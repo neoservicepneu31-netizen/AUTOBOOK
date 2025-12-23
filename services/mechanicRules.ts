@@ -1,103 +1,116 @@
 
 import { Invoice, Car } from '../types';
 
-// Règles fournies par le mécanicien
+// Règles d'entretien proactif NSP
 const RULES = {
   REVISION_KM: 20000,
   REVISION_MONTHS: 12,
   DISTRIBUTION_KM: 150000,
   DISTRIBUTION_YEARS: 6,
   CT_YEARS: 2,
-  CT_FIRST_YEARS: 4
+  CT_FIRST_YEARS: 4,
+  CHECK_FLUIDS_DAYS: 30, // Tous les mois : Lave-glace, Refroidissement
+  CHECK_TIRES_DAYS: 30,  // Tous les mois : Pression
+  CHECK_OIL_DAYS: 90,    // Tous les 3 mois : Niveau huile
 };
 
 interface MaintenanceStatus {
-  status: 'success' | 'warning' | 'critical';
+  status: 'success' | 'warning' | 'critical' | 'neutral';
   message: string;
   nextDeadline: string;
+  alerts: string[];
+  pendingTasks: {id: string, label: string, severity: 'low' | 'high'} [];
 }
 
 export const calculateMaintenanceStatus = (car: Car, invoices: Invoice[]): MaintenanceStatus => {
-  const currentKm = invoices.length > 0 ? Math.max(...invoices.map(i => i.km)) : 0; // Estimation basée sur la dernière facture
+  const currentKm = invoices.length > 0 ? Math.max(...invoices.map(i => i.km)) : car.initialKm;
   const today = new Date();
+  const alerts: string[] = [];
+  const pendingTasks: {id: string, label: string, severity: 'low' | 'high'}[] = [];
 
-  // 1. ANALYSE RÉVISION (1 an ou 20 000 km)
+  // Date de référence (Dernière facture ou création du véhicule)
+  const lastDocDate = invoices.length > 0 
+    ? new Date(Math.max(...invoices.map(i => new Date(i.date).getTime())))
+    : new Date(); // Si pas de doc, on part d'aujourd'hui pour le premier cycle
+
+  const daysSinceLastCheck = Math.floor((today.getTime() - lastDocDate.getTime()) / (1000 * 60 * 60 * 24));
+
+  // 1. ANALYSE RÉVISION (ANNIUELLE / 20k KM)
   const lastRevision = invoices
-    .filter(i => i.title.toLowerCase().includes('révision') || i.title.toLowerCase().includes('vidange'))
+    .filter(i => /révision|vidange|entretien/i.test(i.title))
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
 
   if (lastRevision) {
     const nextRevisionDate = new Date(lastRevision.date);
     nextRevisionDate.setFullYear(nextRevisionDate.getFullYear() + 1);
-    
     const kmSinceRevision = currentKm - lastRevision.km;
-    const kmRemaining = RULES.REVISION_KM - kmSinceRevision;
-
-    if (kmSinceRevision >= RULES.REVISION_KM) {
-      return { status: 'critical', message: `URGENT : Révision dépassée de ${Math.abs(kmRemaining)} km ! Risque moteur.`, nextDeadline: 'Immédiat' };
+    
+    if (kmSinceRevision >= RULES.REVISION_KM || today > nextRevisionDate) {
+      alerts.push("REVISION");
+      pendingTasks.push({id: 'rev', label: 'Révision Complète Immédiate', severity: 'high'});
     }
-    if (today > nextRevisionDate) {
-      return { status: 'critical', message: `URGENT : Révision annuelle dépassée depuis le ${nextRevisionDate.toLocaleDateString()}.`, nextDeadline: 'Immédiat' };
-    }
-    if (kmRemaining < 2000) {
-      return { status: 'warning', message: `Prévoir Révision bientôt (reste ${kmRemaining} km).`, nextDeadline: `${kmRemaining} km` };
-    }
-  } else if (invoices.length === 0) {
-     // Pas d'historique
-     return { status: 'warning', message: "Aucun historique. Ajoutez votre dernière révision pour le calcul.", nextDeadline: 'Inconnue' };
+  } else if (invoices.length > 0) {
+    pendingTasks.push({id: 'rev_warn', label: 'Planifier Révision Annuelle', severity: 'low'});
   }
 
-  // 2. ANALYSE DISTRIBUTION (6 ans ou 150 000 km)
-  // On cherche si une facture mentionne "Distribution"
-  const lastBelt = invoices.find(i => i.title.toLowerCase().includes('distribution') || i.title.toLowerCase().includes('courroie'));
-  
-  const carAgeYears = (today.getTime() - new Date(car.firstRegistrationDate).getTime()) / (1000 * 60 * 60 * 24 * 365.25);
-  
-  if (!lastBelt) {
-    // Jamais faite selon l'historique
-    if (currentKm > RULES.DISTRIBUTION_KM) {
-      return { status: 'critical', message: "ALERTE : Distribution à faire impérativement (>150 000km). Risque casse moteur.", nextDeadline: 'Immédiat' };
-    }
-    if (carAgeYears > RULES.DISTRIBUTION_YEARS) {
-      return { status: 'critical', message: `ALERTE : Véhicule a ${carAgeYears.toFixed(1)} ans. Distribution à faire (>6 ans).`, nextDeadline: 'Immédiat' };
-    }
-  }
-
-  // 3. CONTRÔLE TECHNIQUE (4 ans puis tous les 2 ans)
+  // 2. CONTRÔLE TECHNIQUE
   const nextCTDate = calculateNextCT(car.firstRegistrationDate, invoices);
-  const monthsToCT = (nextCTDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24 * 30);
+  const diffTimeCT = nextCTDate.getTime() - today.getTime();
+  const diffDaysCT = Math.ceil(diffTimeCT / (1000 * 60 * 60 * 24));
 
-  if (monthsToCT < 0) {
-    return { status: 'critical', message: `URGENT : Contrôle Technique périmé depuis le ${nextCTDate.toLocaleDateString()}. Vous êtes en infraction !`, nextDeadline: 'Passée' };
-  }
-  if (monthsToCT < 2) {
-    return { status: 'warning', message: `Contrôle Technique à prévoir avant le ${nextCTDate.toLocaleDateString()}.`, nextDeadline: nextCTDate.toLocaleDateString() };
+  if (diffDaysCT < 0) {
+    alerts.push("CT_EXPIRED");
+    pendingTasks.push({id: 'ct_crit', label: 'Contrôle Technique PÉRIMÉ', severity: 'high'});
+  } else if (diffDaysCT < 30) {
+    alerts.push("CT_SOON");
+    pendingTasks.push({id: 'ct_warn', label: 'RDV Contrôle Technique', severity: 'high'});
   }
 
-  // Si tout va bien
+  // 3. RAPPELS PROACTIFS (MENSUELS)
+  if (daysSinceLastCheck >= RULES.CHECK_FLUIDS_DAYS) {
+    pendingTasks.push({id: 'coolant', label: 'Niveau Liquide Refroidissement', severity: 'low'});
+    pendingTasks.push({id: 'washer', label: 'Niveau Lave-Glace', severity: 'low'});
+    pendingTasks.push({id: 'tires', label: 'Pression des Pneus (Gonflage)', severity: 'low'});
+  }
+
+  // 4. NIVEAU HUILE (TRIMESTRIEL)
+  if (daysSinceLastCheck >= RULES.CHECK_OIL_DAYS) {
+    pendingTasks.push({id: 'oil_check', label: 'Contrôle Niveau Huile Moteur', severity: 'high'});
+  }
+
+  // Détermination du statut global
+  let status: MaintenanceStatus['status'] = 'success';
+  let message = "Votre véhicule est parfaitement suivi. L'IA NSP assure la conformité.";
+
+  if (pendingTasks.some(t => t.severity === 'high')) {
+    status = 'critical';
+    message = "ALERTE SÉCURITÉ : Plusieurs points de conformité critique nécessitent votre attention.";
+  } else if (pendingTasks.length > 0) {
+    status = 'warning';
+    message = "ENTRETIEN COURANT : Quelques vérifications de routine sont à prévoir ce mois-ci.";
+  }
+
   return { 
-    status: 'success', 
-    message: "Véhicule sain. L'IA veille au grain sur vos échéances.",
-    nextDeadline: 'RAS'
+    status, 
+    message, 
+    nextDeadline: nextCTDate.toLocaleDateString(), 
+    alerts,
+    pendingTasks
   };
 };
 
 const calculateNextCT = (firstRegDateStr: string, invoices: Invoice[]): Date => {
   const firstReg = new Date(firstRegDateStr);
-  
-  // Chercher le dernier CT dans les factures avec une Regex précise
   const lastCT = invoices
     .filter(i => /contr[oô]le technique|ct\b|visite technique/i.test(i.title))
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
 
   if (lastCT) {
-    // RÈGLE : Si on a un CT scanné (ou titre manuel), le prochain est DANS 2 ANS
     const next = new Date(lastCT.date);
     next.setFullYear(next.getFullYear() + 2);
     return next;
   }
 
-  // RÈGLE PAR DÉFAUT : 4 ans après la première mise en circulation si aucun CT trouvé
   const firstCT = new Date(firstReg);
   firstCT.setFullYear(firstCT.getFullYear() + 4);
   return firstCT;
