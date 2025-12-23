@@ -31,6 +31,7 @@ const App: React.FC = () => {
   const [activeCarId, setActiveCarId] = useState<string | null>(null);
   const [aiStatus, setAiStatus] = useState<AIStatus>({ status: 'neutral', message: 'Chargement...' });
 
+  // Chargement global synchrone pour garantir la visibilité de tous les clients
   const loadAllData = () => {
     const users = db.users.getAll();
     const cars = db.cars.getAll();
@@ -53,7 +54,7 @@ const App: React.FC = () => {
         if (foundUser) {
           setUser(foundUser);
           if (foundUser.role === 'admin') {
-            db.users.seedGlobal(); // Activer la simulation pour Admin
+            db.users.seedGlobal(); 
             loadAllData();
             setScreen(Screen.ADMIN_DASHBOARD);
           } else {
@@ -72,6 +73,7 @@ const App: React.FC = () => {
     initApp();
   }, []);
 
+  // Sync auto : Sauvegarde en temps réel chaque modification vers le stockage
   useEffect(() => {
     if (!isDatabaseReady || !initialLoadDone.current) return;
     setIsSyncing(true);
@@ -107,9 +109,7 @@ const App: React.FC = () => {
   }, [activeCar, activeCarInvoices]);
 
   const handleLogin = (loggedInUser: User) => {
-    if (loggedInUser.role === 'admin') {
-      db.users.seedGlobal(); // Simulation pour le gérant
-    }
+    // Si l'utilisateur n'existe pas encore dans la liste globale (Inscription)
     setAllUsers(prev => {
       const idx = prev.findIndex(u => u.id === loggedInUser.id);
       if (idx >= 0) {
@@ -119,24 +119,33 @@ const App: React.FC = () => {
       }
       return [...prev, loggedInUser];
     });
+    
     setUser(loggedInUser);
     db.session.set(loggedInUser.id);
-    loadAllData();
-    setScreen(loggedInUser.role === 'admin' ? Screen.ADMIN_DASHBOARD : Screen.GARAGE);
+    
+    // Si admin, on s'assure de recharger tout pour voir les nouvelles inscriptions
+    if (loggedInUser.role === 'admin') {
+      db.users.seedGlobal();
+      loadAllData();
+      setScreen(Screen.ADMIN_DASHBOARD);
+    } else {
+      setScreen(Screen.GARAGE);
+    }
   };
 
   const handleUpdateUser = (u: User) => setAllUsers(prev => prev.map(x => x.id === u.id ? u : x));
   const handleDeleteUser = (id: string) => {
     setAllUsers(prev => prev.filter(u => u.id !== id));
     setAllCars(prev => prev.filter(c => c.ownerId !== id));
+    setAllInvoices(prev => prev.filter(inv => !allCars.some(c => c.id === inv.carId && c.ownerId === id)));
   };
 
   const handleLogout = () => { setUser(null); db.session.clear(); setScreen(Screen.AUTH); };
 
   const handleCarOnboarding = (newCar: Car) => {
     if (!user) return;
-    const car = { ...newCar, ownerId: user.id };
-    setAllCars(prev => [...prev, car]);
+    const carWithId = { ...newCar, ownerId: user.id };
+    setAllCars(prev => [...prev, carWithId]);
     setActiveCarId(newCar.id);
     localStorage.setItem('AUTOBOOK_ACTIVE_CAR', newCar.id);
     setScreen(Screen.DASHBOARD);
@@ -153,7 +162,7 @@ const App: React.FC = () => {
   return (
     <div className="max-w-md mx-auto bg-nsp-bg shadow-2xl h-[100dvh] relative overflow-y-auto overflow-x-hidden">
       {isSyncing && (
-        <div className="fixed top-4 right-4 z-50 bg-black/80 text-white px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wider flex items-center gap-2 border border-white/10 shadow-xl backdrop-blur-md">
+        <div className="fixed top-4 right-4 z-[110] bg-black/80 text-white px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wider flex items-center gap-2 border border-white/10 shadow-xl backdrop-blur-md">
            <Cloud size={12} className="text-green-500 animate-pulse" /> <span>Sync Cloud...</span>
         </div>
       )}
