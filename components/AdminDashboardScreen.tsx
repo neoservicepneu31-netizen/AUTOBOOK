@@ -30,8 +30,10 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({
   const appUrl = 'https://autobook-zxwf.vercel.app';
   
   const stats = useMemo(() => {
-    const totalUsers = allUsers.length;
-    const totalCars = allCars.length;
+    // Filtrer pour ne compter que les vrais clients (exclure l'admin des stats)
+    const realUsers = allUsers.filter(u => u.role !== 'admin');
+    const totalUsers = realUsers.length;
+    const totalCars = allCars.filter(c => realUsers.some(u => u.id === c.ownerId)).length;
     const totalRevenue = allInvoices.reduce((acc, inv) => acc + inv.price, 0);
     return { totalUsers, totalCars, totalRevenue };
   }, [allUsers, allCars, allInvoices]);
@@ -73,7 +75,6 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({
         </div>
 
         <div className="flex-1 overflow-y-auto p-6 space-y-8 max-w-2xl mx-auto w-full">
-          {/* Header Profil */}
           <div className="flex flex-col items-center text-center space-y-4">
             <div className="w-24 h-24 bg-nsp-primary rounded-3xl flex items-center justify-center text-4xl font-black text-white shadow-2xl">
               {user.name.charAt(0)}
@@ -92,7 +93,6 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({
             </div>
           </div>
 
-          {/* Stats Client */}
           <div className="grid grid-cols-2 gap-4">
              <div className="bg-nsp-card border border-nsp-border p-4 rounded-2xl">
                 <p className="text-[9px] text-gray-500 font-black uppercase mb-1">Véhicules</p>
@@ -104,7 +104,6 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({
              </div>
           </div>
 
-          {/* Liste Véhicules */}
           <div className="space-y-4">
             <h4 className="text-white font-black text-xs uppercase tracking-widest flex items-center gap-2">
               <CarIcon size={14} className="text-nsp-primary" /> Parc Automobile
@@ -131,7 +130,6 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({
             )}
           </div>
 
-          {/* Actions de Compte */}
           <div className="space-y-4 pt-4 border-t border-nsp-border">
              <button onClick={() => handleResetPassword(user)} className="w-full bg-nsp-card border border-nsp-border p-4 rounded-2xl text-white font-black text-xs uppercase flex items-center justify-center gap-3">
                <Key size={16} className="text-nsp-primary" /> Réinitialiser le mot de passe
@@ -193,28 +191,32 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({
   const renderOverview = () => (
     <div className="space-y-6 animate-fade-in print:hidden">
       <div className="grid grid-cols-2 gap-4">
-        {renderKPI("Clients Actifs", stats.totalUsers, <Users size={24}/>, "text-blue-500")}
-        {renderKPI("Total CA Réseau", `${stats.totalRevenue}€`, <TrendingUp size={24}/>, "text-green-500")}
+        {renderKPI("Vrais Clients", stats.totalUsers, <Users size={24}/>, "text-blue-500")}
+        {renderKPI("CA Réseau", `${stats.totalRevenue}€`, <TrendingUp size={24}/>, "text-green-500")}
       </div>
       
       <div className="bg-nsp-card border border-nsp-border rounded-3xl p-5">
         <h3 className="text-white font-black text-[10px] uppercase tracking-widest mb-4 flex items-center gap-2">
-          <Activity size={14} className="text-nsp-primary" /> Inscriptions Temps Réel
+          <Activity size={14} className="text-nsp-primary" /> Dernières Inscriptions Réelles
         </h3>
         <div className="space-y-4">
-          {allUsers.slice(-5).reverse().map(u => (
-            <div key={u.id} onClick={() => setSelectedUser(u)} className="flex items-center gap-3 border-b border-white/5 pb-3 last:border-0 cursor-pointer hover:bg-white/5 transition-colors p-1 rounded-lg">
-               <div className="w-8 h-8 rounded-full bg-nsp-input flex items-center justify-center text-[10px] font-black text-nsp-primary">{u.name.charAt(0)}</div>
-               <div className="flex-1">
-                 <p className="text-xs text-white font-bold">{u.name}</p>
-                 <p className="text-[9px] text-gray-500">{u.email}</p>
-               </div>
-               <span className={`text-[8px] font-black px-2 py-0.5 rounded-full ${u.isPremium ? 'bg-yellow-500/10 text-yellow-500' : 'bg-gray-800 text-gray-500'}`}>
-                 {u.isPremium ? 'PREMIUM' : 'FREE'}
-               </span>
-               <ChevronRight size={14} className="text-gray-700" />
-            </div>
-          ))}
+          {allUsers.filter(u => u.role !== 'admin').length === 0 ? (
+            <p className="text-gray-600 text-[10px] uppercase tracking-widest text-center py-4 italic">Aucun client inscrit pour le moment</p>
+          ) : (
+            allUsers.filter(u => u.role !== 'admin').slice(-5).reverse().map(u => (
+              <div key={u.id} onClick={() => setSelectedUser(u)} className="flex items-center gap-3 border-b border-white/5 pb-3 last:border-0 cursor-pointer hover:bg-white/5 transition-colors p-1 rounded-lg">
+                 <div className="w-8 h-8 rounded-full bg-nsp-input flex items-center justify-center text-[10px] font-black text-nsp-primary">{u.name.charAt(0)}</div>
+                 <div className="flex-1">
+                   <p className="text-xs text-white font-bold">{u.name}</p>
+                   <p className="text-[9px] text-gray-500">{u.email}</p>
+                 </div>
+                 <span className={`text-[8px] font-black px-2 py-0.5 rounded-full ${u.isPremium ? 'bg-yellow-500/10 text-yellow-500' : 'bg-gray-800 text-gray-500'}`}>
+                   {u.isPremium ? 'PREMIUM' : 'FREE'}
+                 </span>
+                 <ChevronRight size={14} className="text-gray-700" />
+              </div>
+            ))
+          )}
         </div>
       </div>
     </div>
@@ -222,11 +224,7 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({
 
   return (
     <div className="min-h-screen bg-[#070707] flex flex-col font-sans">
-      
-      {/* Zone Detail User (Modal) */}
       {selectedUser && renderUserDetail(selectedUser)}
-
-      {/* ZONE D'IMPRESSION A4 */}
       <div className="hidden print:flex flex-col items-center justify-between p-20 h-[297mm] w-[210mm] bg-white text-black text-center font-sans">
         <div className="space-y-8">
           <div className="bg-black text-white px-12 py-8 rounded-[2.5rem] inline-block shadow-2xl">
@@ -234,7 +232,6 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({
           </div>
           <h2 className="text-3xl font-black uppercase tracking-widest text-red-600">VOTRE CARNET D'ENTRETIEN NUMÉRIQUE</h2>
         </div>
-
         <div className="space-y-12 flex flex-col items-center">
           <h3 className="text-5xl font-black uppercase leading-tight">SCANNEZ POUR<br/><span className="text-gray-400">REJOINDRE LE RÉSEAU</span></h3>
           <div className="p-8 border-[14px] border-black rounded-[5rem] shadow-2xl">
@@ -247,7 +244,6 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({
           <p className="text-3xl font-black uppercase tracking-tighter text-black mt-4">autobook-zxwf.vercel.app</p>
           <p className="text-xl font-bold uppercase tracking-tighter text-gray-500">Accessible sur iOS & Android • Inscription Gratuite</p>
         </div>
-
         <div className="w-full flex justify-between items-center border-t-8 border-black pt-16">
            <div className="text-left">
               <p className="text-2xl font-black uppercase">Sécurité Cloud Européenne</p>
@@ -257,9 +253,7 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({
         </div>
       </div>
 
-      {/* DASHBOARD UI */}
       <div className="flex flex-col flex-1 print:hidden">
-        {/* Header Admin */}
         <div className="bg-red-950/40 border-b border-red-900/30 p-6 flex justify-between items-center pt-safe-top backdrop-blur-md sticky top-0 z-50">
           <div className="flex items-center gap-4">
             <div className="bg-red-600 p-2.5 rounded-xl"><ShieldAlert className="text-white" size={24} /></div>
@@ -271,12 +265,11 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({
           <button onClick={onLogout} className="text-white bg-red-600 px-4 py-2 rounded-xl font-black text-[10px] uppercase">Logout</button>
         </div>
 
-        {/* Navigation Tabs */}
         <div className="flex border-b border-nsp-border px-4 bg-nsp-card/20 overflow-x-auto no-scrollbar backdrop-blur-sm sticky top-[84px] z-40">
           {[
             { id: 'overview', label: 'Surveillance', icon: <BarChart3 size={14}/> },
             { id: 'diffusion', label: 'Diffusion QR', icon: <QrCode size={14}/> },
-            { id: 'users', label: 'Répertoire Clients', icon: <Users size={14}/> },
+            { id: 'users', label: 'Clients Réels', icon: <Users size={14}/> },
             { id: 'alerts', label: 'Système', icon: <AlertTriangle size={14}/> }
           ].map(tab => (
             <button 
@@ -289,7 +282,6 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({
           ))}
         </div>
 
-        {/* Content Area */}
         <div className="flex-1 p-6 max-w-4xl mx-auto w-full pb-24">
            {activeTab === 'overview' && renderOverview()}
            {activeTab === 'diffusion' && renderDiffusion()}
@@ -300,7 +292,7 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({
                     <Search size={18} className="text-gray-500" />
                     <input 
                       type="text" 
-                      placeholder="Chercher une inscription (Nom, Email)..." 
+                      placeholder="Chercher une inscription réelle..." 
                       className="bg-transparent text-white outline-none text-sm font-bold w-full"
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
@@ -311,26 +303,36 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({
                   </button>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {allUsers.filter(u => 
+                  {allUsers.filter(u => u.role !== 'admin').filter(u => 
                     u.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
                     u.email.toLowerCase().includes(searchTerm.toLowerCase())
-                  ).map(u => (
-                    <div key={u.id} onClick={() => setSelectedUser(u)} className="bg-nsp-card p-4 rounded-2xl border border-nsp-border flex justify-between items-center group shadow-md cursor-pointer hover:border-nsp-primary transition-all">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-nsp-input rounded-xl flex items-center justify-center font-black text-nsp-primary">{u.name.charAt(0)}</div>
-                        <div>
-                          <p className="text-white font-bold text-sm uppercase">{u.name} {u.isPremium && <Zap size={10} className="inline text-yellow-500 fill-yellow-500" />}</p>
-                          <p className="text-[10px] text-gray-500 truncate max-w-[120px]">{u.email}</p>
+                  ).length === 0 ? (
+                    <div className="col-span-full py-12 text-center text-gray-600 bg-nsp-card border border-dashed border-nsp-border rounded-3xl">
+                       <Users size={40} className="mx-auto mb-3 opacity-20" />
+                       <p className="text-xs font-black uppercase tracking-widest">Aucun client enregistré</p>
+                    </div>
+                  ) : (
+                    allUsers.filter(u => u.role !== 'admin').filter(u => 
+                      u.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                      u.email.toLowerCase().includes(searchTerm.toLowerCase())
+                    ).map(u => (
+                      <div key={u.id} onClick={() => setSelectedUser(u)} className="bg-nsp-card p-4 rounded-2xl border border-nsp-border flex justify-between items-center group shadow-md cursor-pointer hover:border-nsp-primary transition-all">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 bg-nsp-input rounded-xl flex items-center justify-center font-black text-nsp-primary">{u.name.charAt(0)}</div>
+                          <div>
+                            <p className="text-white font-bold text-sm uppercase">{u.name} {u.isPremium && <Zap size={10} className="inline text-yellow-500 fill-yellow-500" />}</p>
+                            <p className="text-[10px] text-gray-500 truncate max-w-[120px]">{u.email}</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                           <span className={`text-[8px] font-black px-2 py-1 rounded-md ${u.clientType === 'new' ? 'bg-blue-500/10 text-blue-400' : 'bg-gray-800 text-gray-500'}`}>
+                             {u.clientType === 'new' ? 'NOUVEAU' : 'ANCIEN'}
+                           </span>
+                           <ChevronRight size={14} className="text-gray-700" />
                         </div>
                       </div>
-                      <div className="flex items-center gap-2">
-                         <span className={`text-[8px] font-black px-2 py-1 rounded-md ${u.clientType === 'new' ? 'bg-blue-500/10 text-blue-400' : 'bg-gray-800 text-gray-500'}`}>
-                           {u.clientType === 'new' ? 'NOUVEAU' : 'ANCIEN'}
-                         </span>
-                         <ChevronRight size={14} className="text-gray-700" />
-                      </div>
-                    </div>
-                  ))}
+                    ))
+                  )}
                 </div>
              </div>
            )}
@@ -338,7 +340,7 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({
              <div className="bg-red-950/10 border border-red-500/20 p-8 rounded-3xl animate-fade-in text-center">
                 <ShieldAlert size={48} className="text-red-500 mx-auto mb-4" />
                 <h3 className="text-white font-black text-lg uppercase mb-2">Surveillance Cloud Européenne</h3>
-                <p className="text-gray-500 text-sm max-w-sm mx-auto">La passerelle de synchronisation est active. Tous les terminaux (mobiles, tablettes) en Europe sont connectés au concentrateur AUTOBOOK.</p>
+                <p className="text-gray-500 text-sm max-w-sm mx-auto">La passerelle de synchronisation est active. Seuls les comptes créés via le portail Vercel sont affichés ici.</p>
              </div>
            )}
         </div>
