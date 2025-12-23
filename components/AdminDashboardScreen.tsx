@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { User, Car, Invoice } from '../types';
-import { LogOut, Users, FileText, Car as CarIcon, ShieldAlert, Search, CheckCircle2, XCircle, Lock, HardDrive, Activity, Settings, Cpu, Database, Wifi, Share2, Smartphone, Copy, QrCode, Info, Globe } from 'lucide-react';
+import { LogOut, Users, FileText, Car as CarIcon, ShieldAlert, Search, CheckCircle2, Lock, Cpu, Database, Share2, Copy, QrCode, Globe, SmartphoneNfc, Download, ExternalLink, Mail, Zap, AlertTriangle, RefreshCw } from 'lucide-react';
 
 interface AdminDashboardScreenProps {
   currentUser: User;
@@ -15,9 +15,18 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({ curr
   const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'alerts' | 'system' | 'share'>('overview');
   const [searchTerm, setSearchTerm] = useState('');
   
-  // System Stats State
+  // LOGIQUE DE DÉTECTION D'URL POUR VERCEL
+  const getInitialUrl = () => {
+    const origin = window.location.origin;
+    // Sur Vercel, on veut l'URL propre sans le /admin ou autres
+    return origin.replace(/\/$/, "");
+  };
+
+  const [customUrl, setCustomUrl] = useState(getInitialUrl());
+  const isVercel = window.location.hostname.includes('vercel.app');
+
+  // System Stats
   const [storageUsage, setStorageUsage] = useState(0);
-  const [apiStatus, setApiStatus] = useState<'online' | 'offline'>('online');
 
   useEffect(() => {
     if (activeTab === 'system') {
@@ -26,320 +35,216 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({ curr
             const keys = Object.keys(localStorage);
             for (const key of keys) {
                 const value = localStorage.getItem(key);
-                if (value) {
-                    total += ((value.length + key.length) * 2);
-                }
+                if (value) total += ((value.length + key.length) * 2);
             }
-            setStorageUsage(total / 1024 / 1024); // MB
-        } catch (e) {
-            console.warn("Erreur lecture stockage", e);
-            setStorageUsage(0);
-        }
-        setApiStatus(navigator.onLine ? 'online' : 'offline');
+            setStorageUsage(total / 1024 / 1024);
+        } catch (e) { setStorageUsage(0); }
     }
   }, [activeTab]);
-
-  const totalStorage = allInvoices.length * 2.5; 
-  const usersRequestingReset = allUsers.filter(u => u.passwordResetRequested);
-  const pendingResets = usersRequestingReset.length;
 
   const renderOverview = () => (
     <div className="space-y-6 animate-fade-in">
       <div className="grid grid-cols-2 gap-4">
-        <div className="bg-nsp-input p-4 rounded-xl border border-nsp-border">
-          <div className="flex items-center justify-between mb-2">
-             <span className="text-gray-400 text-xs uppercase tracking-wider">Utilisateurs</span>
-             <Users size={16} className="text-nsp-primary" />
-          </div>
-          <div className="text-2xl font-bold text-white">{allUsers.length}</div>
-          <div className="text-xs text-green-500 mt-1">+12% ce mois</div>
+        <div className="bg-nsp-input p-5 rounded-2xl border border-nsp-border">
+          <span className="text-gray-500 text-[10px] uppercase font-black tracking-widest block mb-1">Total Clients</span>
+          <div className="text-3xl font-black text-white">{allUsers.length}</div>
         </div>
-        <div className="bg-nsp-input p-4 rounded-xl border border-nsp-border">
-          <div className="flex items-center justify-between mb-2">
-             <span className="text-gray-400 text-xs uppercase tracking-wider">Documents</span>
-             <FileText size={16} className="text-blue-500" />
-          </div>
-          <div className="text-2xl font-bold text-white">{allInvoices.length}</div>
-          <div className="text-xs text-gray-500 mt-1">Stockés sécurisés</div>
-        </div>
-        <div className="bg-nsp-input p-4 rounded-xl border border-nsp-border">
-          <div className="flex items-center justify-between mb-2">
-             <span className="text-gray-400 text-xs uppercase tracking-wider">Véhicules</span>
-             <CarIcon size={16} className="text-yellow-500" />
-          </div>
-          <div className="text-2xl font-bold text-white">{allCars.length}</div>
-          <div className="text-xs text-gray-500 mt-1">Actifs</div>
-        </div>
-        <div className="bg-nsp-input p-4 rounded-xl border border-nsp-border">
-          <div className="flex items-center justify-between mb-2">
-             <span className="text-gray-400 text-xs uppercase tracking-wider">Stockage</span>
-             <HardDrive size={16} className="text-purple-500" />
-          </div>
-          <div className="text-2xl font-bold text-white">{totalStorage.toFixed(1)} MB</div>
-          <div className="text-xs text-gray-500 mt-1">Sur 50 GB</div>
+        <div className="bg-nsp-input p-5 rounded-2xl border border-nsp-border">
+          <span className="text-gray-500 text-[10px] uppercase font-black tracking-widest block mb-1">Documents Archivés</span>
+          <div className="text-3xl font-black text-white">{allInvoices.length}</div>
         </div>
       </div>
-      <div className="bg-nsp-card border border-nsp-border rounded-xl p-5">
-        <h3 className="text-white font-bold mb-4 flex items-center gap-2">
-          <Activity size={18} className="text-nsp-primary" /> Activité Récente
-        </h3>
-        <div className="space-y-4">
-           <div className="flex items-center justify-between text-sm">
-             <div className="flex items-center gap-3">
-               <div className="w-2 h-2 rounded-full bg-green-500"></div>
-               <span className="text-gray-300">Nouvel utilisateur inscrit</span>
-             </div>
-             <span className="text-gray-600 text-xs">Il y a 10 min</span>
-           </div>
-           <div className="flex items-center justify-between text-sm">
-             <div className="flex items-center gap-3">
-               <div className="w-2 h-2 rounded-full bg-blue-500"></div>
-               <span className="text-gray-300">Facture uploadée (Clio V)</span>
-             </div>
-             <span className="text-gray-600 text-xs">Il y a 45 min</span>
-           </div>
-        </div>
+      
+      <div className={`p-6 rounded-2xl border flex items-center gap-4 ${isVercel ? 'bg-green-600/10 border-green-500/30' : 'bg-orange-600/10 border-orange-500/30'}`}>
+          <div className={`p-3 rounded-full ${isVercel ? 'bg-green-500/20 text-green-500' : 'bg-orange-500/20 text-orange-500'}`}>
+            <Zap size={24} />
+          </div>
+          <div>
+            <h3 className="text-white font-bold text-sm">Hébergement : {isVercel ? 'Vercel Production 🚀' : 'Mode Local 🛠️'}</h3>
+            <p className="text-xs text-gray-500">
+                {isVercel ? 'L\'application est à jour et en ligne.' : 'Déploiement requis pour diffusion client.'}
+            </p>
+          </div>
       </div>
     </div>
   );
 
   const renderUsers = () => (
     <div className="space-y-4 animate-fade-in">
-      <div className="bg-nsp-input p-3 rounded-lg flex items-center gap-3 border border-nsp-border focus-within:border-nsp-primary transition-colors">
-        <Search size={20} className="text-gray-500" />
-        <input 
-          type="text" 
-          placeholder="Rechercher un utilisateur..." 
-          className="bg-transparent text-white placeholder-gray-500 outline-none flex-1"
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-        />
-      </div>
-      <div className="space-y-2">
-        {allUsers.filter(u => u.name.toLowerCase().includes(searchTerm.toLowerCase())).map(u => (
-          <div key={u.id} className="bg-nsp-card p-4 rounded-xl border border-nsp-border flex items-center justify-between">
-             <div className="flex items-center gap-3">
-               <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold ${u.role === 'admin' ? 'bg-red-900/50 text-red-500' : 'bg-gray-800 text-gray-400'}`}>
-                 {u.name.charAt(0)}
-               </div>
-               <div>
-                 <h4 className="text-white font-bold text-sm">{u.name}</h4>
-                 <p className="text-xs text-gray-500">{u.email}</p>
-               </div>
-             </div>
-             <div className="flex items-center gap-2">
-               {u.role === 'admin' ? (
-                 <span className="text-[10px] bg-red-500 text-white px-2 py-1 rounded uppercase font-bold">Admin</span>
-               ) : (
-                 <span className="text-[10px] bg-blue-900/30 text-blue-400 px-2 py-1 rounded uppercase font-bold">User</span>
-               )}
-             </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-
-  const renderAlerts = () => (
-    <div className="space-y-4 animate-fade-in">
-      <div className="bg-nsp-card border border-nsp-border rounded-xl p-5">
-         <h3 className="text-white font-bold mb-4 flex items-center gap-2">
-           <Lock size={18} className="text-nsp-warning" /> Demandes de sécurité ({pendingResets})
-         </h3>
-         <div className="space-y-4">
-            {pendingResets === 0 ? (
-                <p className="text-sm text-gray-500 italic">Aucune demande en attente.</p>
-            ) : (
-                usersRequestingReset.map(u => (
-                    <div key={u.id} className="bg-nsp-input p-4 rounded-lg flex flex-col gap-3 border border-nsp-border">
-                       <div className="flex justify-between">
-                         <span className="text-white font-bold text-sm">Reset Password</span>
-                         <span className="text-xs text-red-400 font-bold">URGENT</span>
-                       </div>
-                       <p className="text-xs text-gray-400">{u.email}</p>
-                       <div className="flex gap-2">
-                         <button onClick={() => alert(`Email envoyé à ${u.email}`)} className="flex-1 bg-nsp-success text-white text-xs font-bold py-2 rounded">VALIDER</button>
-                         <button onClick={() => alert("Refusé")} className="flex-1 bg-red-900/50 text-red-400 text-xs font-bold py-2 rounded border border-red-800">REFUSER</button>
-                       </div>
-                    </div>
-                ))
-            )}
-         </div>
-      </div>
-    </div>
-  );
-
-  const renderSystem = () => (
-    <div className="space-y-6 animate-fade-in">
-        <div className="bg-nsp-card border border-nsp-border rounded-xl p-5">
-            <h3 className="text-white font-bold mb-6 flex items-center gap-2">
-                <Cpu size={20} className="text-nsp-primary" /> État du Système PWA
-            </h3>
-            
-            <div className="space-y-6">
-                <div className="flex items-center justify-between pb-4 border-b border-nsp-border">
-                    <div className="flex items-center gap-3">
-                        <div className="p-2 bg-nsp-input rounded-lg"><Wifi size={20} className={apiStatus === 'online' ? "text-green-500" : "text-red-500"} /></div>
-                        <div>
-                            <p className="text-white font-bold text-sm">Connectivité API</p>
-                            <p className="text-xs text-gray-500">{apiStatus === 'online' ? 'Connecté au Cloud NSP' : 'Mode Hors-Ligne'}</p>
-                        </div>
-                    </div>
-                    <div className={`px-3 py-1 rounded-full text-xs font-bold ${apiStatus === 'online' ? 'bg-green-500/20 text-green-500' : 'bg-red-500/20 text-red-500'}`}>
-                        {apiStatus === 'online' ? 'ONLINE' : 'OFFLINE'}
-                    </div>
-                </div>
-
-                <div className="flex items-center justify-between pb-4 border-b border-nsp-border">
-                    <div className="flex items-center gap-3">
-                        <div className="p-2 bg-nsp-input rounded-lg"><Database size={20} className="text-blue-500" /></div>
-                        <div>
-                            <p className="text-white font-bold text-sm">Mémoire Locale (Cache)</p>
-                            <p className="text-xs text-gray-500">Utilisée par les photos HD</p>
-                        </div>
-                    </div>
-                    <div className="text-right">
-                        <p className="text-white font-bold text-sm">{storageUsage.toFixed(2)} MB</p>
-                        <p className="text-[10px] text-gray-500">Quota ~5 MB (Soft)</p>
-                    </div>
-                </div>
-
-                <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                        <div className="p-2 bg-nsp-input rounded-lg"><Settings size={20} className="text-purple-500" /></div>
-                        <div>
-                            <p className="text-white font-bold text-sm">Version Application</p>
-                            <p className="text-xs text-gray-500">Dernier Build</p>
-                        </div>
-                    </div>
-                    <div className="text-white font-mono text-sm">v2.1.0 (Stable)</div>
-                </div>
-            </div>
+        <div className="bg-nsp-input p-3 rounded-2xl flex items-center gap-3 border border-nsp-border">
+            <Search size={20} className="text-gray-500" />
+            <input 
+                type="text" 
+                placeholder="Filtrer les clients..." 
+                className="bg-transparent text-white outline-none flex-1 text-sm font-bold"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+            />
         </div>
-
-        <div className="bg-yellow-900/20 border border-yellow-500/30 p-4 rounded-xl">
-            <h4 className="text-yellow-500 font-bold text-sm mb-2 flex items-center gap-2">
-                <ShieldAlert size={16} /> Zone de Danger
-            </h4>
-            <p className="text-xs text-gray-400 mb-4">Actions irréversibles sur la base de données locale.</p>
-            <button 
-                onClick={() => { if(confirm('Vider toute la base de données ?')) { localStorage.clear(); window.location.reload(); } }}
-                className="w-full border border-red-500/50 text-red-500 hover:bg-red-500/10 py-3 rounded-lg text-xs font-bold uppercase tracking-wider transition-colors"
-            >
-                Formater la Base de Données
-            </button>
+        <div className="space-y-2">
+            {allUsers.filter(u => u.name.toLowerCase().includes(searchTerm.toLowerCase())).map(u => (
+                <div key={u.id} className="bg-nsp-card p-4 rounded-xl border border-nsp-border flex justify-between items-center group hover:border-nsp-primary transition-all">
+                    <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-lg bg-nsp-input flex items-center justify-center text-nsp-primary font-black border border-nsp-border group-hover:bg-nsp-primary group-hover:text-white transition-colors">{u.name.charAt(0)}</div>
+                        <div>
+                            <div className="text-white font-bold text-sm uppercase">{u.name}</div>
+                            <div className="text-[10px] text-nsp-primary font-mono">{u.email}</div>
+                        </div>
+                    </div>
+                    <button onClick={() => { navigator.clipboard.writeText(u.email); alert('Email copié !'); }} className="p-2 text-gray-500 hover:text-white"><Copy size={16}/></button>
+                </div>
+            ))}
         </div>
     </div>
   );
 
   const renderShare = () => {
-    const currentUrl = window.location.href;
+    // QR Code PROPRE (Pas de logo au centre car ça bloque le scan sur Vercel si l'URL est longue)
+    // On utilise l'API Google Charts pour plus de stabilité si besoin, ou QRServer (ici conservé car rapide)
+    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=512x512&data=${encodeURIComponent(customUrl)}&margin=10&ecc=H`;
     
     return (
-      <div className="space-y-6 animate-fade-in pb-10">
-        <div className="bg-nsp-card border border-nsp-border rounded-xl p-6 text-center shadow-xl">
-          <div className="w-16 h-16 bg-nsp-primary/20 rounded-full flex items-center justify-center mx-auto mb-4">
-            <Globe size={32} className="text-nsp-primary" />
-          </div>
-          <h3 className="text-2xl font-bold text-white mb-2">Diffuser AUTOBOOK</h3>
-          <p className="text-gray-400 text-sm mb-8">
-            Partagez le lien ou le QR Code ci-dessous. Vos utilisateurs n'ont pas besoin d'aller sur l'App Store !
-          </p>
-          
-          {/* SIMULATED QR CODE */}
-          <div className="bg-white p-4 rounded-2xl inline-block mb-8 shadow-inner">
-             <div className="w-48 h-48 bg-nsp-bg flex items-center justify-center relative overflow-hidden group cursor-pointer" onClick={() => alert("QR Code généré pour : " + currentUrl)}>
-                <QrCode size={160} className="text-white" />
-                <div className="absolute inset-0 bg-nsp-primary/10 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                   <span className="text-white font-bold text-xs uppercase bg-nsp-primary px-3 py-1 rounded-full">Agrandir</span>
-                </div>
-                {/* Simulated center logo */}
-                <div className="absolute inset-0 flex items-center justify-center">
-                    <div className="bg-white p-1 rounded-lg">
-                        <div className="bg-nsp-primary text-white text-[8px] font-black px-1">AUTOBOOK</div>
-                    </div>
-                </div>
-             </div>
-          </div>
+      <div className="space-y-8 animate-fade-in pb-16">
+        <div className="text-center">
+           <h3 className="text-3xl font-black text-white uppercase tracking-tighter">Diffusion Client 🚀</h3>
+           <p className="text-gray-500 text-xs mt-2">Générez le code d'accès pour vos affiches de garage.</p>
+        </div>
 
-          <div className="bg-nsp-input p-4 rounded-lg border border-nsp-border flex items-center gap-3 mb-8">
-             <p className="text-blue-400 font-mono text-sm flex-1 truncate text-left">{currentUrl}</p>
-             <button 
-               onClick={() => { navigator.clipboard.writeText(currentUrl); alert('Lien copié !'); }}
-               className="p-2 bg-blue-600 hover:bg-blue-700 rounded text-white transition-colors"
-             >
-               <Copy size={16} />
-             </button>
-          </div>
+        {/* Configuration de l'URL */}
+        <div className="bg-nsp-card border border-nsp-border rounded-3xl p-6 space-y-5">
+           <div className="flex items-center justify-between">
+              <h4 className="text-white font-bold text-[10px] uppercase tracking-[0.2em] flex items-center gap-2">
+                 <Globe size={14} className="text-blue-500" /> URL de Destination
+              </h4>
+              <button 
+                onClick={() => setCustomUrl(getInitialUrl())}
+                className="text-[9px] bg-nsp-input hover:text-white text-gray-500 px-3 py-1 rounded-full font-black uppercase tracking-widest border border-nsp-border flex items-center gap-1"
+              >
+                <RefreshCw size={10} /> Reset Auto
+              </button>
+           </div>
+           
+           <div className="space-y-3">
+              <div className="bg-nsp-input p-1 rounded-2xl border border-nsp-border focus-within:border-nsp-primary flex items-center gap-2">
+                 <input 
+                    type="text" 
+                    value={customUrl}
+                    onChange={(e) => setCustomUrl(e.target.value)}
+                    className="flex-1 bg-transparent px-4 py-3 text-white text-xs font-mono outline-none"
+                    placeholder="https://votre-garage.vercel.app"
+                 />
+                 <button onClick={() => { navigator.clipboard.writeText(customUrl); alert('Lien copié !'); }} className="p-3 text-gray-400 hover:text-white">
+                    <Copy size={18} />
+                 </button>
+              </div>
 
-          {/* Installation Instructions */}
-          <div className="space-y-4 text-left">
-             <h4 className="text-white font-bold text-sm flex items-center gap-2 mb-4">
-                <Smartphone size={18} className="text-nsp-primary" /> Instructions pour vos utilisateurs :
-             </h4>
-             
-             <div className="grid grid-cols-1 gap-3">
-                <div className="bg-black/30 p-4 rounded-xl border border-gray-800 hover:border-nsp-primary transition-colors">
-                  <div className="flex items-center gap-3 mb-3">
-                    <div className="w-8 h-8 rounded-full bg-blue-600/20 text-blue-500 flex items-center justify-center font-bold">1</div>
-                    <h5 className="text-white font-bold text-sm">Sur iPhone (Safari)</h5>
-                  </div>
-                  <p className="text-xs text-gray-400 leading-relaxed pl-11">
-                    Ouvrez le lien dans Safari, appuyez sur le bouton <strong>Partager</strong> (carré avec flèche) puis choisissez <strong>"Sur l'écran d'accueil"</strong>.
-                  </p>
-                </div>
+              <div className="bg-blue-900/10 border border-blue-500/20 p-4 rounded-2xl flex gap-3">
+                 <AlertTriangle size={18} className="text-blue-400 shrink-0" />
+                 <p className="text-[10px] text-gray-400 font-bold uppercase leading-relaxed">
+                    <span className="text-blue-400">NOTE VERCEL :</span> Le QR Code pointe sur l'adresse ci-dessus. 
+                    Si vous changez de domaine (ex: .com), revenez ici mettre à jour l'URL avant d'imprimer.
+                 </p>
+              </div>
+           </div>
+        </div>
 
-                <div className="bg-black/30 p-4 rounded-xl border border-gray-800 hover:border-nsp-primary transition-colors">
-                  <div className="flex items-center gap-3 mb-3">
-                    <div className="w-8 h-8 rounded-full bg-green-600/20 text-green-500 flex items-center justify-center font-bold">2</div>
-                    <h5 className="text-white font-bold text-sm">Sur Android (Chrome)</h5>
-                  </div>
-                  <p className="text-xs text-gray-400 leading-relaxed pl-11">
-                    Ouvrez le lien dans Chrome. Un bouton <strong>"Installer l'application"</strong> apparaîtra. Sinon, allez dans le menu (3 points) et choisissez "Installer".
-                  </p>
-                </div>
-             </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
+           {/* Zone QR Code */}
+           <div className="bg-nsp-card border border-nsp-border rounded-[2.5rem] p-8 flex flex-col items-center shadow-2xl relative overflow-hidden group">
+              <div className="bg-white p-4 rounded-3xl shadow-2xl mb-8 border-[8px] border-white transition-transform group-hover:scale-105 duration-500">
+                 <img 
+                   src={qrUrl} 
+                   alt="QR Code" 
+                   className="w-64 h-64 block"
+                   key={customUrl} 
+                 />
+              </div>
 
-             <div className="bg-blue-900/20 p-4 rounded-xl border border-blue-500/30 flex gap-3 mt-6">
-                <Info size={20} className="text-blue-400 shrink-0" />
-                <p className="text-[11px] text-blue-200">
-                  <strong>CONSEIL PRO :</strong> Pour une diffusion plus large, imprimez le QR Code sur vos factures ou affichez-le dans votre point de vente.
-                </p>
-             </div>
-          </div>
+              <div className="w-full flex gap-3">
+                 <button 
+                    onClick={() => window.open(qrUrl, '_blank')}
+                    className="flex-1 bg-nsp-input text-white text-[10px] font-black py-4 rounded-2xl uppercase tracking-widest border border-nsp-border hover:bg-white hover:text-black transition-all flex items-center justify-center gap-2"
+                 >
+                    <Download size={14} /> Télécharger
+                 </button>
+                 <button 
+                    onClick={() => window.open(customUrl, '_blank')}
+                    className="flex-1 bg-nsp-primary text-white text-[10px] font-black py-4 rounded-2xl uppercase tracking-widest shadow-xl shadow-red-900/30 flex items-center justify-center gap-2"
+                 >
+                    <ExternalLink size={14} /> Tester
+                 </button>
+              </div>
+           </div>
+
+           {/* Aide à l'installation */}
+           <div className="space-y-4">
+              <h4 className="text-white font-bold text-[10px] uppercase tracking-[0.2em] flex items-center gap-2 mb-2">
+                 <SmartphoneNfc size={16} className="text-nsp-primary" /> Guide de Diffusion
+              </h4>
+              <div className="bg-nsp-card border border-nsp-border p-5 rounded-2xl flex gap-4 items-center">
+                 <div className="w-10 h-10 rounded-full bg-nsp-primary/10 text-nsp-primary flex items-center justify-center font-black text-xs shrink-0">1</div>
+                 <p className="text-[11px] text-gray-300 font-bold uppercase leading-tight">Imprimez ce QR Code sur vos factures ou vos affiches.</p>
+              </div>
+              <div className="bg-nsp-card border border-nsp-border p-5 rounded-2xl flex gap-4 items-center">
+                 <div className="w-10 h-10 rounded-full bg-nsp-primary/10 text-nsp-primary flex items-center justify-center font-black text-xs shrink-0">2</div>
+                 <p className="text-[11px] text-gray-300 font-bold uppercase leading-tight">Le client scanne avec son téléphone pour ouvrir AUTOBOOK.</p>
+              </div>
+              <div className="bg-nsp-card border border-nsp-border p-5 rounded-2xl flex gap-4 items-center">
+                 <div className="w-10 h-10 rounded-full bg-nsp-primary/10 text-nsp-primary flex items-center justify-center font-black text-xs shrink-0">3</div>
+                 <p className="text-[11px] text-gray-300 font-bold uppercase leading-tight">Il clique sur "Installer" pour ajouter l'icône sur son bureau.</p>
+              </div>
+              
+              <div className="bg-gradient-to-br from-red-900/40 to-black p-6 rounded-[2rem] border border-red-500/20 mt-4">
+                 <h5 className="text-nsp-primary font-black text-[10px] uppercase tracking-widest mb-2">Impact Client</h5>
+                 <p className="text-[10px] text-gray-400 leading-relaxed italic">
+                   "Le carnet numérique remplace le papier. Le client garde votre garage en poche 24h/24."
+                 </p>
+              </div>
+           </div>
         </div>
       </div>
     );
   };
 
   return (
-    <div className="min-h-screen bg-[#0a0a0a] flex flex-col">
-      <div className="bg-red-950/30 border-b border-red-900/30 p-6 flex justify-between items-center pt-safe-top">
-        <div className="flex items-center gap-3">
-           <div className="bg-red-600 p-2 rounded-lg"><ShieldAlert className="text-white" size={24} /></div>
+    <div className="min-h-screen bg-[#070707] flex flex-col">
+      <div className="bg-red-950/40 border-b border-red-900/30 p-6 flex justify-between items-center pt-safe-top backdrop-blur-md sticky top-0 z-50">
+        <div className="flex items-center gap-4">
+           <div className="bg-red-600 p-2.5 rounded-xl shadow-lg shadow-red-900/40"><ShieldAlert className="text-white" size={24} /></div>
            <div>
-             <h1 className="text-xl font-bold text-white">PANNEAU ADMIN</h1>
-             <p className="text-red-400 text-xs uppercase tracking-wider font-bold">Gestion des clients</p>
+             <h1 className="text-xl font-black text-white tracking-tighter uppercase leading-none">Console<span className="text-red-600">Admin</span></h1>
+             <p className="text-red-500 text-[9px] uppercase font-black tracking-[0.3em] mt-1">Gérance NSP Toulouse</p>
            </div>
         </div>
-        <button onClick={onLogout} className="text-gray-400 hover:text-white flex items-center gap-2 bg-black/30 px-4 py-2 rounded-lg hover:bg-red-900/50 transition-colors">
-          <LogOut size={16} />
-        </button>
+        <button onClick={onLogout} className="text-white bg-red-600 px-5 py-2.5 rounded-xl font-black text-[10px] tracking-widest hover:bg-red-500 transition-colors shadow-lg shadow-red-900/20">DÉCONNEXION</button>
       </div>
 
-      <div className="flex border-b border-nsp-border px-4 bg-nsp-card/50 overflow-x-auto no-scrollbar">
-        <button onClick={() => setActiveTab('overview')} className={`py-4 px-4 text-xs font-bold border-b-2 transition-colors whitespace-nowrap ${activeTab === 'overview' ? 'border-nsp-primary text-white' : 'border-transparent text-gray-500'}`}>VUE GLOBALE</button>
-        <button onClick={() => setActiveTab('users')} className={`py-4 px-4 text-xs font-bold border-b-2 transition-colors whitespace-nowrap ${activeTab === 'users' ? 'border-nsp-primary text-white' : 'border-transparent text-gray-500'}`}>UTILISATEURS</button>
-        <button onClick={() => setActiveTab('alerts')} className={`py-4 px-4 text-xs font-bold border-b-2 transition-colors whitespace-nowrap ${activeTab === 'alerts' ? 'border-nsp-primary text-white' : 'border-transparent text-gray-500'}`}>ALERTES <span className="bg-red-600 text-white text-[9px] px-1.5 py-0.5 rounded-full ml-1">{pendingResets}</span></button>
-        <button onClick={() => setActiveTab('system')} className={`py-4 px-4 text-xs font-bold border-b-2 transition-colors whitespace-nowrap ${activeTab === 'system' ? 'border-nsp-primary text-white' : 'border-transparent text-gray-500'}`}>SYSTÈME</button>
-        <button onClick={() => setActiveTab('share')} className={`py-4 px-4 text-xs font-bold border-b-2 transition-colors whitespace-nowrap ${activeTab === 'share' ? 'border-nsp-primary text-white' : 'border-transparent text-gray-500'}`}>DIFFUSION 🚀</button>
+      <div className="flex border-b border-nsp-border px-4 bg-nsp-card/20 overflow-x-auto no-scrollbar backdrop-blur-sm sticky top-[84px] z-40">
+        <button onClick={() => setActiveTab('overview')} className={`py-4 px-6 text-[10px] font-black border-b-2 transition-all uppercase tracking-[0.2em] ${activeTab === 'overview' ? 'border-nsp-primary text-white' : 'border-transparent text-gray-600'}`}>Tableau</button>
+        <button onClick={() => setActiveTab('users')} className={`py-4 px-6 text-[10px] font-black border-b-2 transition-all uppercase tracking-[0.2em] ${activeTab === 'users' ? 'border-nsp-primary text-white' : 'border-transparent text-gray-600'}`}>Utilisateurs</button>
+        <button onClick={() => setActiveTab('share')} className={`py-4 px-6 text-[10px] font-black border-b-2 transition-all uppercase tracking-[0.2em] ${activeTab === 'share' ? 'border-nsp-primary text-white' : 'border-transparent text-gray-600'}`}>Diffuser QR</button>
+        <button onClick={() => setActiveTab('system')} className={`py-4 px-6 text-[10px] font-black border-b-2 transition-all uppercase tracking-[0.2em] ${activeTab === 'system' ? 'border-nsp-primary text-white' : 'border-transparent text-gray-600'}`}>Maintenance</button>
       </div>
 
-      <div className="flex-1 p-6 overflow-y-auto max-w-5xl mx-auto w-full">
+      <div className="flex-1 p-6 overflow-y-auto max-w-4xl mx-auto w-full">
          {activeTab === 'overview' && renderOverview()}
          {activeTab === 'users' && renderUsers()}
-         {activeTab === 'alerts' && renderAlerts()}
-         {activeTab === 'system' && renderSystem()}
+         {activeTab === 'system' && (
+             <div className="space-y-6">
+                 <div className="bg-nsp-card border border-nsp-border rounded-2xl p-6">
+                    <h3 className="text-white font-bold mb-4 flex items-center gap-2"><Database size={18} className="text-blue-500" /> Stockage Navigateur</h3>
+                    <p className="text-3xl font-black text-white">{storageUsage.toFixed(2)} MB</p>
+                    <p className="text-[10px] text-gray-500 uppercase mt-2 tracking-widest">Utilisation locale des données (Photos/Inscriptions)</p>
+                 </div>
+                 <div className="bg-red-600/10 border border-red-500/20 p-6 rounded-2xl">
+                    <h4 className="text-red-500 font-black text-xs uppercase mb-3 tracking-widest">Zone de danger</h4>
+                    <p className="text-xs text-gray-400 mb-4">La suppression des données est irréversible et effacera tous les clients enregistrés sur cet appareil.</p>
+                    <button onClick={() => { if(confirm('⚠️ ATTENTION : Effacer TOUS les clients ?')) { localStorage.clear(); window.location.reload(); } }} className="w-full bg-red-600 text-white py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-red-500 transition-all">
+                        Réinitialiser la base de données
+                    </button>
+                 </div>
+             </div>
+         )}
          {activeTab === 'share' && renderShare()}
       </div>
     </div>

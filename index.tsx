@@ -1,3 +1,4 @@
+
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
@@ -5,10 +6,25 @@ import App from './App';
 // Register Service Worker for PWA capabilities
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    // Use relative path 'sw.js' instead of absolute '/sw.js' to support subdirectories/local serving
-    navigator.serviceWorker.register('sw.js')
+    // Utilisation d'un chemin relatif pour Vercel
+    navigator.serviceWorker.register('./sw.js')
       .then(registration => {
         console.log('SW registered: ', registration);
+        
+        // Si une mise à jour est trouvée, on force le rechargement
+        registration.onupdatefound = () => {
+          const installingWorker = registration.installing;
+          if (installingWorker) {
+            installingWorker.onstatechange = () => {
+              if (installingWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                console.log('New content is available; please refresh.');
+                if(confirm('Une nouvelle version est disponible. Mettre à jour ?')) {
+                    window.location.reload();
+                }
+              }
+            };
+          }
+        };
       })
       .catch(registrationError => {
         console.log('SW registration failed: ', registrationError);
