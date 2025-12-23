@@ -1,0 +1,23 @@
+
+{
+  "name": "AUTOBOOK - Carnet Entretien Intelligent",
+  "short_name": "AUTOBOOK",
+  "description": "Le carnet de santé numérique de votre véhicule avec analyse IA.",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#121212",
+  "theme_color": "#E63946",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/3202/3202926.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/3202/3202926.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

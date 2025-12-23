@@ -1,0 +1,7 @@
+{
+  "name": "AUTOBOOK1",
+  "description": "Le carnet de santé numérique de votre véhicule avec analyse IA.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
