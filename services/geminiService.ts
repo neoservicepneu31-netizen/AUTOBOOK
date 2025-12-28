@@ -2,19 +2,7 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { Car, ManufacturerSpecs, TechnicalSpecs } from "../types";
 
-const getApiKey = () => {
-  try {
-    if (typeof process !== 'undefined' && process && process.env && process.env.API_KEY) {
-      return process.env.API_KEY;
-    }
-  } catch (e) {
-    console.warn("API Key detection skipped.");
-  }
-  return '';
-};
-
-const API_KEY = getApiKey();
-
+// Utility to process and compress images before sending to Gemini
 export const processFile = (file: File): Promise<string> => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -24,7 +12,7 @@ export const processFile = (file: File): Promise<string> => {
         const canvas = document.createElement('canvas');
         let width = img.width;
         let height = img.height;
-        const MAX_SIZE = 800;
+        const MAX_SIZE = 1600; 
         if (width > height) {
           if (width > MAX_SIZE) {
             height *= MAX_SIZE / width;
@@ -32,7 +20,7 @@ export const processFile = (file: File): Promise<string> => {
           }
         } else {
           if (height > MAX_SIZE) {
-            width *= MAX_SIZE / height;
+            width = width * (MAX_SIZE / height);
             height = MAX_SIZE;
           }
         }
@@ -41,54 +29,48 @@ export const processFile = (file: File): Promise<string> => {
         const ctx = canvas.getContext('2d');
         if (ctx) {
           ctx.drawImage(img, 0, 0, width, height);
-          resolve(canvas.toDataURL('image/jpeg', 0.6));
+          resolve(canvas.toDataURL('image/jpeg', 0.85));
         } else {
-          reject(new Error("Canvas context error"));
+          reject(new Error("Erreur de rendu"));
         }
       };
-      img.onerror = () => reject(new Error("Image load error"));
       img.src = e.target?.result as string;
     };
-    reader.onerror = reject;
     reader.readAsDataURL(file);
   });
 };
 
+// Converts a file to base64 for Gemini inlineData
 export const fileToGenerativePart = async (file: File): Promise<string> => {
   if (file.type.startsWith('image/')) {
     const compressedDataUrl = await processFile(file);
     return compressedDataUrl.split(',')[1];
-  } else {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        const base64String = reader.result as string;
-        const base64Data = base64String.split(',')[1];
-        resolve(base64Data);
-      };
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
-    });
   }
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve((reader.result as string).split(',')[1]);
+    reader.readAsDataURL(file);
+  });
 };
 
-const cleanJsonString = (text: string): string => {
-  let clean = text.replace(/```json/g, '').replace(/```/g, '');
-  return clean.trim();
-};
-
+// Analyzes an invoice image using Gemini 3 and returns structured data
 export const analyzeInvoiceImage = async (base64Data: string, mimeType: string = 'image/jpeg') => {
-  if (!API_KEY) {
-    return { type: 'maintenance', title: "Saisie Manuelle (No API Key)", date: new Date().toISOString().split('T')[0], km: 0, price: 0 };
+  // Use current process.env.API_KEY
+  const apiKey = process.env.API_KEY;
+  if (!apiKey || apiKey === "") {
+    throw new Error("AUTH_REQUIRED");
   }
+
   try {
-    const ai = new GoogleGenAI({ apiKey: API_KEY });
+    const ai = new GoogleGenAI({ apiKey });
+    const modelName = 'gemini-3-flash-preview';
+
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
+      model: modelName,
       contents: {
         parts: [
           { inlineData: { mimeType: mimeType.startsWith('image') ? 'image/jpeg' : mimeType, data: base64Data } },
-          { text: `Analyse cette facture auto. Extrais: type (fuel/maintenance), titre, date, km, prix, volume. Extrais aussi specs techniques (pneus, huile).` }
+          { text: "Analyse ce document automobile. Extrais en JSON strict : type (fuel/maintenance), title (nom établissement), date (YYYY-MM-DD), km (nombre), price (nombre), volume (litres si carburant), specs (obj: tireDimensions, oilViscosity, batteryRef)." }
         ]
       },
       config: {
@@ -102,32 +84,48 @@ export const analyzeInvoiceImage = async (base64Data: string, mimeType: string =
             km: { type: Type.NUMBER },
             price: { type: Type.NUMBER },
             volume: { type: Type.NUMBER },
-            specs: { type: Type.OBJECT, properties: { tireDimensions: { type: Type.STRING }, oilViscosity: { type: Type.STRING } }, nullable: true }
-          }
+            specs: { 
+              type: Type.OBJECT, 
+              properties: { 
+                tireDimensions: { type: Type.STRING }, 
+                oilViscosity: { type: Type.STRING }, 
+                batteryRef: { type: Type.STRING } 
+              } 
+            }
+          },
+          required: ["type", "title", "date", "km", "price"]
         }
       }
     });
-    return JSON.parse(cleanJsonString(response.text));
-  } catch (error) {
-    return { type: 'maintenance', title: "Erreur Analyse", date: new Date().toISOString().split('T')[0], km: 0, price: 0 };
+
+    const text = response.text;
+    if (!text) return null;
+    return JSON.parse(text);
+  } catch (error: any) {
+    const msg = error.message || "";
+    // Handle Vercel / Auth errors by requesting re-activation
+    if (
+      error.status === 403 || 
+      error.status === 401 || 
+      msg.includes("API_KEY") || 
+      msg.includes("not found") ||
+      msg.includes("Requested entity was not found")
+    ) {
+      throw new Error("AUTH_REQUIRED");
+    }
+    throw error;
   }
 };
 
 export const getPersonalizedMaintenance = async (car: Car, currentKm: number): Promise<ManufacturerSpecs> => {
-  if (!API_KEY) {
-    return { tirePressure: "2.4 bar", oilType: "5W30", checkPoints: ["Niveau Huile", "Pression Pneus", "Lave-glace"] };
-  }
+  const apiKey = process.env.API_KEY;
+  if (!apiKey) return { tirePressure: "2.5 bar", oilType: "Standard", checkPoints: ["Pneus", "Huile"] };
+  
   try {
-    const ai = new GoogleGenAI({ apiKey: API_KEY });
-    const prompt = `
-      Expert Mécanique NSP. Véhicule: ${car.name}, Moteur: ${car.fuelType}, Km: ${currentKm}.
-      Donne 3 points de contrôle de CONFORMITÉ et SÉCURITÉ spécifiques à ce modèle pour le maintenir en parfait état.
-      Ajoute une instruction technique courte pour aider l'utilisateur (ex: localisation bouchon, type de liquide).
-      Réponds en Français.
-    `;
+    const ai = new GoogleGenAI({ apiKey });
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: prompt,
+      model: 'gemini-3-flash-preview',
+      contents: `Génère les préconisations d'entretien JSON pour un véhicule ${car.name} (${car.fuelType}) ayant ${currentKm} km.`,
       config: {
         responseMimeType: "application/json",
         responseSchema: {
@@ -140,8 +138,10 @@ export const getPersonalizedMaintenance = async (car: Car, currentKm: number): P
         }
       }
     });
-    return JSON.parse(cleanJsonString(response.text));
-  } catch (e) {
-    return { tirePressure: "2.5 bar", oilType: "Standard", checkPoints: ["Pneus", "Huile", "Lave-glace"] };
+    
+    const text = response.text;
+    return text ? JSON.parse(text) : { tirePressure: "2.5 bar", oilType: "Standard", checkPoints: ["Pneus", "Huile"] };
+  } catch {
+    return { tirePressure: "2.5 bar", oilType: "Standard", checkPoints: ["Pneus", "Huile"] };
   }
 };

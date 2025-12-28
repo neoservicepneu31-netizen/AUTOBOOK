@@ -1,5 +1,4 @@
 
-
 export enum Screen {
   AUTH = 'AUTH',
   GARAGE = 'GARAGE',
@@ -9,42 +8,48 @@ export enum Screen {
   SELL_CAR = 'SELL_CAR',
   BUY_CAR = 'BUY_CAR',
   ASSISTANCE = 'ASSISTANCE',
-  ADMIN_DASHBOARD = 'ADMIN_DASHBOARD' // Nouvel écran Admin
+  ADMIN_DASHBOARD = 'ADMIN_DASHBOARD'
+}
+
+export interface AIStudio {
+  hasSelectedApiKey(): Promise<boolean>;
+  openSelectKey(): Promise<void>;
+}
+
+declare global {
+  interface Window {
+    // Removed the optional modifier '?' to match the required property declaration in the global context.
+    // This resolves the error: "Subsequent property declarations must have the same type."
+    aistudio: AIStudio;
+  }
 }
 
 export interface User {
   id: string;
   name: string;
   email: string;
-  password?: string; // Ajout pour la mémorisation
-  role: 'user' | 'admin'; // Rôle de sécurité
+  password?: string;
+  role: 'user' | 'admin';
   clientType?: 'new' | 'existing';
-  isValidated?: boolean; // Validation par l'admin
-  passwordResetRequested?: boolean; // Demande de reset en attente
-  
-  // --- MONÉTISATION ---
-  isPremium?: boolean;          // 5€ (Tout inclus)
-  hasSivAccess?: boolean;       // 1€ (Plaque immat)
-  hasAssistanceAccess?: boolean;// 1€ (Assistance)
+  isValidated?: boolean;
+  passwordResetRequested?: boolean;
+  isPremium?: boolean;
+  hasSivAccess?: boolean;
+  hasAssistanceAccess?: boolean;
 }
 
 export interface TechnicalSpecs {
-  // Pneus & Freins
-  tireDimensions?: string; // ex: 205/55 R16
-  tirePressure?: string;   // ex: 2.5 bar AV / 2.4 bar AR
-  
-  // Fluides & Batterie
-  oilViscosity?: string;   // ex: 5W30
-  oilCapacity?: string;    // ex: 4.5L
-  batteryRef?: string;     // ex: 70Ah 640A
-  colorCode?: string;      // ex: EWP (Blanc Banquise)
-  
-  // Filtres & Consommables
-  oilFilterRef?: string;   // ex: Purflux L398a
-  airFilterRef?: string;   // ex: Mann C2512
-  fuelFilterRef?: string;  // ex: Bosch F026
-  cabinFilterRef?: string; // ex: Valeo 715
-  wiperRef?: string;       // ex: Bosch A123S
+  tireDimensions?: string;
+  tirePressure?: string;
+  oilViscosity?: string;
+  oilCapacity?: string;
+  batteryRef?: string;
+  colorCode?: string;
+  oilFilterRef?: string;
+  airFilterRef?: string;
+  fuelFilterRef?: string;
+  cabinFilterRef?: string;
+  wiperRef?: string;
 }
 
 export interface NewsArticle {
@@ -60,7 +65,7 @@ export interface NewsArticle {
 
 export interface Car {
   id: string;
-  ownerId: string; // Lien sécurisé vers le propriétaire
+  ownerId: string;
   name: string;
   type: 'car' | 'motorcycle';
   plate: string;
@@ -83,9 +88,7 @@ export interface Car {
     interior: 'good' | 'average' | 'bad';
     engine: 'good' | 'average' | 'bad';
   };
-  // La mémoire technique du véhicule
   specs?: TechnicalSpecs;
-  // Assurance
   insurance?: {
     contractNumber?: string;
     assistancePhone?: string;
@@ -103,8 +106,7 @@ export interface Invoice {
   price: number;
   volume?: number;
   imageUrl?: string;
-  secureStorageId?: string; // ID du fichier dans le coffre-fort
-  // Infos techniques détectées dans cette facture
+  secureStorageId?: string;
   detectedSpecs?: TechnicalSpecs;
 }
 

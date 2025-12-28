@@ -11,18 +11,15 @@
     <meta name="apple-mobile-web-app-title" content="AUTOBOOK" />
     
     <link rel="manifest" href="manifest.json" />
-    <!-- Mise à jour icône : Utilisation d'une icône de voiture générique pour correspondre au style -->
     <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/3202/3202926.png" />
     <link rel="icon" type="image/png" href="https://cdn-icons-png.flaticon.com/512/3202/3202926.png" />
     
     <title>AUTOBOOK</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
-      // Global Error Handler for Production Crashes
       window.onerror = function(message, source, lineno, colno, error) {
         const root = document.getElementById('root');
         if (root && root.innerHTML.trim() === '') {
-          // If screen is empty (white screen), show error
           document.body.innerHTML = `
             <div style="background:#121212; color:white; padding:20px; font-family:sans-serif; height:100vh; display:flex; flex-direction:column; justify-content:center; align-items:center; text-align:center;">
               <h1 style="color:#E63946; font-size:24px; margin-bottom:10px;">⚠️ Oups ! Erreur Technique</h1>
@@ -54,58 +51,11 @@
             },
             fontFamily: {
               sans: ['Inter', 'sans-serif'],
-            },
-            animation: {
-              'fade-in': 'fadeIn 0.5s ease-out',
-              'slide-up': 'slideUp 0.5s ease-out',
-              'scale-up': 'scaleUp 0.3s ease-out',
-            },
-            keyframes: {
-              fadeIn: {
-                '0%': { opacity: '0' },
-                '100%': { opacity: '1' },
-              },
-              slideUp: {
-                '0%': { transform: 'translateY(20px)', opacity: '0' },
-                '100%': { transform: 'translateY(0)', opacity: '1' },
-              },
-              scaleUp: {
-                '0%': { transform: 'scale(0.9)', opacity: '0' },
-                '100%': { transform: 'scale(1)', opacity: '1' },
-              }
             }
           }
         }
       }
     </script>
-    <style>
-      /* Custom Scrollbar for Webkit */
-      ::-webkit-scrollbar {
-        width: 8px;
-      }
-      ::-webkit-scrollbar-track {
-        background: #121212; 
-      }
-      ::-webkit-scrollbar-thumb {
-        background: #333; 
-        border-radius: 4px;
-      }
-      ::-webkit-scrollbar-thumb:hover {
-        background: #E63946; 
-      }
-      /* Disable select on UI elements for native app feel */
-      .no-select {
-        user-select: none;
-        -webkit-user-select: none;
-      }
-      /* Support Safe Area for iPhone Notch */
-      body {
-        padding-top: env(safe-area-inset-top);
-        padding-bottom: env(safe-area-inset-bottom);
-        padding-left: env(safe-area-inset-left);
-        padding-right: env(safe-area-inset-right);
-      }
-    </style>
   <script type="importmap">
 {
   "imports": {
@@ -113,7 +63,10 @@
     "@google/genai": "https://aistudiocdn.com/@google/genai@^1.30.0",
     "react/": "https://aistudiocdn.com/react@^19.2.1/",
     "react": "https://aistudiocdn.com/react@^19.2.1",
-    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.1/"
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.1/",
+    "firebase/app": "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js",
+    "firebase/firestore": "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js",
+    "firebase/": "https://esm.sh/firebase@^12.7.0/"
   }
 }
 </script>

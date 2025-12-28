@@ -1,6 +1,12 @@
 
 import { User, Car, Invoice } from '../types';
 
+/**
+ * CONFIGURATION AUTOBOOK CLOUD
+ * Pour synchroniser tous les téléphones de l'Europe, 
+ * remplacez cette logique par une API REST ou Firebase.
+ */
+
 const KEYS = {
   USERS: 'AUTOBOOK_DB_USERS_V2', 
   CARS: 'AUTOBOOK_DB_CARS_V2',
@@ -8,7 +14,6 @@ const KEYS = {
   SESSION: 'AUTOBOOK_SESSION_V2'
 };
 
-// Seul le compte administrateur est conservé par défaut
 const DEFAULT_USERS: User[] = [
   { 
     id: 'admin-001', 
@@ -34,6 +39,7 @@ const loadData = <T>(key: string, fallback: T): T => {
 const saveData = <T>(key: string, data: T): boolean => {
   try {
     localStorage.setItem(key, JSON.stringify(data));
+    // SIMULATION : Ici, on enverrait les données au serveur Cloud pour l'Europe
     return true;
   } catch (e) {
     return false;
@@ -46,7 +52,6 @@ export const db = {
     saveAll: (users: User[]) => saveData(KEYS.USERS, users),
     seedGlobal: () => {
       const existing = loadData<User[]>(KEYS.USERS, DEFAULT_USERS);
-      // On vérifie simplement que l'admin est présent, on n'ajoute plus de faux comptes
       const hasAdmin = existing.some(u => u.role === 'admin');
       if (!hasAdmin) {
         saveData(KEYS.USERS, [...DEFAULT_USERS, ...existing]);
