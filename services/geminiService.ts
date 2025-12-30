@@ -2,6 +2,9 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { Car, ManufacturerSpecs, TechnicalSpecs } from "../types";
 
+/**
+ * Compresse et traite le fichier pour le stockage local
+ */
 export const processFile = (file: File): Promise<string> => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -9,18 +12,17 @@ export const processFile = (file: File): Promise<string> => {
     reader.onload = (e) => {
       const result = e.target?.result as string;
       
-      // Si c'est un PDF, on renvoie le résultat brut tel quel
+      // Si c'est un PDF, on garde tel quel
       if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
         resolve(result);
         return;
       }
 
-      // Si c'est une image, on compresse agressivement pour le localStorage (limite ~5Mo)
+      // Si c'est une image, compression forte pour garantir la persistence sur Vercel/Web
       const img = new Image();
       img.onload = () => {
         const canvas = document.createElement('canvas');
-        // On réduit la taille max pour éviter de saturer le localStorage
-        const MAX_SIZE = 800; 
+        const MAX_SIZE = 1000; // Taille optimale pour lecture IA + stockage
         let width = img.width;
         let height = img.height;
         
@@ -37,8 +39,8 @@ export const processFile = (file: File): Promise<string> => {
         const ctx = canvas.getContext('2d');
         if (ctx) {
           ctx.drawImage(img, 0, 0, width, height);
-          // Qualité 0.5 pour maximiser le nombre de documents stockables
-          resolve(canvas.toDataURL('image/jpeg', 0.5));
+          // On utilise JPEG à 0.6 pour un bon compromis poids/lisibilité
+          resolve(canvas.toDataURL('image/jpeg', 0.6));
         } else {
           resolve(result);
         }
@@ -50,6 +52,31 @@ export const processFile = (file: File): Promise<string> => {
     reader.onerror = reject;
     reader.readAsDataURL(file);
   });
+};
+
+/**
+ * Convertit une chaîne Base64 en URL d'objet Blob pour un affichage stable
+ */
+export const safeBase64ToBlobUrl = (base64Data: string): string => {
+  try {
+    if (!base64Data.startsWith('data:')) return base64Data;
+    
+    const parts = base64Data.split(';base64,');
+    const contentType = parts[0].split(':')[1];
+    const raw = window.atob(parts[1]);
+    const rawLength = raw.length;
+    const uInt8Array = new Uint8Array(rawLength);
+
+    for (let i = 0; i < rawLength; ++i) {
+      uInt8Array[i] = raw.charCodeAt(i);
+    }
+
+    const blob = new Blob([uInt8Array], { type: contentType });
+    return URL.createObjectURL(blob);
+  } catch (e) {
+    console.error("Erreur conversion Blob:", e);
+    return base64Data; // Fallback au base64 original
+  }
 };
 
 export const fileToGenerativePart = async (file: File): Promise<string> => {

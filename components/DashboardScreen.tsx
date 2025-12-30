@@ -1,8 +1,8 @@
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { User, Car, Invoice, AIStatus, ManufacturerSpecs, TechnicalSpecs } from '../types';
 import { Plus, FileText, ArrowLeft, Sparkles, Gauge, Droplet, ShieldCheck, PhoneCall, Bell, BellOff, X, Trash2, ZoomIn, Download, Wrench, Cpu, Database, AlertCircle, ChevronRight, Settings } from 'lucide-react';
-import { getPersonalizedMaintenance } from '../services/geminiService';
+import { getPersonalizedMaintenance, safeBase64ToBlobUrl } from '../services/geminiService';
 import { requestNotificationPermission, sendLocalNotification } from '../services/notificationService';
 import { calculateMaintenanceStatus } from '../services/mechanicRules';
 
@@ -34,12 +34,18 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
   const proactiveStatus = calculateMaintenanceStatus(car, invoices);
   const lastMileage = invoices.length > 0 ? Math.max(...invoices.map(i => i.km)) : car.initialKm;
 
+  // Optimisation de l'URL pour la visionneuse
+  const safeImageUrl = useMemo(() => {
+    if (viewingInvoice?.imageUrl) {
+      return safeBase64ToBlobUrl(viewingInvoice.imageUrl);
+    }
+    return null;
+  }, [viewingInvoice]);
+
   useEffect(() => {
-    // Vérification initiale de la permission système
     if ("Notification" in window) {
       setNotifEnabled(Notification.permission === 'granted');
     }
-    
     const loadSpecs = async () => {
       const data = await getPersonalizedMaintenance(car, lastMileage);
       setSpecs(data);
@@ -50,7 +56,6 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
   const toggleNotifications = async () => {
     if (notifEnabled) {
       setNotifEnabled(false);
-      // On ne peut pas révoquer au niveau OS via JS, mais on désactive l'intérêt applicatif
     } else {
       const granted = await requestNotificationPermission();
       if (granted) {
@@ -82,7 +87,6 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
              <span className="text-[9px] text-gray-400 font-black uppercase">Synchronisé</span>
           </div>
         </div>
-        
         <div className="p-6">
           {!hasAnySpec ? (
             <div className="py-8 text-center space-y-4">
@@ -101,7 +105,6 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
             </div>
           )}
         </div>
-        
         {hasAnySpec && (
           <div className="px-6 py-4 bg-nsp-primary/5 border-t border-nsp-border flex items-center gap-2">
              <ShieldCheck size={14} className="text-nsp-primary" />
@@ -133,7 +136,6 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
       </header>
 
       <main className="p-6 max-w-4xl mx-auto space-y-8 animate-fade-in">
-        {/* STATS RAPIDES */}
         <div className="grid grid-cols-3 gap-3">
             <div className="bg-nsp-card border border-nsp-border rounded-3xl p-5 flex flex-col items-center text-center">
                 <div className={`w-12 h-12 rounded-2xl flex items-center justify-center mb-3 ${proactiveStatus.alerts.includes('REVISION') ? 'bg-red-500/20 text-red-500' : 'bg-green-500/20 text-green-500'}`}>
@@ -155,7 +157,6 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
             </div>
         </div>
 
-        {/* ANALYSE IA GÉNÉRALE */}
         <div className={`relative overflow-hidden rounded-[2.5rem] border p-8 transition-all shadow-2xl ${
           proactiveStatus.status === 'critical' ? 'border-red-600 bg-red-950/20 shadow-red-900/10' :
           proactiveStatus.status === 'warning' ? 'border-yellow-500/30 bg-yellow-900/10' : 
@@ -176,7 +177,6 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
           </div>
         </div>
 
-        {/* NOUVEAU : CENTRE DE CONTRÔLE NOTIFICATIONS */}
         <div className="bg-nsp-card border border-nsp-border rounded-[2.5rem] p-6 shadow-2xl relative overflow-hidden">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-3">
@@ -188,8 +188,6 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
                 <p className="text-[9px] text-gray-500 uppercase font-black mt-1">Maintenance & Échéances</p>
               </div>
             </div>
-            
-            {/* TOGGLE SWITCH CUSTOM */}
             <button 
               onClick={toggleNotifications}
               className={`w-14 h-8 rounded-full relative transition-all duration-300 shadow-inner ${notifEnabled ? 'bg-nsp-primary' : 'bg-nsp-input'}`}
@@ -227,7 +225,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
                         <div className="flex items-center gap-5">
                             <div className="w-12 h-12 rounded-2xl bg-nsp-input flex items-center justify-center text-nsp-primary group-hover:scale-110 transition-transform overflow-hidden">
                                {inv.imageUrl ? (
-                                  isPDF(inv.imageUrl) ? <FileText size={20} /> : <img src={inv.imageUrl} className="w-full h-full object-cover opacity-60" />
+                                  isPDF(inv.imageUrl) ? <FileText size={20} /> : <img src={safeBase64ToBlobUrl(inv.imageUrl)} className="w-full h-full object-cover opacity-60" />
                                ) : <FileText size={20}/>}
                             </div>
                             <div>
@@ -246,14 +244,12 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
         </div>
       </main>
 
-      {/* BOUTON D'AJOUT FLOTTANT */}
       <div className="fixed bottom-10 right-8 z-50">
           <button onClick={onAddInvoice} className="w-20 h-20 bg-nsp-primary rounded-[2rem] shadow-[0_20px_40px_rgba(230,57,70,0.4)] flex items-center justify-center text-white active:scale-90 transition-transform">
               <Plus size={40} />
           </button>
       </div>
 
-      {/* VISIONNEUSE */}
       {viewingInvoice && (
         <div className="fixed inset-0 z-[100] bg-black/98 backdrop-blur-3xl flex flex-col animate-fade-in overflow-y-auto">
           <header className="flex justify-between items-center p-6 pt-safe-top bg-black/40 border-b border-white/5 sticky top-0 z-50">
@@ -283,7 +279,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
                         <p className="text-gray-500 text-[10px] font-bold uppercase leading-relaxed">Document sécurisé en haute résolution.</p>
                      </div>
                      <a 
-                       href={viewingInvoice.imageUrl} 
+                       href={safeImageUrl || ''} 
                        target="_blank"
                        rel="noopener noreferrer"
                        className="bg-nsp-primary text-white px-10 py-5 rounded-[2rem] font-black text-[10px] uppercase tracking-widest flex items-center gap-3 shadow-xl active:scale-95 transition-all"
@@ -294,7 +290,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
                 ) : viewingInvoice.imageUrl && !imageError ? (
                   <div className="relative cursor-zoom-in" onClick={() => setIsFullscreen(!isFullscreen)}>
                     <img 
-                      src={viewingInvoice.imageUrl} 
+                      src={safeImageUrl || ''} 
                       className={`w-full transition-all duration-500 ${isFullscreen ? 'h-full object-contain' : 'h-auto max-h-[70vh] object-contain mx-auto block'}`} 
                       alt="Facture" 
                       onError={() => setImageError(true)}
@@ -317,13 +313,12 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
                         <p className="text-white font-black text-sm uppercase mb-2">Erreur d'affichage</p>
                         <p className="text-gray-500 text-[10px] font-bold uppercase">Le visuel est peut-être trop volumineux pour l'aperçu, mais il est archivé.</p>
                      </div>
-                     <a 
-                       href={viewingInvoice.imageUrl} 
-                       download={`facture_${viewingInvoice.date}.jpg`}
+                     <button 
+                       onClick={() => window.open(safeImageUrl || '', '_blank')}
                        className="bg-white text-black px-8 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest flex items-center gap-2 shadow-xl"
                      >
-                       <Download size={16} /> Forcer le téléchargement
-                     </a>
+                       <Download size={16} /> Ouvrir en Plein Écran
+                     </button>
                   </div>
                 )}
               </div>

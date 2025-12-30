@@ -1,16 +1,16 @@
 import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
-// Import process with a unique name to avoid conflict with the global 'Process' type or variable
-import * as nodeProcess from 'node:process';
+// Import specific functions from node:process to avoid conflict with the global 'Process' type
+import { cwd, env as nodeEnv } from 'node:process';
 
 export default defineConfig(({ mode }) => {
   // Charge les variables .env en local + les variables d'environnement Vercel
-  // Access the current working directory safely via the nodeProcess import
-  const env = loadEnv(mode, nodeProcess.cwd(), '');
+  // Fix: Use the imported cwd function to get the current working directory safely
+  const env = loadEnv(mode, cwd(), '');
   
   // On priorise la variable de l'environnement de build
-  // Fix: Access API_KEY from the loaded environment or the nodeProcess.env object
-  const apiKey = env.API_KEY || nodeProcess.env.API_KEY;
+  // Fix: Access API_KEY from the loaded environment or the nodeEnv object
+  const apiKey = env.API_KEY || nodeEnv.API_KEY;
 
   return {
     plugins: [react()],
