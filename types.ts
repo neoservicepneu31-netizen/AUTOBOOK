@@ -11,19 +11,6 @@ export enum Screen {
   ADMIN_DASHBOARD = 'ADMIN_DASHBOARD'
 }
 
-export interface AIStudio {
-  hasSelectedApiKey(): Promise<boolean>;
-  openSelectKey(): Promise<void>;
-}
-
-declare global {
-  interface Window {
-    // Fixed: Removed optional modifier to resolve the "Subsequent property declarations must have the same type" error.
-    // This matches the expected required signature in the global environment while maintaining the AIStudio interface.
-    aistudio: AIStudio;
-  }
-}
-
 export interface User {
   id: string;
   name: string;

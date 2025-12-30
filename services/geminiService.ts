@@ -2,7 +2,7 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { Car, ManufacturerSpecs, TechnicalSpecs } from "../types";
 
-// Utility to process and compress images before sending to Gemini
+// Utilitaire pour compresser et convertir l'image en base64
 export const processFile = (file: File): Promise<string> => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -40,7 +40,6 @@ export const processFile = (file: File): Promise<string> => {
   });
 };
 
-// Converts a file to base64 for Gemini inlineData
 export const fileToGenerativePart = async (file: File): Promise<string> => {
   if (file.type.startsWith('image/')) {
     const compressedDataUrl = await processFile(file);
@@ -53,19 +52,18 @@ export const fileToGenerativePart = async (file: File): Promise<string> => {
   });
 };
 
-// Analyzes an invoice image using Gemini 3 and returns structured data
+// Analyse d'un document automobile (Facture ou reçu carburant)
 export const analyzeInvoiceImage = async (base64Data: string, mimeType: string = 'image/jpeg') => {
-  // Use the injected API key directly. No local UI checks.
+  // On instancie l'IA au moment de l'appel avec la clé d'environnement
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   
   try {
-    const modelName = 'gemini-3-flash-preview';
     const response = await ai.models.generateContent({
-      model: modelName,
+      model: 'gemini-3-flash-preview',
       contents: {
         parts: [
           { inlineData: { mimeType: mimeType.startsWith('image') ? 'image/jpeg' : mimeType, data: base64Data } },
-          { text: "Tu es un expert en maintenance automobile. Analyse ce document (facture, reçu, ticket) et extrais les informations suivantes en JSON strict : type (fuel/maintenance), title (nom du garage ou de l'enseigne), date (format YYYY-MM-DD), km (kilométrage affiché), price (montant total TTC), volume (nombre de litres si c'est un plein de carburant), specs (un objet avec tireDimensions, oilViscosity, batteryRef si ces infos sont présentes)." }
+          { text: "Tu es un expert automobile. Analyse ce document (facture de garage, ticket carburant, reçu d'entretien). Extrais précisément les informations en JSON strict avec les clés suivantes : type (valeur: 'fuel' ou 'maintenance'), title (nom du garage ou de l'enseigne), date (format YYYY-MM-DD), km (kilométrage numérique), price (montant total TTC numérique), volume (nombre de litres si carburant), specs (objet avec tireDimensions, oilViscosity, batteryRef si visibles)." }
         ]
       },
       config: {
@@ -96,18 +94,17 @@ export const analyzeInvoiceImage = async (base64Data: string, mimeType: string =
     const text = response.text;
     return text ? JSON.parse(text) : null;
   } catch (error: any) {
-    console.error("Gemini Error:", error);
+    console.error("Erreur Scan IA:", error);
     throw error;
   }
 };
 
 export const getPersonalizedMaintenance = async (car: Car, currentKm: number): Promise<ManufacturerSpecs> => {
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-  
   try {
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
-      contents: `Génère les préconisations d'entretien constructeur en JSON pour un véhicule ${car.name} (${car.fuelType}) ayant ${currentKm} km. Inclus : pression pneus (bar), type d'huile idéal et liste de points de contrôle.`,
+      contents: `Génère les préconisations d'entretien pour un véhicule ${car.name} (${car.fuelType}) à ${currentKm} km. Réponds en JSON.`,
       config: {
         responseMimeType: "application/json",
         responseSchema: {
@@ -120,10 +117,9 @@ export const getPersonalizedMaintenance = async (car: Car, currentKm: number): P
         }
       }
     });
-    
     const text = response.text;
-    return text ? JSON.parse(text) : { tirePressure: "2.5 bar", oilType: "Standard", checkPoints: ["Pneus", "Huile"] };
+    return text ? JSON.parse(text) : { tirePressure: "2.5 bar", oilType: "5W30", checkPoints: ["Vidange", "Pneus"] };
   } catch {
-    return { tirePressure: "2.5 bar", oilType: "Standard", checkPoints: ["Pneus", "Huile"] };
+    return { tirePressure: "2.5 bar", oilType: "5W30", checkPoints: ["Vidange", "Pneus"] };
   }
 };

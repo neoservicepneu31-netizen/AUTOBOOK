@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { User, Car, Invoice, AIStudio } from '../types';
+import { User, Car, Invoice } from '../types';
 import { cloud } from '../services/cloudService';
 import { 
   BarChart3, Users, QrCode, Printer, 

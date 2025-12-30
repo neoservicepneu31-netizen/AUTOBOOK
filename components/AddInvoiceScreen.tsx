@@ -1,7 +1,7 @@
 
 import React, { useState, useRef } from 'react';
 import { Invoice, TechnicalSpecs } from '../types';
-import { Loader2, X, Check, Camera, Zap, HardDrive, AlertTriangle, Fuel, Wrench, RefreshCw, Sparkles } from 'lucide-react';
+import { Loader2, X, Check, Camera, Zap, HardDrive, AlertTriangle, Fuel, Wrench, RefreshCw } from 'lucide-react';
 import { analyzeInvoiceImage, fileToGenerativePart, processFile } from '../services/geminiService';
 
 interface AddInvoiceScreenProps {
@@ -20,7 +20,6 @@ export const AddInvoiceScreen: React.FC<AddInvoiceScreenProps> = ({ carId, onSav
   const [currentMimeType, setCurrentMimeType] = useState<string>('image/jpeg');
   const [detectedSpecs, setDetectedSpecs] = useState<TechnicalSpecs | undefined>(undefined);
   
-  const cameraInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [formData, setFormData] = useState({
@@ -35,7 +34,6 @@ export const AddInvoiceScreen: React.FC<AddInvoiceScreenProps> = ({ carId, onSav
     setIsAnalyzing(true);
     setIsSuccess(false);
     setAnalysisError(null);
-    setDetectedSpecs(undefined);
 
     try {
       const result = await analyzeInvoiceImage(base64, mime);
@@ -53,8 +51,8 @@ export const AddInvoiceScreen: React.FC<AddInvoiceScreenProps> = ({ carId, onSav
         setDetectedSpecs(result.specs);
       }
     } catch (error: any) {
-      console.error("Scan failed:", error);
-      setAnalysisError("Échec de l'analyse automatique. Vous pouvez remplir le formulaire manuellement.");
+      console.error("Scan error:", error);
+      setAnalysisError("Impossible de scanner automatiquement. Merci de remplir les champs manuellement.");
     } finally {
       setIsAnalyzing(false);
     }
@@ -76,7 +74,7 @@ export const AddInvoiceScreen: React.FC<AddInvoiceScreenProps> = ({ carId, onSav
       }
       setFinalBase64(base64);
 
-      // Lancement automatique du scan dès que le fichier est sélectionné
+      // Le scan se lance TOUT SEUL dès que le fichier est sélectionné
       performAnalysis(base64, file.type);
       
     } catch (error: any) {
@@ -105,7 +103,7 @@ export const AddInvoiceScreen: React.FC<AddInvoiceScreenProps> = ({ carId, onSav
     <div className="h-[100dvh] bg-nsp-bg flex flex-col w-full absolute inset-0 z-50 overflow-hidden">
       <div className="p-4 flex items-center justify-between bg-nsp-card border-b border-nsp-border shrink-0 pt-safe-top">
         <button onClick={onCancel} className="text-nsp-sub p-2"><X size={24} /></button>
-        <h2 className="text-sm font-black text-white uppercase tracking-widest">Nouveau Document</h2>
+        <h2 className="text-sm font-black text-white uppercase tracking-widest">Scanner Document</h2>
         <div className="w-6"></div>
       </div>
 
@@ -130,7 +128,7 @@ export const AddInvoiceScreen: React.FC<AddInvoiceScreenProps> = ({ carId, onSav
         {/* SCAN AREA */}
         <div className="mb-6">
           <div 
-            onClick={() => !isAnalyzing && cameraInputRef.current?.click()}
+            onClick={() => !isAnalyzing && fileInputRef.current?.click()}
             className={`relative aspect-video rounded-[2.5rem] border-2 border-dashed flex flex-col items-center justify-center overflow-hidden cursor-pointer transition-all ${isSuccess ? 'border-nsp-success bg-nsp-success/5' : analysisError ? 'border-red-500/30 bg-red-950/10' : 'border-gray-700 bg-nsp-input'}`}
           >
             {imagePreview && <img src={imagePreview} className="absolute inset-0 w-full h-full object-cover opacity-20" />}
@@ -151,14 +149,13 @@ export const AddInvoiceScreen: React.FC<AddInvoiceScreenProps> = ({ carId, onSav
                   <div className="bg-nsp-success text-white px-8 py-4 rounded-full font-black text-[11px] uppercase tracking-widest flex items-center gap-3 shadow-2xl animate-fade-in">
                     <Check size={20} /> Analyse Réussie
                   </div>
-                  <span className="text-[9px] text-gray-500 uppercase font-black tracking-widest">Données extraites</span>
                 </div>
               ) : (
                 <>
                   <div className="w-20 h-20 rounded-full bg-nsp-bg flex items-center justify-center border border-white/5 shadow-2xl mb-2">
                     <Camera size={36} className="text-gray-600" />
                   </div>
-                  <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest text-center">Scanner ou Importer Document</span>
+                  <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest text-center">Ajouter Photo ou Document</span>
                 </>
               )}
             </div>
@@ -169,7 +166,7 @@ export const AddInvoiceScreen: React.FC<AddInvoiceScreenProps> = ({ carId, onSav
               onClick={() => performAnalysis(finalBase64, currentMimeType)}
               className="mt-4 w-full bg-nsp-primary/10 text-nsp-primary border border-nsp-primary/20 py-3 rounded-xl text-[10px] font-black uppercase flex items-center justify-center gap-2"
             >
-              <RefreshCw size={14} /> Relancer l'analyse IA
+              <RefreshCw size={14} /> Réessayer l'analyse IA
             </button>
           )}
         </div>
@@ -183,7 +180,7 @@ export const AddInvoiceScreen: React.FC<AddInvoiceScreenProps> = ({ carId, onSav
 
         {/* FORM FIELDS */}
         <div className="space-y-6">
-          <div className="animate-fade-in">
+          <div>
             <label className="text-[9px] text-gray-600 font-black uppercase mb-2 ml-1 block tracking-widest">Établissement / Garage</label>
             <input 
               type="text" 
@@ -195,7 +192,7 @@ export const AddInvoiceScreen: React.FC<AddInvoiceScreenProps> = ({ carId, onSav
           </div>
 
           <div className="grid grid-cols-2 gap-4">
-            <div className="animate-fade-in">
+            <div>
               <label className="text-[9px] text-gray-600 font-black uppercase mb-2 ml-1 block tracking-widest">Kilométrage</label>
               <input 
                 type="number" 
@@ -205,7 +202,7 @@ export const AddInvoiceScreen: React.FC<AddInvoiceScreenProps> = ({ carId, onSav
                 placeholder="0" 
               />
             </div>
-            <div className="animate-fade-in">
+            <div>
               <label className="text-[9px] text-gray-600 font-black uppercase mb-2 ml-1 block tracking-widest">Prix Total (€)</label>
               <input 
                 type="number" 
@@ -233,7 +230,7 @@ export const AddInvoiceScreen: React.FC<AddInvoiceScreenProps> = ({ carId, onSav
           {detectedSpecs && (
             <div className="mt-8 bg-nsp-primary/5 border border-nsp-primary/10 p-6 rounded-[2.5rem] animate-slide-up shadow-inner">
               <h3 className="text-[10px] font-black text-white uppercase tracking-[0.2em] mb-4 flex items-center gap-3">
-                <Sparkles size={16} className="text-nsp-primary" /> Mémoire Technique IA
+                <HardDrive size={16} className="text-nsp-primary" /> Mémoire Technique IA
               </h3>
               <div className="grid grid-cols-2 gap-3">
                 {Object.entries(detectedSpecs).map(([key, val]) => val && (
@@ -259,7 +256,6 @@ export const AddInvoiceScreen: React.FC<AddInvoiceScreenProps> = ({ carId, onSav
         </button>
       </div>
 
-      <input type="file" ref={cameraInputRef} className="hidden" capture="environment" onChange={handleFileChange} />
       <input type="file" ref={fileInputRef} className="hidden" accept="image/*,application/pdf" onChange={handleFileChange} />
     </div>
   );
