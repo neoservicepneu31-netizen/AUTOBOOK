@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { Car, Invoice } from '../types';
-import { ArrowLeft, Plus, FileText, Search, Filter, Fuel, Wrench, ChevronRight, X, Calendar, Gauge, Trash2, Database, Sparkles } from 'lucide-react';
+import { ArrowLeft, Plus, FileText, Search, Filter, Fuel, Wrench, ChevronRight, X, Calendar, Gauge, Trash2, Database, Sparkles, ZoomIn } from 'lucide-react';
 
 interface InvoicesListScreenProps {
   car: Car;
@@ -14,6 +14,7 @@ interface InvoicesListScreenProps {
 export const InvoicesListScreen: React.FC<InvoicesListScreenProps> = ({ car, invoices, onBack, onAdd, onDelete }) => {
   const [filter, setFilter] = useState<'all' | 'maintenance' | 'fuel'>('all');
   const [viewingInvoice, setViewingInvoice] = useState<Invoice | null>(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
   const filteredInvoices = invoices.filter(inv => filter === 'all' || inv.type === filter);
   const totalSpend = filteredInvoices.reduce((acc, inv) => acc + inv.price, 0);
@@ -24,7 +25,7 @@ export const InvoicesListScreen: React.FC<InvoicesListScreenProps> = ({ car, inv
         <div className="flex items-center justify-between mb-6">
           <button onClick={onBack} className="p-3 bg-nsp-input rounded-2xl text-nsp-sub"><ArrowLeft size={20}/></button>
           <div className="text-center">
-            <h2 className="text-lg font-black text-white uppercase tracking-widest leading-none">Bibliothèque</h2>
+            <h2 className="text-lg font-black text-white uppercase tracking-widest leading-none">BIBLIOTHÈQUE</h2>
             <p className="text-[9px] text-nsp-primary font-black uppercase mt-1">{car.name}</p>
           </div>
           <button onClick={onAdd} className="p-3 bg-nsp-primary rounded-2xl text-white shadow-lg"><Plus size={20}/></button>
@@ -70,15 +71,21 @@ export const InvoicesListScreen: React.FC<InvoicesListScreenProps> = ({ car, inv
                 className="bg-nsp-card p-5 rounded-3xl border border-nsp-border flex items-center justify-between group hover:border-nsp-primary transition-all active:scale-[0.98] shadow-lg"
               >
                 <div className="flex items-center gap-4">
-                  <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${inv.type === 'fuel' ? 'bg-blue-500/10 text-blue-400' : 'bg-nsp-primary/10 text-nsp-primary'}`}>
-                    {inv.type === 'fuel' ? <Fuel size={20}/> : <Wrench size={20}/>}
+                  <div className="w-14 h-14 rounded-2xl overflow-hidden bg-nsp-input relative shrink-0">
+                    {inv.imageUrl ? (
+                      <img src={inv.imageUrl} className="w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-opacity" alt="Scan" />
+                    ) : (
+                      <div className={`w-full h-full flex items-center justify-center ${inv.type === 'fuel' ? 'text-blue-400' : 'text-nsp-primary'}`}>
+                        {inv.type === 'fuel' ? <Fuel size={20}/> : <Wrench size={20}/>}
+                      </div>
+                    )}
                   </div>
-                  <div>
-                    <h4 className="text-white font-bold text-sm uppercase truncate max-w-[150px]">{inv.title}</h4>
+                  <div className="overflow-hidden">
+                    <h4 className="text-white font-bold text-sm uppercase truncate">{inv.title}</h4>
                     <p className="text-[10px] text-gray-500 mt-1">{inv.date} • {inv.km.toLocaleString()} KM</p>
                   </div>
                 </div>
-                <div className="text-right">
+                <div className="text-right shrink-0">
                   <p className="text-white font-black text-sm">{inv.price}€</p>
                   <ChevronRight size={16} className="text-gray-700 ml-auto mt-1" />
                 </div>
@@ -89,63 +96,86 @@ export const InvoicesListScreen: React.FC<InvoicesListScreenProps> = ({ car, inv
       </div>
 
       {viewingInvoice && (
-        <div className="fixed inset-0 z-[100] bg-black/95 backdrop-blur-3xl flex flex-col p-8 animate-fade-in overflow-y-auto">
-          <header className="flex justify-between items-center mb-10 pt-safe-top">
-            <button onClick={() => setViewingInvoice(null)} className="p-4 bg-nsp-input rounded-2xl text-white"><X size={24}/></button>
+        <div className="fixed inset-0 z-[100] bg-black/95 backdrop-blur-3xl flex flex-col animate-fade-in overflow-y-auto">
+          <header className="flex justify-between items-center p-6 pt-safe-top bg-black/40 border-b border-white/5 sticky top-0 z-50">
+            <button onClick={() => { setViewingInvoice(null); setIsFullscreen(false); }} className="p-3 bg-nsp-input rounded-2xl text-white"><X size={24}/></button>
             <div className="text-center">
-               <h3 className="text-white font-black text-xs uppercase tracking-widest">Détails Document</h3>
-               <p className="text-[9px] text-nsp-primary font-black uppercase mt-1">Audit IA Terminé</p>
+               <h3 className="text-white font-black text-xs uppercase tracking-widest">EXAMEN DU DOCUMENT</h3>
+               <p className="text-[9px] text-nsp-primary font-black uppercase mt-1">Archive Numérique Certifiée</p>
             </div>
-            <div className="w-14"></div>
+            <div className="w-12"></div>
           </header>
 
-          <div className="max-w-md mx-auto w-full space-y-8 pb-10">
+          <div className="max-w-md mx-auto w-full p-6 space-y-8 pb-10">
             {viewingInvoice.imageUrl && (
-              <div className="rounded-[3rem] overflow-hidden border border-white/10 shadow-[0_30px_60px_rgba(0,0,0,0.5)]">
-                <img src={viewingInvoice.imageUrl} className="w-full h-auto max-h-[40vh] object-contain" alt="Facture" />
+              <div 
+                className={`rounded-[2.5rem] overflow-hidden border border-white/10 shadow-2xl relative transition-all duration-500 cursor-zoom-in ${isFullscreen ? 'fixed inset-4 z-[110] bg-black m-0 rounded-3xl' : ''}`}
+                onClick={() => setIsFullscreen(!isFullscreen)}
+              >
+                <img 
+                  src={viewingInvoice.imageUrl} 
+                  className={`w-full transition-all duration-500 ${isFullscreen ? 'h-full object-contain' : 'h-auto max-h-[50vh] object-contain'}`} 
+                  alt="Facture Originale" 
+                />
+                {!isFullscreen && (
+                  <div className="absolute bottom-4 right-4 bg-black/60 p-3 rounded-full text-white backdrop-blur-md">
+                    <ZoomIn size={20} />
+                  </div>
+                )}
+                {isFullscreen && (
+                  <button className="absolute top-4 right-4 bg-nsp-primary text-white p-3 rounded-full shadow-2xl">
+                    <X size={24} />
+                  </button>
+                )}
               </div>
             )}
 
-            <div className="grid grid-cols-2 gap-4">
-              <div className="bg-nsp-card p-6 rounded-[2rem] border border-nsp-border">
-                <p className="text-[10px] text-gray-500 uppercase font-black mb-1">Montant</p>
-                <p className="text-white font-black text-2xl">{viewingInvoice.price}€</p>
-              </div>
-              <div className="bg-nsp-card p-6 rounded-[2rem] border border-nsp-border">
-                <p className="text-[10px] text-gray-500 uppercase font-black mb-1">Kilométrage</p>
-                <p className="text-white font-black text-2xl">{viewingInvoice.km.toLocaleString()}</p>
-              </div>
-            </div>
-
-            <div className="bg-nsp-card p-6 rounded-[2rem] border border-nsp-border space-y-4">
-               <div className="flex items-center gap-3 mb-2">
-                  <Sparkles size={16} className="text-nsp-primary" />
-                  <h5 className="text-[10px] text-white font-black uppercase tracking-widest">Données Techniques Gemini</h5>
-               </div>
-               <div className="space-y-3">
-                  <div className="flex justify-between items-center border-b border-white/5 pb-2">
-                    <span className="text-[10px] text-gray-500 font-bold uppercase">Date</span>
-                    <span className="text-sm text-white font-bold">{viewingInvoice.date}</span>
+            {!isFullscreen && (
+              <>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="bg-nsp-card p-6 rounded-[2rem] border border-nsp-border shadow-xl">
+                    <p className="text-[10px] text-gray-500 uppercase font-black mb-1">Dépense</p>
+                    <p className="text-white font-black text-2xl">{viewingInvoice.price}€</p>
                   </div>
-                  <div className="flex justify-between items-center border-b border-white/5 pb-2">
-                    <span className="text-[10px] text-gray-500 font-bold uppercase">Etablissement</span>
-                    <span className="text-sm text-white font-bold uppercase">{viewingInvoice.title}</span>
+                  <div className="bg-nsp-card p-6 rounded-[2rem] border border-nsp-border shadow-xl">
+                    <p className="text-[10px] text-gray-500 uppercase font-black mb-1">Index KM</p>
+                    <p className="text-white font-black text-2xl">{viewingInvoice.km.toLocaleString()}</p>
                   </div>
-                  {viewingInvoice.detectedSpecs && Object.entries(viewingInvoice.detectedSpecs).map(([key, val]) => val && (
-                    <div key={key} className="flex justify-between items-center border-b border-white/5 pb-2">
-                      <span className="text-[10px] text-gray-500 font-bold uppercase">{key.replace(/Ref|Dimensions|Viscosity/g, '')}</span>
-                      <span className="text-sm text-white font-bold">{val}</span>
-                    </div>
-                  ))}
-               </div>
-            </div>
+                </div>
 
-            <button 
-              onClick={() => { if(confirm('Supprimer ce document de votre garage numérique ?')) { onDelete(viewingInvoice.id); setViewingInvoice(null); } }} 
-              className="w-full bg-red-600/10 text-red-500 font-black py-5 rounded-[2rem] text-[10px] uppercase tracking-widest border border-red-600/20 flex items-center justify-center gap-3"
-            >
-              <Trash2 size={16} /> Supprimer le Document
-            </button>
+                <div className="bg-nsp-card p-6 rounded-[2.5rem] border border-nsp-border space-y-5 shadow-2xl">
+                  <div className="flex items-center gap-3">
+                      <Sparkles size={16} className="text-nsp-primary" />
+                      <h5 className="text-[10px] text-white font-black uppercase tracking-widest">RAPPORT D'ANALYSE IA</h5>
+                  </div>
+                  
+                  <div className="space-y-4">
+                      <div className="flex justify-between items-center border-b border-white/5 pb-2">
+                        <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">Date d'opération</span>
+                        <span className="text-sm text-white font-bold">{viewingInvoice.date}</span>
+                      </div>
+                      <div className="flex justify-between items-center border-b border-white/5 pb-2">
+                        <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">Établissement</span>
+                        <span className="text-sm text-white font-bold uppercase truncate max-w-[180px] text-right">{viewingInvoice.title}</span>
+                      </div>
+                      
+                      {viewingInvoice.detectedSpecs && Object.entries(viewingInvoice.detectedSpecs).map(([key, val]) => val && (
+                        <div key={key} className="flex justify-between items-center border-b border-white/5 pb-2">
+                          <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">{key.replace(/Ref|Dimensions|Viscosity/g, '')}</span>
+                          <span className="text-sm text-nsp-primary font-black uppercase">{val}</span>
+                        </div>
+                      ))}
+                  </div>
+                </div>
+
+                <button 
+                  onClick={() => { if(confirm('Voulez-vous supprimer définitivement ce document de votre garage numérique ?')) { onDelete(viewingInvoice.id); setViewingInvoice(null); } }} 
+                  className="w-full bg-red-600/10 text-red-500 font-black py-5 rounded-[2rem] text-[10px] uppercase tracking-widest border border-red-600/20 flex items-center justify-center gap-3 active:bg-red-600/20 transition-colors"
+                >
+                  <Trash2 size={16} /> SUPPRIMER L'ARCHIVE
+                </button>
+              </>
+            )}
           </div>
         </div>
       )}

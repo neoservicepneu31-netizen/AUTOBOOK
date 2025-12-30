@@ -2,7 +2,7 @@
 import React, { useState, useRef } from 'react';
 import { Invoice, TechnicalSpecs } from '../types';
 import { Loader2, X, Check, Camera, Zap, AlertTriangle, Fuel, Wrench, RefreshCw, FileText, Info } from 'lucide-react';
-import { analyzeInvoiceImage, fileToGenerativePart } from '../services/geminiService';
+import { analyzeInvoiceImage, processFile } from '../services/geminiService';
 
 interface AddInvoiceScreenProps {
   carId: string;
@@ -15,8 +15,7 @@ export const AddInvoiceScreen: React.FC<AddInvoiceScreenProps> = ({ carId, onSav
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
-  const [imagePreview, setImagePreview] = useState<string | null>(null);
-  const [finalBase64, setFinalBase64] = useState<string | null>(null);
+  const [persistentImage, setPersistentImage] = useState<string | null>(null);
   const [currentMimeType, setCurrentMimeType] = useState<string>('image/jpeg');
   const [detectedSpecs, setDetectedSpecs] = useState<TechnicalSpecs | undefined>(undefined);
   
@@ -30,13 +29,15 @@ export const AddInvoiceScreen: React.FC<AddInvoiceScreenProps> = ({ carId, onSav
     volume: ''
   });
 
-  const performAnalysis = async (base64: string, mime: string) => {
+  const performAnalysis = async (base64DataUrl: string, mime: string) => {
     setIsAnalyzing(true);
     setIsSuccess(false);
     setAnalysisError(null);
 
     try {
-      const result = await analyzeInvoiceImage(base64, mime);
+      // On extrait la partie pure base64 pour l'API Gemini
+      const pureBase64 = base64DataUrl.split(',')[1];
+      const result = await analyzeInvoiceImage(pureBase64, mime);
       
       if (result) {
         setIsSuccess(true);
@@ -52,7 +53,7 @@ export const AddInvoiceScreen: React.FC<AddInvoiceScreenProps> = ({ carId, onSav
       }
     } catch (error: any) {
       console.error("AI Analysis Failed:", error);
-      setAnalysisError(error.message);
+      setAnalysisError("L'IA n'a pas pu lire le document. Vérifiez la netteté de la photo.");
     } finally {
       setIsAnalyzing(false);
     }
@@ -68,19 +69,15 @@ export const AddInvoiceScreen: React.FC<AddInvoiceScreenProps> = ({ carId, onSav
     setAnalysisError(null);
 
     try {
-      if (mime.startsWith('image/')) {
-        setImagePreview(URL.createObjectURL(file));
-      } else {
-        setImagePreview(null);
-      }
+      // Transformation en Base64 permanent et compressé
+      const base64DataUrl = await processFile(file);
+      setPersistentImage(base64DataUrl);
 
-      const base64 = await fileToGenerativePart(file);
-      setFinalBase64(base64);
-
-      await performAnalysis(base64, mime);
+      // Analyse par l'IA
+      await performAnalysis(base64DataUrl, mime);
     } catch (error: any) {
       setIsAnalyzing(false);
-      setAnalysisError("Impossible de lire le fichier sélectionné.");
+      setAnalysisError("Impossible de traiter ce fichier.");
     }
   };
 
@@ -95,7 +92,7 @@ export const AddInvoiceScreen: React.FC<AddInvoiceScreenProps> = ({ carId, onSav
       km: parseInt(formData.km) || 0,
       price: parseFloat(formData.price) || 0,
       volume: activeTab === 'fuel' ? parseFloat(formData.volume) || 0 : undefined,
-      imageUrl: imagePreview || undefined,
+      imageUrl: persistentImage || undefined, // On sauvegarde le Base64 permanent
       detectedSpecs
     };
     onSave(newInvoice, detectedSpecs);
@@ -105,7 +102,7 @@ export const AddInvoiceScreen: React.FC<AddInvoiceScreenProps> = ({ carId, onSav
     <div className="h-[100dvh] bg-nsp-bg flex flex-col w-full absolute inset-0 z-50 overflow-hidden">
       <div className="p-4 flex items-center justify-between bg-nsp-card border-b border-nsp-border shrink-0 pt-safe-top">
         <button onClick={onCancel} className="text-nsp-sub p-2"><X size={24} /></button>
-        <h2 className="text-sm font-black text-white uppercase tracking-widest">Document Numérique</h2>
+        <h2 className="text-sm font-black text-white uppercase tracking-widest">Scanner Document</h2>
         <div className="w-6"></div>
       </div>
 
@@ -115,7 +112,7 @@ export const AddInvoiceScreen: React.FC<AddInvoiceScreenProps> = ({ carId, onSav
             onClick={() => setActiveTab('maintenance')}
             className={`flex-1 py-4 rounded-xl flex items-center justify-center gap-2 font-black text-[10px] uppercase tracking-widest transition-all ${activeTab === 'maintenance' ? 'bg-nsp-primary text-white shadow-lg' : 'text-gray-500'}`}
           >
-            <Wrench size={16} /> Entretien
+            <Wrench size={16} /> Maintenance
           </button>
           <button 
             onClick={() => setActiveTab('fuel')}
@@ -128,98 +125,85 @@ export const AddInvoiceScreen: React.FC<AddInvoiceScreenProps> = ({ carId, onSav
         <div className="mb-6">
           <div 
             onClick={() => !isAnalyzing && fileInputRef.current?.click()}
-            className={`relative aspect-video rounded-[2.5rem] border-2 border-dashed flex flex-col items-center justify-center overflow-hidden cursor-pointer transition-all ${isSuccess ? 'border-nsp-success bg-nsp-success/5' : analysisError ? 'border-red-500/30 bg-red-950/10' : 'border-gray-700 bg-nsp-input'}`}
+            className={`relative aspect-[3/4] rounded-[2.5rem] border-2 border-dashed flex flex-col items-center justify-center overflow-hidden cursor-pointer transition-all ${isSuccess ? 'border-nsp-success bg-nsp-success/5' : analysisError ? 'border-red-500/30 bg-red-950/10' : 'border-gray-700 bg-nsp-input'}`}
           >
-            {imagePreview ? (
-              <img src={imagePreview} className="absolute inset-0 w-full h-full object-cover opacity-40" alt="Aperçu" />
-            ) : currentMimeType === 'application/pdf' && finalBase64 ? (
-              <div className="flex flex-col items-center text-nsp-primary">
-                <FileText size={48} />
-                <span className="text-[10px] font-black mt-2">PDF Détecté</span>
-              </div>
-            ) : null}
+            {persistentImage && (
+              <img src={persistentImage} className="absolute inset-0 w-full h-full object-cover" alt="Scan Document" />
+            )}
             
-            <div className="z-10 flex flex-col items-center gap-3">
+            <div className={`z-10 flex flex-col items-center gap-3 ${persistentImage ? 'bg-black/60 p-6 rounded-3xl backdrop-blur-sm' : ''}`}>
               {isAnalyzing ? (
                 <div className="flex flex-col items-center gap-4">
                   <div className="relative">
                     <Loader2 className="animate-spin text-nsp-primary" size={48} />
                     <Zap className="absolute inset-0 m-auto text-nsp-primary animate-pulse" size={16} />
                   </div>
-                  <span className="text-[11px] font-black text-white uppercase tracking-[0.3em] animate-pulse">Extraction IA en cours...</span>
+                  <span className="text-[11px] font-black text-white uppercase tracking-[0.3em] animate-pulse">Lecture IA...</span>
                 </div>
               ) : isSuccess ? (
                 <div className="bg-nsp-success text-white px-8 py-4 rounded-full font-black text-[11px] uppercase tracking-widest flex items-center gap-3 shadow-2xl">
-                  <Check size={20} /> Lecture Terminée
+                  <Check size={20} /> Analyse OK
                 </div>
               ) : (
                 <>
                   <div className="w-16 h-16 rounded-full bg-nsp-bg flex items-center justify-center border border-white/5 shadow-2xl mb-2">
                     <Camera size={32} className="text-gray-600" />
                   </div>
-                  <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest text-center">Prendre en Photo / PDF</span>
+                  <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest text-center">Photographier la facture</span>
                 </>
               )}
             </div>
           </div>
           
-          {finalBase64 && !isAnalyzing && (
+          {persistentImage && !isAnalyzing && (
             <button 
-              onClick={() => performAnalysis(finalBase64, currentMimeType)}
+              onClick={() => performAnalysis(persistentImage, currentMimeType)}
               className="mt-4 w-full bg-nsp-primary/10 text-nsp-primary border border-nsp-primary/20 py-4 rounded-2xl text-[10px] font-black uppercase flex items-center justify-center gap-2 transition-transform active:scale-95"
             >
-              <RefreshCw size={14} /> Réessayer l'analyse IA
+              <RefreshCw size={14} /> Ré-analyser par l'IA
             </button>
           )}
         </div>
 
         {analysisError && (
-           <div className="mb-6 bg-red-950/40 border border-red-500/30 p-5 rounded-[2rem] space-y-3 text-red-200">
-             <div className="flex items-center gap-4">
-                <AlertTriangle size={24} className="shrink-0 text-red-500" />
-                <p className="text-[10px] font-black uppercase tracking-widest leading-tight">{analysisError}</p>
-             </div>
-             {analysisError.includes("CONFIG_ERROR") && (
-               <div className="bg-black/40 p-3 rounded-xl border border-white/5">
-                  <p className="text-[9px] text-gray-400 font-bold flex items-center gap-2">
-                    <Info size={12} className="text-nsp-primary" />
-                    Action : Vérifiez les variables d'environnement sur votre dashboard Vercel et redéployez.
-                  </p>
-               </div>
-             )}
+           <div className="mb-6 bg-red-950/40 border border-red-500/30 p-5 rounded-[2rem] flex items-center gap-4 text-red-200">
+              <AlertTriangle size={24} className="shrink-0 text-red-500" />
+              <p className="text-[10px] font-black uppercase tracking-widest leading-tight">{analysisError}</p>
            </div>
         )}
 
         <div className="space-y-6">
-          <div>
-            <label className="text-[9px] text-gray-600 font-black uppercase mb-2 ml-1 block tracking-widest">Établissement</label>
-            <input 
-              type="text" 
-              className="w-full bg-nsp-input border border-nsp-border rounded-2xl px-6 py-5 text-white font-bold text-sm focus:border-nsp-primary outline-none transition-all" 
-              value={formData.title} 
-              onChange={e => setFormData({...formData, title: e.target.value})} 
-              placeholder="Ex: Norauto, Total..." 
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
+          <div className="bg-nsp-card p-5 rounded-3xl border border-nsp-border space-y-4">
             <div>
-              <label className="text-[9px] text-gray-600 font-black uppercase mb-2 ml-1 block tracking-widest">Kilométrage</label>
+              <label className="text-[9px] text-gray-600 font-black uppercase mb-2 ml-1 block tracking-widest">Établissement / Garage</label>
               <input 
-                type="number" 
-                className="w-full bg-nsp-input border border-nsp-border rounded-2xl px-6 py-5 text-white font-bold text-sm focus:border-nsp-primary outline-none" 
-                value={formData.km} 
-                onChange={e => setFormData({...formData, km: e.target.value})} 
+                type="text" 
+                className="w-full bg-nsp-input border border-transparent rounded-2xl px-6 py-4 text-white font-bold text-sm focus:border-nsp-primary outline-none" 
+                value={formData.title} 
+                onChange={e => setFormData({...formData, title: e.target.value})} 
+                placeholder="Ex: Neo Service Pneu..." 
               />
             </div>
-            <div>
-              <label className="text-[9px] text-gray-600 font-black uppercase mb-2 ml-1 block tracking-widest">Prix (€)</label>
-              <input 
-                type="number" 
-                className="w-full bg-nsp-input border border-nsp-border rounded-2xl px-6 py-5 text-white font-bold text-sm focus:border-nsp-primary outline-none" 
-                value={formData.price} 
-                onChange={e => setFormData({...formData, price: e.target.value})} 
-              />
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="text-[9px] text-gray-600 font-black uppercase mb-2 ml-1 block tracking-widest">Kilométrage</label>
+                <input 
+                  type="number" 
+                  className="w-full bg-nsp-input border border-transparent rounded-2xl px-6 py-4 text-white font-bold text-sm focus:border-nsp-primary outline-none" 
+                  value={formData.km} 
+                  onChange={e => setFormData({...formData, km: e.target.value})} 
+                />
+              </div>
+              <div>
+                <label className="text-[9px] text-gray-600 font-black uppercase mb-2 ml-1 block tracking-widest">Total (€)</label>
+                <input 
+                  type="number" 
+                  className="w-full bg-nsp-input border border-transparent rounded-2xl px-6 py-4 text-white font-bold text-sm focus:border-nsp-primary outline-none" 
+                  value={formData.price} 
+                  onChange={e => setFormData({...formData, price: e.target.value})} 
+                />
+              </div>
             </div>
           </div>
         </div>
@@ -228,10 +212,10 @@ export const AddInvoiceScreen: React.FC<AddInvoiceScreenProps> = ({ carId, onSav
       <div className="p-4 bg-nsp-card border-t border-nsp-border fixed bottom-0 w-full pb-safe-bottom z-40">
         <button 
           onClick={handleSubmit} 
-          disabled={isAnalyzing}
+          disabled={isAnalyzing || !persistentImage}
           className="w-full bg-nsp-primary text-white font-black py-5 rounded-[2.5rem] text-[12px] uppercase tracking-[0.3em] shadow-[0_20px_40px_rgba(230,57,70,0.3)] disabled:opacity-50"
         >
-           {isAnalyzing ? 'Synchronisation IA...' : 'ENREGISTRER AU GARAGE'}
+           {isAnalyzing ? 'Synchronisation IA...' : 'ARCHIVER AU GARAGE'}
         </button>
       </div>
 
