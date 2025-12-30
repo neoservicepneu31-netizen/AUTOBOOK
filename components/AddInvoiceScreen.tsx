@@ -1,7 +1,7 @@
 
 import React, { useState, useRef } from 'react';
 import { Invoice, TechnicalSpecs } from '../types';
-import { Loader2, X, Check, Camera, Zap, AlertTriangle, Fuel, Wrench, RefreshCw, FileText, Info } from 'lucide-react';
+import { Loader2, X, Check, Camera, Zap, AlertTriangle, Fuel, Wrench, RefreshCw, FileText, Info, Upload, ImagePlus } from 'lucide-react';
 import { analyzeInvoiceImage, processFile } from '../services/geminiService';
 
 interface AddInvoiceScreenProps {
@@ -20,6 +20,7 @@ export const AddInvoiceScreen: React.FC<AddInvoiceScreenProps> = ({ carId, onSav
   const [detectedSpecs, setDetectedSpecs] = useState<TechnicalSpecs | undefined>(undefined);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
 
   const [formData, setFormData] = useState({
     title: '',
@@ -35,7 +36,6 @@ export const AddInvoiceScreen: React.FC<AddInvoiceScreenProps> = ({ carId, onSav
     setAnalysisError(null);
 
     try {
-      // On extrait la partie pure base64 pour l'API Gemini
       const pureBase64 = base64DataUrl.split(',')[1];
       const result = await analyzeInvoiceImage(pureBase64, mime);
       
@@ -53,7 +53,7 @@ export const AddInvoiceScreen: React.FC<AddInvoiceScreenProps> = ({ carId, onSav
       }
     } catch (error: any) {
       console.error("AI Analysis Failed:", error);
-      setAnalysisError("L'IA n'a pas pu lire le document. Vérifiez la netteté de la photo.");
+      setAnalysisError("L'IA n'a pas pu lire le document. Vérifiez la netteté ou importez un PDF.");
     } finally {
       setIsAnalyzing(false);
     }
@@ -69,11 +69,8 @@ export const AddInvoiceScreen: React.FC<AddInvoiceScreenProps> = ({ carId, onSav
     setAnalysisError(null);
 
     try {
-      // Transformation en Base64 permanent et compressé
       const base64DataUrl = await processFile(file);
       setPersistentImage(base64DataUrl);
-
-      // Analyse par l'IA
       await performAnalysis(base64DataUrl, mime);
     } catch (error: any) {
       setIsAnalyzing(false);
@@ -92,17 +89,19 @@ export const AddInvoiceScreen: React.FC<AddInvoiceScreenProps> = ({ carId, onSav
       km: parseInt(formData.km) || 0,
       price: parseFloat(formData.price) || 0,
       volume: activeTab === 'fuel' ? parseFloat(formData.volume) || 0 : undefined,
-      imageUrl: persistentImage || undefined, // On sauvegarde le Base64 permanent
+      imageUrl: persistentImage || undefined,
       detectedSpecs
     };
     onSave(newInvoice, detectedSpecs);
   };
 
+  const isPDF = persistentImage?.includes('application/pdf');
+
   return (
-    <div className="h-[100dvh] bg-nsp-bg flex flex-col w-full absolute inset-0 z-50 overflow-hidden">
+    <div className="h-[100dvh] bg-nsp-bg flex flex-col w-full absolute inset-0 z-[100] overflow-hidden">
       <div className="p-4 flex items-center justify-between bg-nsp-card border-b border-nsp-border shrink-0 pt-safe-top">
         <button onClick={onCancel} className="text-nsp-sub p-2"><X size={24} /></button>
-        <h2 className="text-sm font-black text-white uppercase tracking-widest">Scanner Document</h2>
+        <h2 className="text-sm font-black text-white uppercase tracking-widest">Scanner & Classer</h2>
         <div className="w-6"></div>
       </div>
 
@@ -122,14 +121,20 @@ export const AddInvoiceScreen: React.FC<AddInvoiceScreenProps> = ({ carId, onSav
           </button>
         </div>
 
-        <div className="mb-6">
+        <div className="mb-6 space-y-4">
           <div 
-            onClick={() => !isAnalyzing && fileInputRef.current?.click()}
-            className={`relative aspect-[3/4] rounded-[2.5rem] border-2 border-dashed flex flex-col items-center justify-center overflow-hidden cursor-pointer transition-all ${isSuccess ? 'border-nsp-success bg-nsp-success/5' : analysisError ? 'border-red-500/30 bg-red-950/10' : 'border-gray-700 bg-nsp-input'}`}
+            className={`relative aspect-[3/4] rounded-[2.5rem] border-2 border-dashed flex flex-col items-center justify-center overflow-hidden transition-all ${isSuccess ? 'border-nsp-success bg-nsp-success/5' : analysisError ? 'border-red-500/30 bg-red-950/10' : 'border-gray-700 bg-nsp-input'}`}
           >
-            {persistentImage && (
-              <img src={persistentImage} className="absolute inset-0 w-full h-full object-cover" alt="Scan Document" />
-            )}
+            {persistentImage ? (
+               isPDF ? (
+                 <div className="flex flex-col items-center gap-4 text-center p-10">
+                    <FileText size={64} className="text-red-500" />
+                    <p className="text-white font-bold text-xs uppercase">Document PDF Prêt</p>
+                 </div>
+               ) : (
+                 <img src={persistentImage} className="absolute inset-0 w-full h-full object-cover" alt="Scan" />
+               )
+            ) : null}
             
             <div className={`z-10 flex flex-col items-center gap-3 ${persistentImage ? 'bg-black/60 p-6 rounded-3xl backdrop-blur-sm' : ''}`}>
               {isAnalyzing ? (
@@ -138,30 +143,48 @@ export const AddInvoiceScreen: React.FC<AddInvoiceScreenProps> = ({ carId, onSav
                     <Loader2 className="animate-spin text-nsp-primary" size={48} />
                     <Zap className="absolute inset-0 m-auto text-nsp-primary animate-pulse" size={16} />
                   </div>
-                  <span className="text-[11px] font-black text-white uppercase tracking-[0.3em] animate-pulse">Lecture IA...</span>
+                  <span className="text-[11px] font-black text-white uppercase tracking-[0.3em] animate-pulse">Extraction IA...</span>
+                </div>
+              ) : !persistentImage ? (
+                <div className="space-y-4 w-full px-6">
+                  <button 
+                    onClick={() => cameraInputRef.current?.click()}
+                    className="w-full bg-nsp-primary text-white py-4 rounded-2xl flex items-center justify-center gap-3 font-black text-[11px] uppercase tracking-widest shadow-xl"
+                  >
+                    <Camera size={20} /> Prendre une Photo
+                  </button>
+                  <button 
+                    onClick={() => fileInputRef.current?.click()}
+                    className="w-full bg-white/10 text-white py-4 rounded-2xl flex items-center justify-center gap-3 font-black text-[11px] uppercase tracking-widest border border-white/10"
+                  >
+                    <Upload size={20} /> Importer un Fichier
+                  </button>
                 </div>
               ) : isSuccess ? (
                 <div className="bg-nsp-success text-white px-8 py-4 rounded-full font-black text-[11px] uppercase tracking-widest flex items-center gap-3 shadow-2xl">
-                  <Check size={20} /> Analyse OK
+                  <Check size={20} /> Extraction Réussie
                 </div>
               ) : (
-                <>
-                  <div className="w-16 h-16 rounded-full bg-nsp-bg flex items-center justify-center border border-white/5 shadow-2xl mb-2">
-                    <Camera size={32} className="text-gray-600" />
-                  </div>
-                  <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest text-center">Photographier la facture</span>
-                </>
+                <button onClick={() => setPersistentImage(null)} className="text-white font-black text-[10px] uppercase underline">Changer de document</button>
               )}
             </div>
           </div>
           
           {persistentImage && !isAnalyzing && (
-            <button 
-              onClick={() => performAnalysis(persistentImage, currentMimeType)}
-              className="mt-4 w-full bg-nsp-primary/10 text-nsp-primary border border-nsp-primary/20 py-4 rounded-2xl text-[10px] font-black uppercase flex items-center justify-center gap-2 transition-transform active:scale-95"
-            >
-              <RefreshCw size={14} /> Ré-analyser par l'IA
-            </button>
+            <div className="flex gap-2">
+              <button 
+                onClick={() => performAnalysis(persistentImage, currentMimeType)}
+                className="flex-1 bg-nsp-primary/10 text-nsp-primary border border-nsp-primary/20 py-4 rounded-2xl text-[10px] font-black uppercase flex items-center justify-center gap-2 transition-transform active:scale-95"
+              >
+                <RefreshCw size={14} /> Relancer l'IA
+              </button>
+              <button 
+                onClick={() => setPersistentImage(null)}
+                className="bg-nsp-input text-gray-400 border border-nsp-border py-4 px-6 rounded-2xl text-[10px] font-black uppercase"
+              >
+                Reset
+              </button>
+            </div>
           )}
         </div>
 
@@ -175,7 +198,7 @@ export const AddInvoiceScreen: React.FC<AddInvoiceScreenProps> = ({ carId, onSav
         <div className="space-y-6">
           <div className="bg-nsp-card p-5 rounded-3xl border border-nsp-border space-y-4">
             <div>
-              <label className="text-[9px] text-gray-600 font-black uppercase mb-2 ml-1 block tracking-widest">Établissement / Garage</label>
+              <label className="text-[9px] text-gray-600 font-black uppercase mb-2 ml-1 block tracking-widest">Enseigne du Garage</label>
               <input 
                 type="text" 
                 className="w-full bg-nsp-input border border-transparent rounded-2xl px-6 py-4 text-white font-bold text-sm focus:border-nsp-primary outline-none" 
@@ -187,7 +210,7 @@ export const AddInvoiceScreen: React.FC<AddInvoiceScreenProps> = ({ carId, onSav
 
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="text-[9px] text-gray-600 font-black uppercase mb-2 ml-1 block tracking-widest">Kilométrage</label>
+                <label className="text-[9px] text-gray-600 font-black uppercase mb-2 ml-1 block tracking-widest">KM Relevé</label>
                 <input 
                   type="number" 
                   className="w-full bg-nsp-input border border-transparent rounded-2xl px-6 py-4 text-white font-bold text-sm focus:border-nsp-primary outline-none" 
@@ -196,7 +219,7 @@ export const AddInvoiceScreen: React.FC<AddInvoiceScreenProps> = ({ carId, onSav
                 />
               </div>
               <div>
-                <label className="text-[9px] text-gray-600 font-black uppercase mb-2 ml-1 block tracking-widest">Total (€)</label>
+                <label className="text-[9px] text-gray-600 font-black uppercase mb-2 ml-1 block tracking-widest">Montant TTC (€)</label>
                 <input 
                   type="number" 
                   className="w-full bg-nsp-input border border-transparent rounded-2xl px-6 py-4 text-white font-bold text-sm focus:border-nsp-primary outline-none" 
@@ -209,23 +232,19 @@ export const AddInvoiceScreen: React.FC<AddInvoiceScreenProps> = ({ carId, onSav
         </div>
       </div>
 
-      <div className="p-4 bg-nsp-card border-t border-nsp-border fixed bottom-0 w-full pb-safe-bottom z-40">
+      <div className="p-4 bg-nsp-card border-t border-nsp-border fixed bottom-0 w-full pb-safe-bottom z-[110]">
         <button 
           onClick={handleSubmit} 
           disabled={isAnalyzing || !persistentImage}
           className="w-full bg-nsp-primary text-white font-black py-5 rounded-[2.5rem] text-[12px] uppercase tracking-[0.3em] shadow-[0_20px_40px_rgba(230,57,70,0.3)] disabled:opacity-50"
         >
-           {isAnalyzing ? 'Synchronisation IA...' : 'ARCHIVER AU GARAGE'}
+           {isAnalyzing ? 'Synchronisation...' : 'ARCHIVER DANS LE CARNET'}
         </button>
       </div>
 
-      <input 
-        type="file" 
-        ref={fileInputRef} 
-        className="hidden" 
-        accept="image/*,application/pdf" 
-        onChange={handleFileChange} 
-      />
+      {/* INPUTS SOURCES */}
+      <input type="file" ref={cameraInputRef} className="hidden" accept="image/*" capture="environment" onChange={handleFileChange} />
+      <input type="file" ref={fileInputRef} className="hidden" accept="image/*,application/pdf" onChange={handleFileChange} />
     </div>
   );
 };

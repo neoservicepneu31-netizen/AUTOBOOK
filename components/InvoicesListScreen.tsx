@@ -53,7 +53,7 @@ export const InvoicesListScreen: React.FC<InvoicesListScreenProps> = ({ car, inv
             <h3 className="text-4xl font-black text-white tracking-tighter">{totalSpend.toLocaleString()}€</h3>
             <div className="mt-4 flex items-center gap-2">
               <Sparkles size={14} className="text-nsp-primary animate-pulse" />
-              <span className="text-[9px] text-nsp-sub font-bold uppercase tracking-widest">Géré par Intelligence Artificielle</span>
+              <span className="text-[9px] text-nsp-sub font-bold uppercase tracking-widest">Données Archivées par IA</span>
             </div>
           </div>
           <div className="absolute top-[-20%] right-[-10%] w-40 h-40 bg-nsp-primary/20 blur-[50px] rounded-full"></div>
@@ -103,21 +103,21 @@ export const InvoicesListScreen: React.FC<InvoicesListScreenProps> = ({ car, inv
 
       {/* VISIONNEUSE AMÉLIORÉE */}
       {viewingInvoice && (
-        <div className="fixed inset-0 z-[100] bg-black flex flex-col animate-fade-in overflow-y-auto">
+        <div className="fixed inset-0 z-[200] bg-black flex flex-col animate-fade-in overflow-y-auto">
           <header className="flex justify-between items-center p-6 pt-safe-top bg-black/80 backdrop-blur-xl border-b border-white/10 sticky top-0 z-50">
             <button onClick={() => { setViewingInvoice(null); setIsFullscreen(false); }} className="p-3 bg-nsp-input rounded-2xl text-white"><X size={24}/></button>
             <div className="text-center">
-               <h3 className="text-white font-black text-xs uppercase tracking-widest">EXAMEN IA DU DOCUMENT</h3>
-               <p className="text-[9px] text-nsp-primary font-black uppercase mt-1">Données Corrigées & Certifiées</p>
+               <h3 className="text-white font-black text-xs uppercase tracking-widest">EXAMEN DU DOCUMENT</h3>
+               <p className="text-[9px] text-nsp-primary font-black uppercase mt-1">Analyse & Extraction Certifiée</p>
             </div>
             <div className="w-12"></div>
           </header>
 
           <div className="max-w-2xl mx-auto w-full p-6 space-y-8 pb-32">
-            {/* 1. DOCUMENT ORIGINAL */}
+            {/* DOCUMENT ORIGINAL */}
             <div className="space-y-4">
               <h4 className="text-[10px] text-gray-500 font-black uppercase tracking-widest flex items-center gap-2">
-                <Eye size={14} /> Document Original Scanné
+                <Eye size={14} /> Document Original
               </h4>
               <div className="rounded-[2.5rem] overflow-hidden border border-white/10 shadow-2xl bg-nsp-input relative">
                 {isPDF(viewingInvoice.imageUrl) ? (
@@ -126,8 +126,8 @@ export const InvoicesListScreen: React.FC<InvoicesListScreenProps> = ({ car, inv
                       <FileText size={56} />
                     </div>
                     <div className="space-y-2">
-                      <p className="text-white font-black text-lg uppercase leading-none">FACTURE PDF</p>
-                      <p className="text-gray-500 text-[10px] font-bold uppercase max-w-[200px]">Ce document est stocké en haute définition dans votre coffre-fort.</p>
+                      <p className="text-white font-black text-lg uppercase leading-none">DOCUMENT PDF</p>
+                      <p className="text-gray-500 text-[10px] font-bold uppercase max-w-[200px]">Ce fichier est stocké en haute définition.</p>
                     </div>
                     <a 
                       href={viewingInvoice.imageUrl} 
@@ -135,18 +135,15 @@ export const InvoicesListScreen: React.FC<InvoicesListScreenProps> = ({ car, inv
                       rel="noopener noreferrer"
                       className="bg-white text-black px-10 py-5 rounded-[2rem] font-black text-[10px] uppercase tracking-widest flex items-center gap-3 shadow-2xl active:scale-95 transition-all"
                     >
-                      <Download size={18} /> Télécharger / Voir PDF
+                      <Download size={18} /> Télécharger / Voir le PDF
                     </a>
                   </div>
                 ) : viewingInvoice.imageUrl ? (
-                  <div className="relative group">
+                  <div className="relative">
                     <img 
                       src={viewingInvoice.imageUrl} 
-                      className="w-full h-auto max-h-[70vh] object-contain mx-auto block" 
+                      className="w-full h-auto max-h-[80vh] object-contain mx-auto block" 
                       alt="Facture Originale" 
-                      onError={(e) => {
-                        (e.target as HTMLImageElement).src = 'https://placehold.co/400x600/121212/white?text=Image+Non+Disponible';
-                      }}
                     />
                     <div className="absolute top-4 right-4">
                       <div className="bg-nsp-primary/90 backdrop-blur-md text-white px-4 py-2 rounded-full text-[9px] font-black uppercase tracking-widest flex items-center gap-2 shadow-2xl">
@@ -163,35 +160,31 @@ export const InvoicesListScreen: React.FC<InvoicesListScreenProps> = ({ car, inv
               </div>
             </div>
 
-            {/* 2. DONNÉES CORRIGÉES / EXTRAITES */}
+            {/* DONNÉES EXTRAITES (DOC CORRIGÉ) */}
             <div className="space-y-4">
               <h4 className="text-[10px] text-gray-500 font-black uppercase tracking-widest flex items-center gap-2">
-                <Sparkles size={14} className="text-nsp-primary" /> Analyse Technique IA
+                <Sparkles size={14} className="text-nsp-primary" /> Rapport d'Expertise IA
               </h4>
               
               <div className="grid grid-cols-2 gap-4">
                 <div className="bg-nsp-card p-6 rounded-[2rem] border border-nsp-border shadow-xl">
-                  <p className="text-[9px] text-gray-500 uppercase font-black mb-1">Montant Validé</p>
-                  <p className="text-white font-black text-3xl">{viewingInvoice.price.toLocaleString()}€</p>
+                  <p className="text-[9px] text-gray-500 uppercase font-black mb-1">Montant Payé</p>
+                  <p className="text-white font-black text-2xl">{viewingInvoice.price.toLocaleString()}€</p>
                 </div>
                 <div className="bg-nsp-card p-6 rounded-[2rem] border border-nsp-border shadow-xl">
-                  <p className="text-[9px] text-gray-500 uppercase font-black mb-1">Index Compteur</p>
-                  <p className="text-white font-black text-3xl">{viewingInvoice.km.toLocaleString()}</p>
+                  <p className="text-[9px] text-gray-500 uppercase font-black mb-1">Kilométrage</p>
+                  <p className="text-white font-black text-2xl">{viewingInvoice.km.toLocaleString()}</p>
                 </div>
               </div>
 
               <div className="bg-nsp-card p-8 rounded-[2.5rem] border border-nsp-border space-y-6 shadow-2xl relative overflow-hidden">
-                <div className="absolute top-0 right-0 p-6 opacity-5 pointer-events-none">
-                  <Sparkles size={120} className="text-nsp-primary" />
-                </div>
-                
                 <div className="space-y-4 relative z-10">
                   <div className="flex justify-between items-center border-b border-white/5 pb-3">
                     <span className="text-[10px] text-gray-500 font-black uppercase tracking-widest">Date Document</span>
                     <span className="text-sm text-white font-bold">{new Date(viewingInvoice.date).toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' })}</span>
                   </div>
                   <div className="flex justify-between items-center border-b border-white/5 pb-3">
-                    <span className="text-[10px] text-gray-500 font-black uppercase tracking-widest">Établissement</span>
+                    <span className="text-[10px] text-gray-500 font-black uppercase tracking-widest">Garage / Enseigne</span>
                     <span className="text-sm text-white font-bold uppercase truncate max-w-[200px] text-right">{viewingInvoice.title}</span>
                   </div>
                   
@@ -205,18 +198,16 @@ export const InvoicesListScreen: React.FC<InvoicesListScreenProps> = ({ car, inv
 
                 <div className="pt-4 flex items-center gap-3">
                    <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></div>
-                   <p className="text-[9px] text-gray-400 font-black uppercase tracking-widest">Les données ci-dessus ont été vérifiées par le moteur Gemini IA</p>
+                   <p className="text-[9px] text-gray-400 font-black uppercase tracking-widest">Synthèse validée par le moteur de diagnostic NSP</p>
                 </div>
               </div>
 
-              <div className="flex gap-4">
-                <button 
-                  onClick={() => { if(confirm('Voulez-vous supprimer définitivement ce document de votre bibliothèque ?')) { onDelete(viewingInvoice.id); setViewingInvoice(null); } }} 
-                  className="flex-1 bg-red-600/10 text-red-500 font-black py-5 rounded-[2rem] text-[10px] uppercase tracking-widest border border-red-600/20 flex items-center justify-center gap-3 active:bg-red-600/20 transition-all shadow-xl"
-                >
-                  <Trash2 size={16} /> SUPPRIMER L'ARCHIVE
-                </button>
-              </div>
+              <button 
+                onClick={() => { if(confirm('Supprimer définitivement ce document ?')) { onDelete(viewingInvoice.id); setViewingInvoice(null); } }} 
+                className="w-full bg-red-600/10 text-red-500 font-black py-5 rounded-[2rem] text-[10px] uppercase tracking-widest border border-red-600/20 flex items-center justify-center gap-3 active:bg-red-600/20 transition-all shadow-xl"
+              >
+                <Trash2 size={16} /> SUPPRIMER L'ARCHIVE
+              </button>
             </div>
           </div>
         </div>

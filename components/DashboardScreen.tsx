@@ -1,7 +1,7 @@
 
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState } from 'react';
 import { User, Car, Invoice, AIStatus, ManufacturerSpecs, TechnicalSpecs } from '../types';
-import { Plus, FileText, AlertTriangle, ArrowLeft, Sparkles, Calendar, Gauge, Droplet, CheckCircle2, ShieldCheck, PhoneCall, FolderOpen, Bell, BellOff, Info, Wind, ChevronRight, Wrench, HardDrive, Cpu, Battery, Settings2, Zap, LayoutDashboard, Database, X, Trash2, ZoomIn, Download } from 'lucide-react';
+import { Plus, FileText, ArrowLeft, Sparkles, Gauge, Droplet, ShieldCheck, PhoneCall, Bell, BellOff, X, Trash2, ZoomIn, Download, Wrench, Cpu, Database, AlertCircle, ChevronRight, Settings } from 'lucide-react';
 import { getPersonalizedMaintenance } from '../services/geminiService';
 import { requestNotificationPermission, sendLocalNotification } from '../services/notificationService';
 import { calculateMaintenanceStatus } from '../services/mechanicRules';
@@ -29,12 +29,17 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
   const [notifEnabled, setNotifEnabled] = useState(false);
   const [viewingInvoice, setViewingInvoice] = useState<Invoice | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [imageError, setImageError] = useState(false);
 
   const proactiveStatus = calculateMaintenanceStatus(car, invoices);
   const lastMileage = invoices.length > 0 ? Math.max(...invoices.map(i => i.km)) : car.initialKm;
 
   useEffect(() => {
-    if ("Notification" in window && Notification.permission === 'granted') setNotifEnabled(true);
+    // Vérification initiale de la permission système
+    if ("Notification" in window) {
+      setNotifEnabled(Notification.permission === 'granted');
+    }
+    
     const loadSpecs = async () => {
       const data = await getPersonalizedMaintenance(car, lastMileage);
       setSpecs(data);
@@ -43,14 +48,21 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
   }, [car.id, lastMileage]);
 
   const toggleNotifications = async () => {
-    const granted = await requestNotificationPermission();
-    setNotifEnabled(granted);
-    if (granted) {
-      sendLocalNotification("✅ AUTOBOOK ACTIVE", "Liaison smartphone confirmée.");
+    if (notifEnabled) {
+      setNotifEnabled(false);
+      // On ne peut pas révoquer au niveau OS via JS, mais on désactive l'intérêt applicatif
+    } else {
+      const granted = await requestNotificationPermission();
+      if (granted) {
+        setNotifEnabled(true);
+        sendLocalNotification("✅ AUTOBOOK CONNECTÉ", "Les alertes d'entretien sont désormais actives sur votre smartphone.");
+      } else {
+        alert("Permission refusée. Veuillez activer les notifications dans les réglages de votre navigateur.");
+      }
     }
   };
 
-  const isPDF = (url?: string) => url?.startsWith('data:application/pdf');
+  const isPDF = (url?: string) => url?.includes('application/pdf');
 
   const renderTechnicalMemory = () => {
     const carSpecs = car.specs || {};
@@ -114,13 +126,14 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
         </div>
         <button 
            onClick={toggleNotifications}
-           className={`p-2.5 rounded-2xl transition-all ${notifEnabled ? 'text-nsp-primary bg-nsp-primary/10 border border-nsp-primary/20' : 'text-gray-600 bg-nsp-input border border-transparent'}`}
+           className={`p-2.5 rounded-2xl transition-all ${notifEnabled ? 'text-nsp-primary bg-nsp-primary/10 border border-nsp-primary/20 shadow-lg shadow-nsp-primary/20' : 'text-gray-600 bg-nsp-input border border-transparent'}`}
         >
           {notifEnabled ? <Bell size={20} /> : <BellOff size={20} />}
         </button>
       </header>
 
       <main className="p-6 max-w-4xl mx-auto space-y-8 animate-fade-in">
+        {/* STATS RAPIDES */}
         <div className="grid grid-cols-3 gap-3">
             <div className="bg-nsp-card border border-nsp-border rounded-3xl p-5 flex flex-col items-center text-center">
                 <div className={`w-12 h-12 rounded-2xl flex items-center justify-center mb-3 ${proactiveStatus.alerts.includes('REVISION') ? 'bg-red-500/20 text-red-500' : 'bg-green-500/20 text-green-500'}`}>
@@ -142,6 +155,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
             </div>
         </div>
 
+        {/* ANALYSE IA GÉNÉRALE */}
         <div className={`relative overflow-hidden rounded-[2.5rem] border p-8 transition-all shadow-2xl ${
           proactiveStatus.status === 'critical' ? 'border-red-600 bg-red-950/20 shadow-red-900/10' :
           proactiveStatus.status === 'warning' ? 'border-yellow-500/30 bg-yellow-900/10' : 
@@ -162,6 +176,35 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
           </div>
         </div>
 
+        {/* NOUVEAU : CENTRE DE CONTRÔLE NOTIFICATIONS */}
+        <div className="bg-nsp-card border border-nsp-border rounded-[2.5rem] p-6 shadow-2xl relative overflow-hidden">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-3">
+              <div className={`p-3 rounded-2xl ${notifEnabled ? 'bg-nsp-primary/10 text-nsp-primary' : 'bg-gray-800 text-gray-500'}`}>
+                <Bell size={20} className={notifEnabled ? 'animate-tada' : ''} />
+              </div>
+              <div>
+                <h3 className="text-white font-black text-xs uppercase tracking-widest">Alertes Intelligentes</h3>
+                <p className="text-[9px] text-gray-500 uppercase font-black mt-1">Maintenance & Échéances</p>
+              </div>
+            </div>
+            
+            {/* TOGGLE SWITCH CUSTOM */}
+            <button 
+              onClick={toggleNotifications}
+              className={`w-14 h-8 rounded-full relative transition-all duration-300 shadow-inner ${notifEnabled ? 'bg-nsp-primary' : 'bg-nsp-input'}`}
+            >
+              <div className={`absolute top-1 w-6 h-6 bg-white rounded-full shadow-lg transition-all duration-300 transform ${notifEnabled ? 'left-7' : 'left-1'}`}></div>
+            </button>
+          </div>
+          <p className="text-[10px] text-gray-400 font-bold leading-relaxed pr-8">
+            {notifEnabled 
+              ? "Vous recevrez des notifications push critiques pour les révisions, le contrôle technique et les alertes de sécurité."
+              : "Les alertes push sont désactivées. Vous devrez ouvrir l'application manuellement pour vérifier l'état de santé."
+            }
+          </p>
+        </div>
+
         {renderTechnicalMemory()}
 
         <button onClick={onAssistance} className="w-full bg-white text-black p-6 rounded-[2rem] font-black text-xs uppercase tracking-[0.2em] flex items-center justify-center gap-4 shadow-2xl hover:bg-gray-200 transition-colors">
@@ -180,7 +223,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
                 </div>
             ) : (
                 invoices.slice(0, 3).map(inv => (
-                    <div key={inv.id} onClick={() => setViewingInvoice(inv)} className="bg-nsp-card p-5 rounded-3xl border border-nsp-border flex items-center justify-between hover:border-nsp-primary transition-all cursor-pointer shadow-lg group">
+                    <div key={inv.id} onClick={() => { setViewingInvoice(inv); setImageError(false); }} className="bg-nsp-card p-5 rounded-3xl border border-nsp-border flex items-center justify-between hover:border-nsp-primary transition-all cursor-pointer shadow-lg group">
                         <div className="flex items-center gap-5">
                             <div className="w-12 h-12 rounded-2xl bg-nsp-input flex items-center justify-center text-nsp-primary group-hover:scale-110 transition-transform overflow-hidden">
                                {inv.imageUrl ? (
@@ -203,12 +246,14 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
         </div>
       </main>
 
+      {/* BOUTON D'AJOUT FLOTTANT */}
       <div className="fixed bottom-10 right-8 z-50">
           <button onClick={onAddInvoice} className="w-20 h-20 bg-nsp-primary rounded-[2rem] shadow-[0_20px_40px_rgba(230,57,70,0.4)] flex items-center justify-center text-white active:scale-90 transition-transform">
               <Plus size={40} />
           </button>
       </div>
 
+      {/* VISIONNEUSE */}
       {viewingInvoice && (
         <div className="fixed inset-0 z-[100] bg-black/98 backdrop-blur-3xl flex flex-col animate-fade-in overflow-y-auto">
           <header className="flex justify-between items-center p-6 pt-safe-top bg-black/40 border-b border-white/5 sticky top-0 z-50">
@@ -220,88 +265,113 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
             <div className="w-12"></div>
           </header>
 
-          <div className="max-w-md mx-auto w-full p-6 space-y-8 pb-10">
-            {viewingInvoice.imageUrl ? (
+          <div className="max-w-md mx-auto w-full p-6 space-y-8 pb-32">
+            <div className="space-y-4">
+              <h4 className="text-[10px] text-gray-500 font-black uppercase tracking-widest flex items-center gap-2">
+                 Document Original Scanné
+              </h4>
               <div 
                 className={`rounded-[2.5rem] overflow-hidden border border-white/10 shadow-2xl relative transition-all duration-500 ${isFullscreen ? 'fixed inset-4 z-[110] bg-black m-0 rounded-3xl' : 'bg-nsp-input'}`}
               >
                 {isPDF(viewingInvoice.imageUrl) ? (
                   <div className="aspect-[3/4] flex flex-col items-center justify-center p-10 text-center gap-6">
-                     <div className="w-20 h-20 bg-red-600/10 rounded-full flex items-center justify-center text-red-500">
-                        <FileText size={48} />
+                     <div className="w-24 h-24 bg-red-600/10 rounded-full flex items-center justify-center text-red-500 border border-red-500/20">
+                        <FileText size={56} />
                      </div>
-                     <div>
-                        <p className="text-white font-black text-sm uppercase mb-2">Document PDF</p>
-                        <p className="text-gray-500 text-[10px] font-bold uppercase leading-relaxed">Fichier archivé en haute définition.</p>
+                     <div className="space-y-2">
+                        <p className="text-white font-black text-sm uppercase">Fichier PDF</p>
+                        <p className="text-gray-500 text-[10px] font-bold uppercase leading-relaxed">Document sécurisé en haute résolution.</p>
                      </div>
                      <a 
                        href={viewingInvoice.imageUrl} 
-                       download={`facture_${viewingInvoice.date}.pdf`}
-                       className="bg-nsp-primary text-white px-8 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest flex items-center gap-3 shadow-xl"
+                       target="_blank"
+                       rel="noopener noreferrer"
+                       className="bg-nsp-primary text-white px-10 py-5 rounded-[2rem] font-black text-[10px] uppercase tracking-widest flex items-center gap-3 shadow-xl active:scale-95 transition-all"
                      >
-                       <Download size={18} /> Télécharger le PDF
+                       <Download size={18} /> Télécharger / Voir PDF
                      </a>
                   </div>
-                ) : (
+                ) : viewingInvoice.imageUrl && !imageError ? (
                   <div className="relative cursor-zoom-in" onClick={() => setIsFullscreen(!isFullscreen)}>
                     <img 
                       src={viewingInvoice.imageUrl} 
-                      className={`w-full transition-all duration-500 ${isFullscreen ? 'h-full object-contain' : 'h-auto max-h-[60vh] object-contain'}`} 
-                      alt="Facture Originale" 
+                      className={`w-full transition-all duration-500 ${isFullscreen ? 'h-full object-contain' : 'h-auto max-h-[70vh] object-contain mx-auto block'}`} 
+                      alt="Facture" 
+                      onError={() => setImageError(true)}
                     />
                     {!isFullscreen && (
-                      <div className="absolute bottom-4 right-4 bg-black/60 p-3 rounded-full text-white backdrop-blur-md">
+                      <div className="absolute bottom-4 right-4 bg-nsp-primary/90 p-3 rounded-full text-white backdrop-blur-md shadow-2xl">
                         <ZoomIn size={20} />
                       </div>
                     )}
+                    <div className="absolute top-4 left-4 bg-nsp-primary/90 text-white px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest flex items-center gap-2 shadow-xl">
+                      <ShieldCheck size={12}/> Certifié IA
+                    </div>
+                  </div>
+                ) : (
+                  <div className="aspect-[3/4] flex flex-col items-center justify-center p-10 text-center gap-6 bg-nsp-input">
+                     <div className="w-20 h-20 bg-gray-800 rounded-full flex items-center justify-center text-gray-500">
+                        <AlertCircle size={40} />
+                     </div>
+                     <div>
+                        <p className="text-white font-black text-sm uppercase mb-2">Erreur d'affichage</p>
+                        <p className="text-gray-500 text-[10px] font-bold uppercase">Le visuel est peut-être trop volumineux pour l'aperçu, mais il est archivé.</p>
+                     </div>
+                     <a 
+                       href={viewingInvoice.imageUrl} 
+                       download={`facture_${viewingInvoice.date}.jpg`}
+                       className="bg-white text-black px-8 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest flex items-center gap-2 shadow-xl"
+                     >
+                       <Download size={16} /> Forcer le téléchargement
+                     </a>
                   </div>
                 )}
               </div>
-            ) : (
-              <div className="aspect-square bg-nsp-input rounded-[2.5rem] flex items-center justify-center">
-                 <p className="text-gray-600 font-black uppercase text-xs">Aucun visuel</p>
-              </div>
-            )}
+            </div>
 
             {!isFullscreen && (
               <>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="bg-nsp-card p-6 rounded-[2rem] border border-nsp-border shadow-xl">
                     <p className="text-[10px] text-gray-500 uppercase font-black mb-1">Montant Payé</p>
-                    <p className="text-white font-black text-2xl">{viewingInvoice.price}€</p>
+                    <p className="text-white font-black text-3xl">{viewingInvoice.price}€</p>
                   </div>
                   <div className="bg-nsp-card p-6 rounded-[2rem] border border-nsp-border shadow-xl">
-                    <p className="text-[10px] text-gray-500 uppercase font-black mb-1">Index KM</p>
-                    <p className="text-white font-black text-2xl">{viewingInvoice.km.toLocaleString()}</p>
+                    <p className="text-[10px] text-gray-500 uppercase font-black mb-1">Kilométrage</p>
+                    <p className="text-white font-black text-3xl">{viewingInvoice.km.toLocaleString()}</p>
                   </div>
                 </div>
 
-                <div className="bg-nsp-card p-6 rounded-[2.5rem] border border-nsp-border space-y-5 shadow-2xl relative overflow-hidden">
+                <div className="bg-nsp-card p-8 rounded-[2.5rem] border border-nsp-border space-y-6 shadow-2xl relative overflow-hidden">
                   <div className="flex items-center gap-3 relative z-10">
                       <Sparkles size={16} className="text-nsp-primary" />
-                      <h5 className="text-[10px] text-white font-black uppercase tracking-widest">EXTRACTION IA CERTIFIÉE</h5>
+                      <h5 className="text-[10px] text-white font-black uppercase tracking-widest">Rapport d'Extraction IA</h5>
                   </div>
                   <div className="space-y-4 relative z-10">
-                      <div className="flex justify-between items-center border-b border-white/5 pb-2">
-                        <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">Date relevée</span>
+                      <div className="flex justify-between items-center border-b border-white/5 pb-3">
+                        <span className="text-[10px] text-gray-500 font-black uppercase tracking-widest">Date Document</span>
                         <span className="text-sm text-white font-bold">{viewingInvoice.date}</span>
                       </div>
-                      <div className="flex justify-between items-center border-b border-white/5 pb-2">
-                        <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">Garage</span>
+                      <div className="flex justify-between items-center border-b border-white/5 pb-3">
+                        <span className="text-[10px] text-gray-500 font-black uppercase tracking-widest">Garage / Enseigne</span>
                         <span className="text-sm text-white font-bold uppercase truncate max-w-[180px] text-right">{viewingInvoice.title}</span>
                       </div>
                       {viewingInvoice.detectedSpecs && Object.entries(viewingInvoice.detectedSpecs).map(([key, val]) => val && (
-                        <div key={key} className="flex justify-between items-center border-b border-white/5 pb-2">
-                          <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">{key.replace(/Ref|Dimensions|Viscosity/g, '')}</span>
+                        <div key={key} className="flex justify-between items-center border-b border-white/5 pb-3">
+                          <span className="text-[10px] text-gray-400 font-black uppercase tracking-widest">{key.replace(/Ref|Dimensions|Viscosity/g, '')}</span>
                           <span className="text-sm text-nsp-primary font-black uppercase">{val}</span>
                         </div>
                       ))}
                   </div>
+                  <div className="pt-4 flex items-center gap-2">
+                     <div className="w-1.5 h-1.5 rounded-full bg-green-500"></div>
+                     <p className="text-[9px] text-gray-500 font-black uppercase tracking-widest">Données certifiées conformes par NSP IA</p>
+                  </div>
                 </div>
 
                 <button 
-                  onClick={() => { if(confirm('Supprimer ce document ?')) { onDeleteInvoice(viewingInvoice.id); setViewingInvoice(null); } }} 
-                  className="w-full bg-red-600/10 text-red-500 font-black py-5 rounded-[2rem] text-[10px] uppercase tracking-widest border border-red-600/20 flex items-center justify-center gap-3 active:bg-red-600/20 transition-colors"
+                  onClick={() => { if(confirm('Supprimer définitivement ce document ?')) { onDeleteInvoice(viewingInvoice.id); setViewingInvoice(null); } }} 
+                  className="w-full bg-red-600/10 text-red-500 font-black py-5 rounded-[2rem] text-[10px] uppercase tracking-widest border border-red-600/20 flex items-center justify-center gap-3 active:bg-red-600/20 transition-all shadow-xl"
                 >
                   <Trash2 size={16} /> SUPPRIMER L'ARCHIVE
                 </button>
