@@ -109,17 +109,4 @@ export interface ManufacturerSpecs {
   checkPoints: string[];
 }
 
-/**
- * Defining the AIStudio interface to match existing global expectations
- * and fix subsequent property declaration errors.
- */
-export interface AIStudio {
-  hasSelectedApiKey(): Promise<boolean>;
-  openSelectKey(): Promise<void>;
-}
-
-declare global {
-  interface Window {
-    aistudio?: AIStudio;
-  }
-}
+// Global declarations for aistudio are removed to avoid conflict with environment-provided types.
