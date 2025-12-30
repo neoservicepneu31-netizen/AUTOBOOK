@@ -1,20 +1,18 @@
 
-import React, { useState, useEffect, useRef } from 'react';
-import { Screen, User, Car, Invoice, AIStatus, TechnicalSpecs } from './types';
+import React, { useState, useEffect } from 'react';
+import { Screen, User, Car, Invoice, TechnicalSpecs } from './types';
 import { AuthScreen } from './components/AuthScreen';
 import { OnboardingScreen } from './components/OnboardingScreen';
 import { DashboardScreen } from './components/DashboardScreen';
 import { GarageScreen } from './components/GarageScreen';
 import { AddInvoiceScreen } from './components/AddInvoiceScreen';
-import { SellCarScreen } from './components/SellCarScreen';
-import { BuyCarScreen } from './components/BuyCarScreen';
 import { AssistanceScreen } from './components/AssistanceScreen';
 import { AdminDashboardScreen } from './components/AdminDashboardScreen';
+import { InvoicesListScreen } from './components/InvoicesListScreen';
 import { PaymentModal, PurchaseType } from './components/PaymentModal';
-import { calculateMaintenanceStatus } from './services/mechanicRules';
 import { db } from './services/storageService'; 
 import { cloud } from './services/cloudService';
-import { Cloud, Loader2, WifiOff } from 'lucide-react';
+import { Cloud, Loader2 } from 'lucide-react';
 
 const App: React.FC = () => {
   const [screen, setScreen] = useState<Screen>(Screen.AUTH);
@@ -29,24 +27,18 @@ const App: React.FC = () => {
 
   const loadAllData = async () => {
     try {
-      // Priorité à l'affichage rapide des données locales
       const localUsers = db.users.getAll();
       const localCars = db.cars.getAll();
       const localInvoices = db.invoices.getAll();
-      
       setAllUsers(localUsers);
       setAllCars(localCars);
       setAllInvoices(localInvoices);
-      
-      // Tentative de synchronisation Cloud en arrière-plan
       if (cloud.isConnected()) {
         const remoteUsers = await cloud.fetchAllUsers();
-        if (remoteUsers && remoteUsers.length > 0) {
-          setAllUsers(remoteUsers);
-        }
+        if (remoteUsers && remoteUsers.length > 0) setAllUsers(remoteUsers);
       }
     } catch (e) {
-      console.warn("Échec de chargement Cloud, maintien du mode Local.");
+      console.warn("Sync Cloud off.");
     } finally {
       setIsDatabaseReady(true);
     }
@@ -55,25 +47,19 @@ const App: React.FC = () => {
   useEffect(() => {
     const initApp = async () => {
       await loadAllData();
-      
       const sessionId = db.session.get();
       if (sessionId) {
-        // Re-charger les users pour être sûr d'avoir le plus récent après sync
         const currentUsers = db.users.getAll();
         const foundUser = currentUsers.find(u => u.id === sessionId);
-        
         if (foundUser) {
           setUser(foundUser);
-          if (foundUser.role === 'admin') {
-            setScreen(Screen.ADMIN_DASHBOARD);
-          } else {
+          if (foundUser.role === 'admin') setScreen(Screen.ADMIN_DASHBOARD);
+          else {
             const savedCarId = localStorage.getItem('AUTOBOOK_ACTIVE_CAR');
             if (savedCarId) {
                 setActiveCarId(savedCarId);
-                setScreen(Screen.DASHBOARD);
-            } else {
                 setScreen(Screen.GARAGE);
-            }
+            } else setScreen(Screen.GARAGE);
           }
         }
       }
@@ -87,17 +73,11 @@ const App: React.FC = () => {
       await cloud.syncUser(loggedInUser);
       setUser(loggedInUser);
       db.session.set(loggedInUser.id);
-      
-      // Mise à jour locale immédiate
       const currentUsers = db.users.getAll();
-      const exists = currentUsers.some(u => u.id === loggedInUser.id);
-      if (!exists) {
-        db.users.saveAll([...currentUsers, loggedInUser]);
-      }
-      
+      if (!currentUsers.some(u => u.id === loggedInUser.id)) db.users.saveAll([...currentUsers, loggedInUser]);
       setScreen(loggedInUser.role === 'admin' ? Screen.ADMIN_DASHBOARD : Screen.GARAGE);
     } catch (e) {
-      console.error("Login sync failed:", e);
+      console.error("Login failed:", e);
     } finally {
       setTimeout(() => setIsSyncing(false), 800);
     }
@@ -107,24 +87,15 @@ const App: React.FC = () => {
     const updatedInvoices = [inv, ...allInvoices];
     setAllInvoices(updatedInvoices);
     db.invoices.saveAll(updatedInvoices);
-
     if (specs && activeCarId) {
-      setAllCars(prevCars => {
-        const updated = prevCars.map(c => {
-          if (c.id === activeCarId) {
-            const mergedSpecs = { ...(c.specs || {}), ...specs };
-            Object.keys(mergedSpecs).forEach(key => {
-               if (!mergedSpecs[key as keyof TechnicalSpecs]) delete mergedSpecs[key as keyof TechnicalSpecs];
-            });
-            return { ...c, specs: mergedSpecs };
-          }
-          return c;
-        });
-        db.cars.saveAll(updated);
-        return updated;
+      const updated = allCars.map(c => {
+        if (c.id === activeCarId) return { ...c, specs: { ...(c.specs || {}), ...specs } };
+        return c;
       });
+      setAllCars(updated);
+      db.cars.saveAll(updated);
     }
-    setScreen(Screen.DASHBOARD);
+    setScreen(Screen.INVOICES_LIST);
   };
 
   return (
@@ -137,35 +108,26 @@ const App: React.FC = () => {
 
       {!isDatabaseReady ? (
         <div className="h-full flex flex-col items-center justify-center space-y-6">
-           <div className="relative">
-              <Loader2 className="animate-spin text-nsp-primary" size={48} />
-              <div className="absolute inset-0 flex items-center justify-center">
-                 <div className="w-2 h-2 bg-nsp-primary rounded-full"></div>
-              </div>
-           </div>
-           <p className="text-gray-500 text-[10px] font-black uppercase tracking-[0.3em] animate-pulse">Initialisation du Garage</p>
+           <Loader2 className="animate-spin text-nsp-primary" size={48} />
+           <p className="text-gray-500 text-[10px] font-black uppercase tracking-widest">Chargement...</p>
         </div>
       ) : (
         <>
-         {screen === Screen.AUTH && <AuthScreen onLogin={handleLogin} onForgotPasswordRequest={(e) => {
-           const u = allUsers.find(x => x.email.toLowerCase() === e.toLowerCase());
-           if(u) return true;
-           return false;
-         }} existingUsers={allUsers} />}
+         {screen === Screen.AUTH && <AuthScreen onLogin={handleLogin} onForgotPasswordRequest={(e) => !!allUsers.find(x => x.email.toLowerCase() === e.toLowerCase())} existingUsers={allUsers} />}
          {screen === Screen.ADMIN_DASHBOARD && <AdminDashboardScreen currentUser={user!} allUsers={allUsers} allCars={allCars} allInvoices={allInvoices} onLogout={() => { setUser(null); db.session.clear(); setScreen(Screen.AUTH); }} onUpdateUser={(u) => setAllUsers(prev => prev.map(x => x.id === u.id ? u : x))} onDeleteUser={(id) => setAllUsers(prev => prev.filter(u => u.id !== id))} onRefresh={loadAllData} />}
-         {screen === Screen.GARAGE && <GarageScreen user={user!} cars={allCars.filter(c => c.ownerId === user?.id)} onSelectCar={(id) => { setActiveCarId(id); localStorage.setItem('AUTOBOOK_ACTIVE_CAR', id); setScreen(Screen.DASHBOARD); }} onAddCar={() => setScreen(Screen.ONBOARDING)} onLogout={() => { setUser(null); db.session.clear(); setScreen(Screen.AUTH); }} />}
+         {screen === Screen.GARAGE && <GarageScreen user={user!} cars={allCars.filter(c => c.ownerId === user?.id)} invoices={allInvoices} onSelectCar={(id) => { setActiveCarId(id); localStorage.setItem('AUTOBOOK_ACTIVE_CAR', id); setScreen(Screen.DASHBOARD); }} onViewInvoices={(id) => { setActiveCarId(id); setScreen(Screen.INVOICES_LIST); }} onAddCar={() => setScreen(Screen.ONBOARDING)} onLogout={() => { setUser(null); db.session.clear(); setScreen(Screen.AUTH); }} />}
          {screen === Screen.ONBOARDING && <OnboardingScreen onSave={(c) => { 
            const carWithId = { ...c, ownerId: user!.id };
            const updatedCars = [...allCars, carWithId];
            setAllCars(updatedCars);
            db.cars.saveAll(updatedCars);
            setActiveCarId(c.id);
-           localStorage.setItem('AUTOBOOK_ACTIVE_CAR', c.id);
            setScreen(Screen.DASHBOARD);
          }} onCancel={() => setScreen(Screen.GARAGE)} canUseSiv={!!(user?.isPremium || user?.hasSivAccess)} onRequireSiv={() => setShowPayment('siv')} />}
-         {screen === Screen.DASHBOARD && activeCarId && <DashboardScreen user={user!} car={allCars.find(c => c.id === activeCarId)!} invoices={allInvoices.filter(i => i.carId === activeCarId)} aiStatus={{status:'neutral', message:''}} onBackToGarage={() => setScreen(Screen.GARAGE)} onAddInvoice={() => setScreen(Screen.ADD_INVOICE)} onSellCar={() => setScreen(Screen.SELL_CAR)} onBuyCar={() => setScreen(Screen.BUY_CAR)} onAssistance={() => setScreen(Screen.ASSISTANCE)} onDeleteCar={() => { const updated = allCars.filter(c => c.id !== activeCarId); setAllCars(updated); db.cars.saveAll(updated); setActiveCarId(null); setScreen(Screen.GARAGE); }} onUpdateSpecs={(s) => { const updated = allCars.map(c => c.id === activeCarId ? {...c, specs: s} : c); setAllCars(updated); db.cars.saveAll(updated); }} onUpdateCar={(c) => { const updated = allCars.map(x => x.id === c.id ? c : x); setAllCars(updated); db.cars.saveAll(updated); }} onDeleteInvoice={(id) => { const updated = allInvoices.filter(i => i.id !== id); setAllInvoices(updated); db.invoices.saveAll(updated); }} />}
+         {screen === Screen.DASHBOARD && activeCarId && <DashboardScreen user={user!} car={allCars.find(c => c.id === activeCarId)!} invoices={allInvoices.filter(i => i.carId === activeCarId)} aiStatus={{status:'neutral', message:''}} onBackToGarage={() => setScreen(Screen.GARAGE)} onAddInvoice={() => setScreen(Screen.ADD_INVOICE)} onSellCar={() => {}} onBuyCar={() => {}} onAssistance={() => setScreen(Screen.ASSISTANCE)} onDeleteCar={() => {}} onUpdateSpecs={() => {}} onUpdateCar={() => {}} onDeleteInvoice={(id) => setAllInvoices(prev => prev.filter(i => i.id !== id))} />}
          {screen === Screen.ADD_INVOICE && <AddInvoiceScreen carId={activeCarId!} onSave={handleSaveInvoice} onCancel={() => setScreen(Screen.DASHBOARD)} />}
          {screen === Screen.ASSISTANCE && <AssistanceScreen onBack={() => setScreen(Screen.DASHBOARD)} canUseAssistance={!!(user?.isPremium || user?.hasAssistanceAccess)} onRequireAccess={() => setShowPayment('assistance')} />}
+         {screen === Screen.INVOICES_LIST && activeCarId && <InvoicesListScreen car={allCars.find(c => c.id === activeCarId)!} invoices={allInvoices.filter(i => i.carId === activeCarId)} onBack={() => setScreen(Screen.GARAGE)} onAdd={() => setScreen(Screen.ADD_INVOICE)} onDelete={(id) => { const updated = allInvoices.filter(i => i.id !== id); setAllInvoices(updated); db.invoices.saveAll(updated); }} />}
         </>
       )}
 

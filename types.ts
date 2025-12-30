@@ -8,7 +8,8 @@ export enum Screen {
   SELL_CAR = 'SELL_CAR',
   BUY_CAR = 'BUY_CAR',
   ASSISTANCE = 'ASSISTANCE',
-  ADMIN_DASHBOARD = 'ADMIN_DASHBOARD'
+  ADMIN_DASHBOARD = 'ADMIN_DASHBOARD',
+  INVOICES_LIST = 'INVOICES_LIST'
 }
 
 export interface User {
@@ -108,5 +109,3 @@ export interface ManufacturerSpecs {
   oilType: string;
   checkPoints: string[];
 }
-
-// Global declarations for aistudio are removed to avoid conflict with environment-provided types.
