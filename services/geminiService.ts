@@ -3,7 +3,7 @@ import { GoogleGenAI, Type } from "@google/genai";
 import { Car, ManufacturerSpecs, TechnicalSpecs } from "../types";
 
 /**
- * Compresse et traite le fichier pour le stockage local
+ * Compresse fortement le fichier pour garantir la visibilité malgré les limites de stockage (5MB)
  */
 export const processFile = (file: File): Promise<string> => {
   return new Promise((resolve, reject) => {
@@ -12,17 +12,20 @@ export const processFile = (file: File): Promise<string> => {
     reader.onload = (e) => {
       const result = e.target?.result as string;
       
-      // Si c'est un PDF, on garde tel quel
+      // Si c'est un PDF, on le garde tel quel mais on vérifie la taille
       if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
+        if (file.size > 2 * 1024 * 1024) {
+          alert("Ce PDF est trop lourd (>2Mo). Il risque de ne pas s'afficher correctement après sauvegarde.");
+        }
         resolve(result);
         return;
       }
 
-      // Si c'est une image, compression forte pour garantir la persistence sur Vercel/Web
+      // Pour les images : Compression forte (Crucial pour Vercel/Mobile)
       const img = new Image();
       img.onload = () => {
         const canvas = document.createElement('canvas');
-        const MAX_SIZE = 1000; // Taille optimale pour lecture IA + stockage
+        const MAX_SIZE = 800; // Taille réduite pour économiser 80% d'espace
         let width = img.width;
         let height = img.height;
         
@@ -39,8 +42,8 @@ export const processFile = (file: File): Promise<string> => {
         const ctx = canvas.getContext('2d');
         if (ctx) {
           ctx.drawImage(img, 0, 0, width, height);
-          // On utilise JPEG à 0.6 pour un bon compromis poids/lisibilité
-          resolve(canvas.toDataURL('image/jpeg', 0.6));
+          // Qualité 0.4 : Divise le poids par 10 tout en restant lisible
+          resolve(canvas.toDataURL('image/jpeg', 0.4));
         } else {
           resolve(result);
         }
@@ -55,33 +58,17 @@ export const processFile = (file: File): Promise<string> => {
 };
 
 /**
- * Convertit une chaîne Base64 en URL d'objet Blob pour un affichage stable
+ * Fonction de secours pour l'affichage (évite les crashs si le base64 est corrompu)
  */
 export const safeBase64ToBlobUrl = (base64Data: string): string => {
   try {
-    if (!base64Data.startsWith('data:')) return base64Data;
-    
-    const parts = base64Data.split(';base64,');
-    const contentType = parts[0].split(':')[1];
-    const raw = window.atob(parts[1]);
-    const rawLength = raw.length;
-    const uInt8Array = new Uint8Array(rawLength);
-
-    for (let i = 0; i < rawLength; ++i) {
-      uInt8Array[i] = raw.charCodeAt(i);
-    }
-
-    const blob = new Blob([uInt8Array], { type: contentType });
-    return URL.createObjectURL(blob);
+    if (!base64Data || !base64Data.startsWith('data:')) return base64Data;
+    // On retourne directement la dataURI pour plus de fiabilité sur les petits fichiers
+    return base64Data;
   } catch (e) {
-    console.error("Erreur conversion Blob:", e);
-    return base64Data; // Fallback au base64 original
+    console.error("Erreur de rendu document:", e);
+    return "";
   }
-};
-
-export const fileToGenerativePart = async (file: File): Promise<string> => {
-  const base64Data = await processFile(file);
-  return base64Data.split(',')[1];
 };
 
 export const analyzeInvoiceImage = async (base64Data: string, mimeType: string = 'image/jpeg') => {

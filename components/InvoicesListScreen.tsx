@@ -2,6 +2,7 @@
 import React, { useState } from 'react';
 import { Car, Invoice } from '../types';
 import { ArrowLeft, Plus, Fuel, Wrench, ChevronRight, X, Trash2, Database, Sparkles, ZoomIn, FileText, Download, Eye, ShieldCheck, AlertCircle } from 'lucide-react';
+import { safeBase64ToBlobUrl } from '../services/geminiService';
 
 interface InvoicesListScreenProps {
   car: Car;
@@ -78,7 +79,7 @@ export const InvoicesListScreen: React.FC<InvoicesListScreenProps> = ({ car, inv
                       isPDF(inv.imageUrl) ? (
                         <FileText size={24} className="text-red-500" />
                       ) : (
-                        <img src={inv.imageUrl} className="w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-opacity" alt="Scan" />
+                        <img src={safeBase64ToBlobUrl(inv.imageUrl)} className="w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-opacity" alt="Scan" />
                       )
                     ) : (
                       <div className={`w-full h-full flex items-center justify-center ${inv.type === 'fuel' ? 'text-blue-400' : 'text-nsp-primary'}`}>
@@ -101,7 +102,7 @@ export const InvoicesListScreen: React.FC<InvoicesListScreenProps> = ({ car, inv
         </div>
       </div>
 
-      {/* VISIONNEUSE AMÉLIORÉE */}
+      {/* VISIONNEUSE AMÉLIORÉE - FIX POUR VISIBILITÉ VERCEL */}
       {viewingInvoice && (
         <div className="fixed inset-0 z-[200] bg-black flex flex-col animate-fade-in overflow-y-auto">
           <header className="flex justify-between items-center p-6 pt-safe-top bg-black/80 backdrop-blur-xl border-b border-white/10 sticky top-0 z-50">
@@ -114,36 +115,40 @@ export const InvoicesListScreen: React.FC<InvoicesListScreenProps> = ({ car, inv
           </header>
 
           <div className="max-w-2xl mx-auto w-full p-6 space-y-8 pb-32">
-            {/* DOCUMENT ORIGINAL */}
             <div className="space-y-4">
               <h4 className="text-[10px] text-gray-500 font-black uppercase tracking-widest flex items-center gap-2">
-                <Eye size={14} /> Document Original
+                <Eye size={14} /> Aperçu Haute Résolution
               </h4>
               <div className="rounded-[2.5rem] overflow-hidden border border-white/10 shadow-2xl bg-nsp-input relative">
                 {isPDF(viewingInvoice.imageUrl) ? (
-                  <div className="aspect-[3/4] flex flex-col items-center justify-center p-10 text-center gap-6">
-                    <div className="w-24 h-24 bg-red-600/10 rounded-full flex items-center justify-center text-red-500 border border-red-500/20">
-                      <FileText size={56} />
+                  <div className="w-full">
+                    {/* Tentative d'affichage du PDF dans une iframe */}
+                    <iframe 
+                      src={viewingInvoice.imageUrl} 
+                      className="w-full h-[60vh] border-0 rounded-t-[2.5rem]" 
+                      title="PDF Preview"
+                    />
+                    <div className="p-8 bg-black/40 text-center gap-6 flex flex-col items-center">
+                       <p className="text-gray-500 text-[10px] font-bold uppercase">Si le PDF ne s'affiche pas ci-dessus :</p>
+                       <a 
+                        href={viewingInvoice.imageUrl} 
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="bg-white text-black px-10 py-5 rounded-[2rem] font-black text-[10px] uppercase tracking-widest flex items-center gap-3 shadow-2xl active:scale-95 transition-all"
+                      >
+                        <Download size={18} /> Télécharger / Voir Plein Écran
+                      </a>
                     </div>
-                    <div className="space-y-2">
-                      <p className="text-white font-black text-lg uppercase leading-none">DOCUMENT PDF</p>
-                      <p className="text-gray-500 text-[10px] font-bold uppercase max-w-[200px]">Ce fichier est stocké en haute définition.</p>
-                    </div>
-                    <a 
-                      href={viewingInvoice.imageUrl} 
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="bg-white text-black px-10 py-5 rounded-[2rem] font-black text-[10px] uppercase tracking-widest flex items-center gap-3 shadow-2xl active:scale-95 transition-all"
-                    >
-                      <Download size={18} /> Télécharger / Voir le PDF
-                    </a>
                   </div>
                 ) : viewingInvoice.imageUrl ? (
                   <div className="relative">
                     <img 
-                      src={viewingInvoice.imageUrl} 
+                      src={safeBase64ToBlobUrl(viewingInvoice.imageUrl)} 
                       className="w-full h-auto max-h-[80vh] object-contain mx-auto block" 
                       alt="Facture Originale" 
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).src = 'https://via.placeholder.com/800?text=Image+Trop+Lourde+ou+Corrompue';
+                      }}
                     />
                     <div className="absolute top-4 right-4">
                       <div className="bg-nsp-primary/90 backdrop-blur-md text-white px-4 py-2 rounded-full text-[9px] font-black uppercase tracking-widest flex items-center gap-2 shadow-2xl">
@@ -160,7 +165,7 @@ export const InvoicesListScreen: React.FC<InvoicesListScreenProps> = ({ car, inv
               </div>
             </div>
 
-            {/* DONNÉES EXTRAITES (DOC CORRIGÉ) */}
+            {/* Reste du rapport */}
             <div className="space-y-4">
               <h4 className="text-[10px] text-gray-500 font-black uppercase tracking-widest flex items-center gap-2">
                 <Sparkles size={14} className="text-nsp-primary" /> Rapport d'Expertise IA
@@ -187,13 +192,6 @@ export const InvoicesListScreen: React.FC<InvoicesListScreenProps> = ({ car, inv
                     <span className="text-[10px] text-gray-500 font-black uppercase tracking-widest">Garage / Enseigne</span>
                     <span className="text-sm text-white font-bold uppercase truncate max-w-[200px] text-right">{viewingInvoice.title}</span>
                   </div>
-                  
-                  {viewingInvoice.detectedSpecs && Object.entries(viewingInvoice.detectedSpecs).map(([key, val]) => val && (
-                    <div key={key} className="flex justify-between items-center border-b border-white/5 pb-3">
-                      <span className="text-[10px] text-nsp-primary/60 font-black uppercase tracking-widest">{key.replace(/Ref|Dimensions|Viscosity/g, '')}</span>
-                      <span className="text-sm text-nsp-primary font-black uppercase">{val}</span>
-                    </div>
-                  ))}
                 </div>
 
                 <div className="pt-4 flex items-center gap-3">
