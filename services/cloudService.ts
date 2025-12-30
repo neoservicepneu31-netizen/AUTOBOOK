@@ -1,23 +1,20 @@
-
 import { initializeApp } from 'firebase/app';
 import { 
   getFirestore, 
   collection, 
   getDocs, 
   query, 
+  where,
   onSnapshot, 
   doc, 
   setDoc,
   deleteDoc,
-  Timestamp
+  Timestamp,
+  limit,
+  orderBy
 } from 'firebase/firestore';
-import { User } from '../types';
+import { User, Car, Invoice } from '../types';
 
-/**
- * ---------------------------------------------------------
- * CONFIGURATION FIREBASE - PROJET AUTOBOOK-NSP
- * ---------------------------------------------------------
- */
 const firebaseConfig = {
   apiKey: "AIzaSyC0aoU59SqREEixo7VZbQ5_YmYcG-z3CSw",
   authDomain: "autobook-nsp.firebaseapp.com",
@@ -31,7 +28,6 @@ const firebaseConfig = {
 const API_DISABLED_KEY = 'AUTOBOOK_CLOUD_API_DISABLED';
 let db: any = null;
 let isRealFirebase = false;
-let apiNeedsActivation = localStorage.getItem(API_DISABLED_KEY) === 'true';
 
 try {
     if (firebaseConfig.apiKey && firebaseConfig.apiKey !== "VOTRE_API_KEY") {
@@ -55,105 +51,101 @@ class CloudConnector {
   }
 
   public isConnected(): boolean {
-    return isRealFirebase && !apiNeedsActivation;
+    return isRealFirebase && localStorage.getItem(API_DISABLED_KEY) !== 'true';
   }
 
   public isApiDisabled(): boolean {
-    return apiNeedsActivation;
+    return localStorage.getItem(API_DISABLED_KEY) === 'true';
   }
 
   public resetActivationFlag(): void {
-    apiNeedsActivation = false;
     localStorage.removeItem(API_DISABLED_KEY);
-    console.log("🔄 Réinitialisation du flag Cloud...");
   }
 
-  private markApiDisabled(): void {
-    apiNeedsActivation = true;
-    localStorage.setItem(API_DISABLED_KEY, 'true');
-  }
-
-  // SYNC : Envoie l'utilisateur vers le serveur central
+  // --- SYNC ROBUSTE ---
+  // Utilisation de merge: true pour éviter d'écraser des données concurrentes
   async syncUser(user: User): Promise<void> {
-    if (!isRealFirebase || apiNeedsActivation) return;
-
+    if (!this.isConnected()) return;
     try {
-        const userRef = doc(db, "users", user.id);
-        await setDoc(userRef, {
-            ...user,
-            lastSync: Timestamp.now(),
-            source: window.location.hostname
+        await setDoc(doc(db, "users", user.id), { 
+          ...user, 
+          lastSync: Timestamp.now(),
+          platform: 'web-mobile'
         }, { merge: true });
-    } catch (e: any) {
-        if (e.code === 'not-found' || e.code === 'permission-denied') {
-            this.markApiDisabled();
-        }
-        console.error("Erreur Sync Cloud:", e);
+    } catch (e: any) { 
+        if(e.code === 'permission-denied') localStorage.setItem(API_DISABLED_KEY, 'true');
     }
   }
 
-  // DELETE : Supprime définitivement l'utilisateur du Cloud
-  async deleteUser(userId: string): Promise<void> {
-    if (!isRealFirebase || apiNeedsActivation) return;
-    try {
-      const userRef = doc(db, "users", userId);
-      await deleteDoc(userRef);
-      console.log(`[Cloud] Utilisateur ${userId} supprimé avec succès.`);
-    } catch (e: any) {
-      console.error("Erreur suppression Cloud:", e);
-    }
-  }
-
-  // FETCH : L'ADMIN récupère la liste globale
+  // Fetch avec limite pour éviter de saturer la mémoire si 10k users
   async fetchAllUsers(): Promise<User[]> {
-    if (!isRealFirebase || apiNeedsActivation) {
-        return JSON.parse(localStorage.getItem('AUTOBOOK_DB_USERS_V2') || '[]');
-    }
-
+    if (!this.isConnected()) return [];
     try {
-        const querySnapshot = await getDocs(collection(db, "users"));
-        const users: User[] = [];
-        querySnapshot.forEach((doc) => {
-            const data = doc.data();
-            users.push({
-              ...data,
-              // Convertir le timestamp Firebase en string lisible si besoin
-              lastSyncDate: data.lastSync?.toDate().toISOString()
-            } as any);
-        });
-        
-        if (users.length > 0) {
-            localStorage.setItem('AUTOBOOK_DB_USERS_V2', JSON.stringify(users));
-        }
-        
-        return users;
-    } catch (e: any) {
-        if (e.code === 'not-found' || e.code === 'permission-denied') {
-            this.markApiDisabled();
-        }
-        return JSON.parse(localStorage.getItem('AUTOBOOK_DB_USERS_V2') || '[]');
+        const q = query(collection(db, "users"), limit(500)); 
+        const querySnapshot = await getDocs(q);
+        return querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as User));
+    } catch (e: any) { return []; }
+  }
+
+  async syncCar(car: Car): Promise<void> {
+    if (!this.isConnected()) return;
+    try {
+      // Nettoyage des données lourdes avant sync si nécessaire (préparation Storage)
+      await setDoc(doc(db, "cars", car.id), { 
+        ...car, 
+        lastSync: Timestamp.now(),
+        searchPlate: car.plate.replace(/-/g, '').toUpperCase()
+      }, { merge: true });
+    } catch (e) { console.error("Sync Car Error", e); }
+  }
+
+  async fetchUserCars(userId: string): Promise<Car[]> {
+    if (!this.isConnected()) return [];
+    try {
+      const q = query(collection(db, "cars"), where("ownerId", "==", userId));
+      const snap = await getDocs(q);
+      return snap.docs.map(d => d.data() as Car);
+    } catch (e) { return []; }
+  }
+
+  async syncInvoice(invoice: Invoice): Promise<void> {
+    if (!this.isConnected()) return;
+    try {
+      await setDoc(doc(db, "invoices", invoice.id), { 
+        ...invoice, 
+        lastSync: Timestamp.now() 
+      }, { merge: true });
+    } catch (e) { console.error("Sync Invoice Error", e); }
+  }
+
+  // Added deleteInvoice method to fix error in App.tsx
+  async deleteInvoice(invoiceId: string): Promise<void> {
+    if (!this.isConnected()) return;
+    try {
+      await deleteDoc(doc(db, "invoices", invoiceId));
+    } catch (e) {
+      console.error("Delete Invoice Error", e);
     }
   }
 
-  // LISTEN : Ecouteur en temps réel
-  listenToAllUsers(callback: (users: User[]) => void) {
-    if (!isRealFirebase || apiNeedsActivation) return null;
-
+  async fetchUserInvoices(carId: string): Promise<Invoice[]> {
+    if (!this.isConnected()) return [];
     try {
-        return onSnapshot(collection(db, "users"), (snapshot) => {
-            const users: User[] = [];
-            snapshot.forEach((doc) => {
-                users.push(doc.data() as User);
-            });
-            callback(users);
-        }, (error) => {
-            if (error.code === 'not-found' || error.code === 'permission-denied') {
-                this.markApiDisabled();
-            }
-        });
-    } catch (e) {
-        return null;
+      const q = query(collection(db, "invoices"), where("carId", "==", carId), orderBy("date", "desc"));
+      const snap = await getDocs(q);
+      return snap.docs.map(d => d.data() as Invoice);
+    } catch (e) { 
+      // Si l'index orderBy n'est pas encore créé sur Firebase
+      const snap = await getDocs(query(collection(db, "invoices"), where("carId", "==", carId)));
+      return snap.docs.map(d => d.data() as Invoice);
     }
+  }
+
+  listenToAllUsers(callback: (users: User[]) => void) {
+    if (!this.isConnected()) return null;
+    return onSnapshot(collection(db, "users"), (snapshot) => {
+      callback(snapshot.docs.map(doc => doc.data() as User));
+    });
   }
 }
 

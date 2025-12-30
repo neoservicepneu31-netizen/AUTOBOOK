@@ -2,9 +2,9 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { Car, ManufacturerSpecs, TechnicalSpecs } from "../types";
 
-/**
- * Compresse fortement le fichier pour garantir la visibilité malgré les limites de stockage (5MB)
- */
+// Fonction utilitaire pour attendre (Backoff)
+const wait = (ms: number) => new Promise(res => setTimeout(res, ms));
+
 export const processFile = (file: File): Promise<string> => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -12,20 +12,16 @@ export const processFile = (file: File): Promise<string> => {
     reader.onload = (e) => {
       const result = e.target?.result as string;
       
-      // Si c'est un PDF, on le garde tel quel mais on vérifie la taille
       if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
-        if (file.size > 2 * 1024 * 1024) {
-          alert("Ce PDF est trop lourd (>2Mo). Il risque de ne pas s'afficher correctement après sauvegarde.");
-        }
         resolve(result);
         return;
       }
 
-      // Pour les images : Compression forte (Crucial pour Vercel/Mobile)
       const img = new Image();
       img.onload = () => {
         const canvas = document.createElement('canvas');
-        const MAX_SIZE = 800; // Taille réduite pour économiser 80% d'espace
+        // Taille réduite pour économiser la bande passante sur 10 000 users
+        const MAX_SIZE = 700; 
         let width = img.width;
         let height = img.height;
         
@@ -42,7 +38,6 @@ export const processFile = (file: File): Promise<string> => {
         const ctx = canvas.getContext('2d');
         if (ctx) {
           ctx.drawImage(img, 0, 0, width, height);
-          // Qualité 0.4 : Divise le poids par 10 tout en restant lisible
           resolve(canvas.toDataURL('image/jpeg', 0.4));
         } else {
           resolve(result);
@@ -57,76 +52,38 @@ export const processFile = (file: File): Promise<string> => {
   });
 };
 
-/**
- * Fonction de secours pour l'affichage (évite les crashs si le base64 est corrompu)
- */
 export const safeBase64ToBlobUrl = (base64Data: string): string => {
-  try {
-    if (!base64Data || !base64Data.startsWith('data:')) return base64Data;
-    // On retourne directement la dataURI pour plus de fiabilité sur les petits fichiers
-    return base64Data;
-  } catch (e) {
-    console.error("Erreur de rendu document:", e);
-    return "";
-  }
+  if (!base64Data) return "";
+  if (base64Data.startsWith('data:')) return base64Data;
+  const isPDF = base64Data.length > 100 && base64Data.substring(0, 10).includes('JVBER');
+  const prefix = isPDF ? 'data:application/pdf;base64,' : 'data:image/jpeg;base64,';
+  return `${prefix}${base64Data}`;
 };
 
-export const analyzeInvoiceImage = async (base64Data: string, mimeType: string = 'image/jpeg') => {
+// Analyse avec gestion de la file d'attente (Retry si serveur surchargé)
+export const analyzeInvoiceImage = async (base64Data: string, mimeType: string = 'image/jpeg', retryCount = 0): Promise<any> => {
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   const finalMime = mimeType.includes('pdf') ? 'application/pdf' : 'image/jpeg';
+  const pureBase64 = base64Data.includes(',') ? base64Data.split(',')[1] : base64Data;
   
   try {
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
       contents: {
         parts: [
-          { 
-            inlineData: { 
-              mimeType: finalMime, 
-              data: base64Data 
-            } 
-          },
-          { 
-            text: `Analyse cette facture automobile. 
-            Extraire strictement au format JSON :
-            - type: 'maintenance' ou 'fuel'
-            - title: nom du garage/enseigne
-            - date: format YYYY-MM-DD
-            - km: kilométrage (entier)
-            - price: total (décimal)
-            - volume: litres (si carburant)
-            - specs: { tireDimensions, oilViscosity, batteryRef }
-            Renvoie UNIQUEMENT le JSON.`
-          }
+          { inlineData: { mimeType: finalMime, data: pureBase64 } },
+          { text: `Extraire en JSON strict: { type, title, date (YYYY-MM-DD), km (entier), price (total), specs: { tireDimensions, oilViscosity, batteryRef } }` }
         ]
       },
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            type: { type: Type.STRING },
-            title: { type: Type.STRING },
-            date: { type: Type.STRING },
-            km: { type: Type.NUMBER },
-            price: { type: Type.NUMBER },
-            volume: { type: Type.NUMBER },
-            specs: { 
-              type: Type.OBJECT, 
-              properties: { 
-                tireDimensions: { type: Type.STRING }, 
-                oilViscosity: { type: Type.STRING }, 
-                batteryRef: { type: Type.STRING } 
-              } 
-            }
-          },
-          required: ["type", "title", "date", "km", "price"]
-        }
-      }
+      config: { responseMimeType: "application/json" }
     });
-
     return JSON.parse(response.text?.trim() || '{}');
-  } catch (error) {
+  } catch (error: any) {
+    // Si quota dépassé (429) et qu'on a fait moins de 3 essais
+    if (error?.status === 429 && retryCount < 3) {
+        await wait(2000 * (retryCount + 1)); // Attendre de plus en plus longtemps
+        return analyzeInvoiceImage(base64Data, mimeType, retryCount + 1);
+    }
     console.error("Gemini Error:", error);
     throw error;
   }
@@ -137,19 +94,8 @@ export const getPersonalizedMaintenance = async (car: Car, currentKm: number): P
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
-      contents: `Génère les préconisations d'entretien JSON pour un véhicule ${car.name} (${car.fuelType}) à ${currentKm} km.`,
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            tirePressure: { type: Type.STRING },
-            oilType: { type: Type.STRING },
-            checkPoints: { type: Type.ARRAY, items: { type: Type.STRING } }
-          },
-          required: ["tirePressure", "oilType", "checkPoints"]
-        }
-      }
+      contents: `Génère préconisations JSON pour ${car.name} (${car.fuelType}) à ${currentKm} km: { tirePressure, oilType, checkPoints: [] }`,
+      config: { responseMimeType: "application/json" }
     });
     return JSON.parse(response.text?.trim() || '{}');
   } catch {

@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Screen, User, Car, Invoice, TechnicalSpecs } from './types';
 import { AuthScreen } from './components/AuthScreen';
 import { OnboardingScreen } from './components/OnboardingScreen';
@@ -9,6 +9,8 @@ import { AddInvoiceScreen } from './components/AddInvoiceScreen';
 import { AssistanceScreen } from './components/AssistanceScreen';
 import { AdminDashboardScreen } from './components/AdminDashboardScreen';
 import { InvoicesListScreen } from './components/InvoicesListScreen';
+import { SellCarScreen } from './components/SellCarScreen';
+import { BuyCarScreen } from './components/BuyCarScreen';
 import { PaymentModal, PurchaseType } from './components/PaymentModal';
 import { db } from './services/storageService'; 
 import { cloud } from './services/cloudService';
@@ -25,104 +27,110 @@ const App: React.FC = () => {
   const [showPayment, setShowPayment] = useState<PurchaseType | null>(null);
   const [activeCarId, setActiveCarId] = useState<string | null>(null);
 
-  const loadAllData = async () => {
+  const loadAllData = useCallback(async (targetUser: User) => {
+    setIsSyncing(true);
     try {
-      const localUsers = db.users.getAll();
-      const localCars = db.cars.getAll();
-      const localInvoices = db.invoices.getAll();
-      setAllUsers(localUsers);
-      setAllCars(localCars);
-      setAllInvoices(localInvoices);
+      // 1. Restaurer depuis le Cloud pour cet utilisateur précis
       if (cloud.isConnected()) {
-        const remoteUsers = await cloud.fetchAllUsers();
-        if (remoteUsers && remoteUsers.length > 0) setAllUsers(remoteUsers);
+        const remoteCars = await cloud.fetchUserCars(targetUser.id);
+        const remoteInvoices = await cloud.fetchUserInvoices(targetUser.id);
+
+        setAllCars(remoteCars);
+        setAllInvoices(remoteInvoices);
+        
+        // Cache local
+        db.cars.saveAll(remoteCars);
+        db.invoices.saveAll(remoteInvoices);
+      } else {
+        // Fallback local si pas de cloud
+        setAllCars(db.cars.getAll());
+        setAllInvoices(db.invoices.getAll());
       }
     } catch (e) {
-      console.warn("Sync Cloud off.");
+      console.warn("Sync error", e);
     } finally {
+      setIsSyncing(false);
       setIsDatabaseReady(true);
     }
-  };
+  }, []);
 
   useEffect(() => {
     const initApp = async () => {
-      await loadAllData();
       const sessionId = db.session.get();
       if (sessionId) {
-        const currentUsers = db.users.getAll();
-        const foundUser = currentUsers.find(u => u.id === sessionId);
+        const localUsers = db.users.getAll();
+        const foundUser = localUsers.find(u => u.id === sessionId);
         if (foundUser) {
           setUser(foundUser);
-          if (foundUser.role === 'admin') setScreen(Screen.ADMIN_DASHBOARD);
-          else setScreen(Screen.GARAGE);
+          await loadAllData(foundUser);
+          setScreen(foundUser.role === 'admin' ? Screen.ADMIN_DASHBOARD : Screen.GARAGE);
+        } else {
+          setIsDatabaseReady(true);
         }
+      } else {
+        setIsDatabaseReady(true);
       }
     };
     initApp();
-  }, []);
+  }, [loadAllData]);
 
   const handleLogin = async (loggedInUser: User) => {
-    setIsSyncing(true);
-    try {
-      await cloud.syncUser(loggedInUser);
-      setUser(loggedInUser);
-      db.session.set(loggedInUser.id);
-      const currentUsers = db.users.getAll();
-      if (!currentUsers.some(u => u.id === loggedInUser.id)) {
-        const updatedUsers = [...currentUsers, loggedInUser];
-        db.users.saveAll(updatedUsers);
-        setAllUsers(updatedUsers);
-      }
-      setScreen(loggedInUser.role === 'admin' ? Screen.ADMIN_DASHBOARD : Screen.GARAGE);
-    } catch (e) {
-      console.error("Login failed:", e);
-    } finally {
-      setTimeout(() => setIsSyncing(false), 800);
-    }
+    setUser(loggedInUser);
+    db.session.set(loggedInUser.id);
+    await loadAllData(loggedInUser);
+    setScreen(loggedInUser.role === 'admin' ? Screen.ADMIN_DASHBOARD : Screen.GARAGE);
   };
 
-  const handleUpdateUser = async (updatedUser: User) => {
-    const updatedUsers = allUsers.map(u => u.id === updatedUser.id ? updatedUser : u);
-    setAllUsers(updatedUsers);
-    db.users.saveAll(updatedUsers);
-    if (cloud.isConnected()) {
-      setIsSyncing(true);
-      await cloud.syncUser(updatedUser);
-      setIsSyncing(false);
-    }
+  const handleSaveCar = async (car: Car) => {
+    const updatedCars = [...allCars.filter(c => c.id !== car.id), car];
+    setAllCars(updatedCars);
+    db.cars.saveAll(updatedCars);
+    if (cloud.isConnected()) await cloud.syncCar(car);
   };
 
-  const handleDeleteUser = async (userId: string) => {
-    setIsSyncing(true);
-    try {
-      // 1. Suppression Cloud (Crucial pour Vercel)
-      if (cloud.isConnected()) {
-        await cloud.deleteUser(userId);
-      }
-      // 2. Suppression Locale
-      const updatedUsers = allUsers.filter(u => u.id !== userId);
-      setAllUsers(updatedUsers);
-      db.users.saveAll(updatedUsers);
-    } catch (e) {
-      console.error("Erreur lors de la suppression:", e);
-    } finally {
-      setIsSyncing(false);
-    }
-  };
-
-  const handleSaveInvoice = (inv: Invoice, specs?: TechnicalSpecs) => {
+  const handleSaveInvoice = async (inv: Invoice, specs?: TechnicalSpecs) => {
     const updatedInvoices = [inv, ...allInvoices];
     setAllInvoices(updatedInvoices);
     db.invoices.saveAll(updatedInvoices);
+    if (cloud.isConnected()) await cloud.syncInvoice(inv);
+
     if (specs && activeCarId) {
-      const updated = allCars.map(c => {
-        if (c.id === activeCarId) return { ...c, specs: { ...(c.specs || {}), ...specs } };
-        return c;
-      });
-      setAllCars(updated);
-      db.cars.saveAll(updated);
+      const car = allCars.find(c => c.id === activeCarId);
+      if (car) {
+        const updatedCar = { ...car, specs: { ...(car.specs || {}), ...specs } };
+        await handleSaveCar(updatedCar);
+      }
     }
     setScreen(Screen.INVOICES_LIST);
+  };
+
+  const handleDeleteInvoice = async (invoiceId: string) => {
+    const updated = allInvoices.filter(i => i.id !== invoiceId);
+    setAllInvoices(updated);
+    db.invoices.saveAll(updated);
+    if (cloud.isConnected()) await cloud.deleteInvoice(invoiceId);
+  };
+
+  const handleTransferComplete = (buyerEmail: string) => {
+    // Dans une app réelle, on changerait l'ownerId sur le cloud
+    // Ici on simule en retirant la voiture du garage actuel
+    const updatedCars = allCars.filter(c => c.id !== activeCarId);
+    setAllCars(updatedCars);
+    db.cars.saveAll(updatedCars);
+    setScreen(Screen.GARAGE);
+  };
+
+  const handleImportSuccess = (newCar: Car, newInvoices: Invoice[]) => {
+    const carWithUser = { ...newCar, ownerId: user!.id };
+    const invoicesWithUser = newInvoices.map(inv => ({ ...inv, carId: carWithUser.id }));
+    
+    setAllCars(prev => [...prev, carWithUser]);
+    setAllInvoices(prev => [...prev, ...invoicesWithUser]);
+    
+    db.cars.saveAll([...allCars, carWithUser]);
+    db.invoices.saveAll([...allInvoices, ...invoicesWithUser]);
+    
+    setScreen(Screen.GARAGE);
   };
 
   return (
@@ -136,37 +144,22 @@ const App: React.FC = () => {
       {!isDatabaseReady ? (
         <div className="h-full flex flex-col items-center justify-center space-y-6">
            <Loader2 className="animate-spin text-nsp-primary" size={48} />
-           <p className="text-gray-500 text-[10px] font-black uppercase tracking-widest">Chargement...</p>
+           <p className="text-gray-500 text-[10px] font-black uppercase tracking-widest">Initialisation...</p>
         </div>
       ) : (
         <>
-         {screen === Screen.AUTH && <AuthScreen onLogin={handleLogin} onForgotPasswordRequest={(e) => !!allUsers.find(x => x.email.toLowerCase() === e.toLowerCase())} existingUsers={allUsers} />}
-         {screen === Screen.ADMIN_DASHBOARD && <AdminDashboardScreen currentUser={user!} allUsers={allUsers} allCars={allCars} allInvoices={allInvoices} onLogout={() => { setUser(null); db.session.clear(); setScreen(Screen.AUTH); }} onUpdateUser={handleUpdateUser} onDeleteUser={handleDeleteUser} onRefresh={loadAllData} />}
-         {screen === Screen.GARAGE && <GarageScreen user={user!} cars={allCars.filter(c => c.ownerId === user?.id)} invoices={allInvoices} onSelectCar={(id) => { setActiveCarId(id); localStorage.setItem('AUTOBOOK_ACTIVE_CAR', id); setScreen(Screen.DASHBOARD); }} onViewInvoices={(id) => { setActiveCarId(id); setScreen(Screen.INVOICES_LIST); }} onAddCar={() => setScreen(Screen.ONBOARDING)} onLogout={() => { setUser(null); db.session.clear(); setScreen(Screen.AUTH); }} />}
-         {screen === Screen.ONBOARDING && <OnboardingScreen onSave={(c) => { 
-           const carWithId = { ...c, ownerId: user!.id };
-           const updatedCars = [...allCars, carWithId];
-           setAllCars(updatedCars);
-           db.cars.saveAll(updatedCars);
-           setActiveCarId(c.id);
-           setScreen(Screen.DASHBOARD);
-         }} onCancel={() => setScreen(Screen.GARAGE)} canUseSiv={!!(user?.isPremium || user?.hasSivAccess)} onRequireSiv={() => setShowPayment('siv')} />}
-         {screen === Screen.DASHBOARD && activeCarId && <DashboardScreen user={user!} car={allCars.find(c => c.id === activeCarId)!} invoices={allInvoices.filter(i => i.carId === activeCarId)} aiStatus={{status:'neutral', message:''}} onBackToGarage={() => setScreen(Screen.GARAGE)} onAddInvoice={() => setScreen(Screen.ADD_INVOICE)} onSellCar={() => {}} onBuyCar={() => {}} onAssistance={() => setScreen(Screen.ASSISTANCE)} onDeleteCar={() => {}} onUpdateSpecs={() => {}} onUpdateCar={() => {}} onDeleteInvoice={(id) => setAllInvoices(prev => prev.filter(i => i.id !== id))} />}
+         {screen === Screen.AUTH && <AuthScreen onLogin={handleLogin} onForgotPasswordRequest={() => true} existingUsers={allUsers} />}
+         {screen === Screen.GARAGE && <GarageScreen user={user!} cars={allCars} invoices={allInvoices} onSelectCar={(id) => { setActiveCarId(id); setScreen(Screen.DASHBOARD); }} onViewInvoices={(id) => { setActiveCarId(id); setScreen(Screen.INVOICES_LIST); }} onAddCar={() => setScreen(Screen.ONBOARDING)} onLogout={() => { setUser(null); db.session.clear(); setScreen(Screen.AUTH); }} onBuyCar={() => setScreen(Screen.BUY_CAR)} />}
+         {screen === Screen.ADMIN_DASHBOARD && <AdminDashboardScreen currentUser={user!} allUsers={allUsers} allCars={allCars} allInvoices={allInvoices} onLogout={() => { setUser(null); db.session.clear(); setScreen(Screen.AUTH); }} onUpdateUser={() => {}} onDeleteUser={() => {}} onRefresh={() => loadAllData(user!)} />}
+         {screen === Screen.DASHBOARD && activeCarId && <DashboardScreen user={user!} car={allCars.find(c => c.id === activeCarId)!} invoices={allInvoices.filter(i => i.carId === activeCarId)} aiStatus={{status:'neutral', message:''}} onBackToGarage={() => setScreen(Screen.GARAGE)} onAddInvoice={() => setScreen(Screen.ADD_INVOICE)} onSellCar={() => setScreen(Screen.SELL_CAR)} onBuyCar={() => {}} onAssistance={() => setScreen(Screen.ASSISTANCE)} onDeleteCar={() => {}} onUpdateSpecs={() => {}} onUpdateCar={() => {}} onDeleteInvoice={handleDeleteInvoice} />}
+         {screen === Screen.ONBOARDING && <OnboardingScreen onSave={(c) => { handleSaveCar({...c, ownerId: user!.id}); setScreen(Screen.GARAGE); }} onCancel={() => setScreen(Screen.GARAGE)} canUseSiv={true} onRequireSiv={() => {}} />}
          {screen === Screen.ADD_INVOICE && <AddInvoiceScreen carId={activeCarId!} onSave={handleSaveInvoice} onCancel={() => setScreen(Screen.DASHBOARD)} />}
-         {screen === Screen.ASSISTANCE && <AssistanceScreen onBack={() => setScreen(Screen.DASHBOARD)} canUseAssistance={!!(user?.isPremium || user?.hasAssistanceAccess)} onRequireAccess={() => setShowPayment('assistance')} />}
-         {screen === Screen.INVOICES_LIST && activeCarId && <InvoicesListScreen car={allCars.find(c => c.id === activeCarId)!} invoices={allInvoices.filter(i => i.carId === activeCarId)} onBack={() => setScreen(Screen.GARAGE)} onAdd={() => setScreen(Screen.ADD_INVOICE)} onDelete={(id) => { const updated = allInvoices.filter(i => i.id !== id); setAllInvoices(updated); db.invoices.saveAll(updated); }} />}
+         {screen === Screen.INVOICES_LIST && activeCarId && <InvoicesListScreen car={allCars.find(c => c.id === activeCarId)!} invoices={allInvoices.filter(i => i.carId === activeCarId)} onBack={() => setScreen(Screen.DASHBOARD)} onAdd={() => setScreen(Screen.ADD_INVOICE)} onDelete={handleDeleteInvoice} />}
+         {screen === Screen.SELL_CAR && activeCarId && <SellCarScreen car={allCars.find(c => c.id === activeCarId)!} invoices={allInvoices.filter(i => i.carId === activeCarId)} onCancel={() => setScreen(Screen.DASHBOARD)} onConfirmTransfer={handleTransferComplete} />}
+         {screen === Screen.BUY_CAR && <BuyCarScreen onCancel={() => setScreen(Screen.GARAGE)} onImportSuccess={handleImportSuccess} />}
+         {screen === Screen.ASSISTANCE && <AssistanceScreen onBack={() => setScreen(Screen.DASHBOARD)} canUseAssistance={true} onRequireAccess={() => {}} />}
         </>
       )}
-
-      {showPayment && <PaymentModal feature={showPayment} onClose={() => setShowPayment(null)} onSuccess={(t) => {
-        if(!user) return;
-        const u = {...user};
-        if(t === 'premium') u.isPremium = true;
-        else if(t === 'siv') u.hasSivAccess = true;
-        else u.hasAssistanceAccess = true;
-        handleUpdateUser(u);
-        setShowPayment(null);
-      }} />}
     </div>
   );
 };
