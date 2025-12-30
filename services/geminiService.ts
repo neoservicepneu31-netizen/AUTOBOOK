@@ -50,19 +50,13 @@ export const fileToGenerativePart = async (file: File): Promise<string> => {
 };
 
 export const analyzeInvoiceImage = async (base64Data: string, mimeType: string = 'image/jpeg') => {
-  const apiKey = process.env.API_KEY;
-  
-  // Vérification de sécurité pour Vercel
-  if (!apiKey || apiKey === 'undefined' || apiKey === '') {
-    throw new Error("CONFIG_ERROR: La clé API Gemini est manquante sur Vercel. Ajoutez 'API_KEY' dans les Environment Variables du projet.");
-  }
-
-  const ai = new GoogleGenAI({ apiKey });
+  // Initialisation directe avec la clé API injectée par Vercel/Vite
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   const finalMime = mimeType === 'application/pdf' ? 'application/pdf' : 'image/jpeg';
   
   try {
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash-lite-latest', // Utilisation d'un modèle ultra-rapide pour l'OCR
+      model: 'gemini-3-flash-preview', // Modèle corrigé pour éviter la 404
       contents: {
         parts: [
           { 
@@ -73,16 +67,16 @@ export const analyzeInvoiceImage = async (base64Data: string, mimeType: string =
           },
           { 
             text: `Analyse cette facture ou reçu automobile. 
-            Extrais strictement au format JSON :
+            Extraire les informations suivantes de manière stricte au format JSON :
             - type: 'maintenance' ou 'fuel'
-            - title: nom du garage ou station
-            - date: YYYY-MM-DD
-            - km: kilométrage (nombre)
-            - price: total (nombre)
-            - volume: litres (si fuel)
-            - specs: { tireDimensions, oilViscosity, batteryRef }
+            - title: nom de l'entreprise/garage
+            - date: format YYYY-MM-DD
+            - km: kilométrage indiqué (entier)
+            - price: montant TOTAL à payer (décimal)
+            - volume: nombre de litres (si c'est du carburant, sinon null)
+            - specs: objet contenant { tireDimensions, oilViscosity, batteryRef } si trouvés sur le document.
             
-            Réponds uniquement par le JSON.`
+            IMPORTANT : Renvoie uniquement le code JSON, sans texte avant ou après.`
           }
         ]
       },
@@ -116,16 +110,13 @@ export const analyzeInvoiceImage = async (base64Data: string, mimeType: string =
     return JSON.parse(result);
   } catch (error: any) {
     console.error("Gemini Error:", error);
-    throw new Error(error.message || "Erreur lors de l'analyse IA");
+    throw error;
   }
 };
 
 export const getPersonalizedMaintenance = async (car: Car, currentKm: number): Promise<ManufacturerSpecs> => {
-  const apiKey = process.env.API_KEY;
-  if (!apiKey || apiKey === 'undefined') return { tirePressure: "2.5 bar", oilType: "5W30", checkPoints: ["Niveaux", "Pneus"] };
-
   try {
-    const ai = new GoogleGenAI({ apiKey });
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
       contents: `Génère les préconisations d'entretien JSON pour un véhicule ${car.name} (${car.fuelType}) à ${currentKm} km.`,
