@@ -18,9 +18,9 @@ export interface AIStudio {
 
 declare global {
   interface Window {
-    // Removed the optional modifier '?' to match the required property declaration in the global context.
-    // This resolves the error: "Subsequent property declarations must have the same type."
-    aistudio: AIStudio;
+    // Restoration of the optional modifier '?' to resolve the "identical modifiers" error.
+    // This matches the expected signature in the global environment while maintaining the required AIStudio interface.
+    aistudio?: AIStudio;
   }
 }
 

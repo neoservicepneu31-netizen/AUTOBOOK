@@ -55,16 +55,13 @@ export const fileToGenerativePart = async (file: File): Promise<string> => {
 
 // Analyzes an invoice image using Gemini 3 and returns structured data
 export const analyzeInvoiceImage = async (base64Data: string, mimeType: string = 'image/jpeg') => {
-  // Use current process.env.API_KEY
-  const apiKey = process.env.API_KEY;
-  if (!apiKey || apiKey === "") {
-    throw new Error("AUTH_REQUIRED");
-  }
-
+  // CRITICAL: Create a new GoogleGenAI instance right before making an API call
+  // to ensure it uses the most up-to-date API key from process.env.API_KEY.
+  // Using process.env.API_KEY directly as required by the latest SDK guidelines.
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  
   try {
-    const ai = new GoogleGenAI({ apiKey });
     const modelName = 'gemini-3-flash-preview';
-
     const response = await ai.models.generateContent({
       model: modelName,
       contents: {
@@ -118,11 +115,11 @@ export const analyzeInvoiceImage = async (base64Data: string, mimeType: string =
 };
 
 export const getPersonalizedMaintenance = async (car: Car, currentKm: number): Promise<ManufacturerSpecs> => {
-  const apiKey = process.env.API_KEY;
-  if (!apiKey) return { tirePressure: "2.5 bar", oilType: "Standard", checkPoints: ["Pneus", "Huile"] };
+  // CRITICAL: Create a new GoogleGenAI instance right before making an API call
+  // to ensure it uses the most up-to-date API key from process.env.API_KEY as per coding guidelines.
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   
   try {
-    const ai = new GoogleGenAI({ apiKey });
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
       contents: `Génère les préconisations d'entretien JSON pour un véhicule ${car.name} (${car.fuelType}) ayant ${currentKm} km.`,
