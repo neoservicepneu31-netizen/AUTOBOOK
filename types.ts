@@ -108,3 +108,18 @@ export interface ManufacturerSpecs {
   oilType: string;
   checkPoints: string[];
 }
+
+/**
+ * Defining the AIStudio interface to match existing global expectations
+ * and fix subsequent property declaration errors.
+ */
+export interface AIStudio {
+  hasSelectedApiKey(): Promise<boolean>;
+  openSelectKey(): Promise<void>;
+}
+
+declare global {
+  interface Window {
+    aistudio?: AIStudio;
+  }
+}
