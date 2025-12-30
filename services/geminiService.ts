@@ -1,8 +1,6 @@
-
 import { GoogleGenAI, Type } from "@google/genai";
 import { Car, ManufacturerSpecs, TechnicalSpecs } from "../types";
 
-// Utilitaire pour compresser l'image uniquement si c'est une image
 export const processFile = (file: File): Promise<string> => {
   return new Promise((resolve, reject) => {
     if (file.type === 'application/pdf') {
@@ -18,7 +16,7 @@ export const processFile = (file: File): Promise<string> => {
       const img = new Image();
       img.onload = () => {
         const canvas = document.createElement('canvas');
-        const MAX_SIZE = 1600; 
+        const MAX_SIZE = 1200; 
         let width = img.width;
         let height = img.height;
         
@@ -35,7 +33,7 @@ export const processFile = (file: File): Promise<string> => {
         const ctx = canvas.getContext('2d');
         if (ctx) {
           ctx.drawImage(img, 0, 0, width, height);
-          resolve(canvas.toDataURL('image/jpeg', 0.85));
+          resolve(canvas.toDataURL('image/jpeg', 0.8));
         } else {
           resolve(e.target?.result as string);
         }
@@ -52,22 +50,39 @@ export const fileToGenerativePart = async (file: File): Promise<string> => {
 };
 
 export const analyzeInvoiceImage = async (base64Data: string, mimeType: string = 'image/jpeg') => {
-  // Initialisation strictement conforme aux instructions
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const apiKey = process.env.API_KEY;
+  
+  // Vérification de sécurité pour Vercel
+  if (!apiKey || apiKey === 'undefined' || apiKey === '') {
+    throw new Error("CONFIG_ERROR: La clé API Gemini est manquante sur Vercel. Ajoutez 'API_KEY' dans les Environment Variables du projet.");
+  }
+
+  const ai = new GoogleGenAI({ apiKey });
+  const finalMime = mimeType === 'application/pdf' ? 'application/pdf' : 'image/jpeg';
   
   try {
     const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
+      model: 'gemini-2.5-flash-lite-latest', // Utilisation d'un modèle ultra-rapide pour l'OCR
       contents: {
         parts: [
           { 
             inlineData: { 
-              mimeType: mimeType === 'application/pdf' ? 'application/pdf' : 'image/jpeg', 
+              mimeType: finalMime, 
               data: base64Data 
             } 
           },
           { 
-            text: "Analyse cette facture automobile. Extrais : type ('maintenance' ou 'fuel'), title (garage), date (YYYY-MM-DD), km (entier), price (decimal), volume (si fuel), specs (objet: tireDimensions, oilViscosity, batteryRef). Retourne un JSON pur." 
+            text: `Analyse cette facture ou reçu automobile. 
+            Extrais strictement au format JSON :
+            - type: 'maintenance' ou 'fuel'
+            - title: nom du garage ou station
+            - date: YYYY-MM-DD
+            - km: kilométrage (nombre)
+            - price: total (nombre)
+            - volume: litres (si fuel)
+            - specs: { tireDimensions, oilViscosity, batteryRef }
+            
+            Réponds uniquement par le JSON.`
           }
         ]
       },
@@ -96,16 +111,21 @@ export const analyzeInvoiceImage = async (base64Data: string, mimeType: string =
       }
     });
 
-    return JSON.parse(response.text || '{}');
-  } catch (error) {
-    console.error("Gemini Analysis Error:", error);
-    throw error;
+    const result = response.text?.trim();
+    if (!result) throw new Error("L'IA a retourné une réponse vide.");
+    return JSON.parse(result);
+  } catch (error: any) {
+    console.error("Gemini Error:", error);
+    throw new Error(error.message || "Erreur lors de l'analyse IA");
   }
 };
 
 export const getPersonalizedMaintenance = async (car: Car, currentKm: number): Promise<ManufacturerSpecs> => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const apiKey = process.env.API_KEY;
+  if (!apiKey || apiKey === 'undefined') return { tirePressure: "2.5 bar", oilType: "5W30", checkPoints: ["Niveaux", "Pneus"] };
+
   try {
+    const ai = new GoogleGenAI({ apiKey });
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
       contents: `Génère les préconisations d'entretien JSON pour un véhicule ${car.name} (${car.fuelType}) à ${currentKm} km.`,
@@ -122,7 +142,8 @@ export const getPersonalizedMaintenance = async (car: Car, currentKm: number): P
         }
       }
     });
-    return JSON.parse(response.text || '{}');
+    const result = response.text?.trim();
+    return JSON.parse(result || '{}');
   } catch {
     return { tirePressure: "2.5 bar", oilType: "5W30", checkPoints: ["Niveaux", "Pneus"] };
   }

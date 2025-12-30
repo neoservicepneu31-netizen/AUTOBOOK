@@ -1,7 +1,7 @@
 
 import React, { useState, useRef } from 'react';
 import { Invoice, TechnicalSpecs } from '../types';
-import { Loader2, X, Check, Camera, Zap, HardDrive, AlertTriangle, Fuel, Wrench, RefreshCw, FileText } from 'lucide-react';
+import { Loader2, X, Check, Camera, Zap, AlertTriangle, Fuel, Wrench, RefreshCw, FileText, Info } from 'lucide-react';
 import { analyzeInvoiceImage, fileToGenerativePart } from '../services/geminiService';
 
 interface AddInvoiceScreenProps {
@@ -38,7 +38,7 @@ export const AddInvoiceScreen: React.FC<AddInvoiceScreenProps> = ({ carId, onSav
     try {
       const result = await analyzeInvoiceImage(base64, mime);
       
-      if (result && result.title) {
+      if (result) {
         setIsSuccess(true);
         setActiveTab(result.type === 'fuel' ? 'fuel' : 'maintenance');
         setFormData({
@@ -49,12 +49,10 @@ export const AddInvoiceScreen: React.FC<AddInvoiceScreenProps> = ({ carId, onSav
           volume: result.volume?.toString() || ''
         });
         setDetectedSpecs(result.specs);
-      } else {
-        throw new Error("Données illisibles");
       }
     } catch (error: any) {
       console.error("AI Analysis Failed:", error);
-      setAnalysisError("L'IA n'a pas pu extraire les données. Merci de compléter le formulaire.");
+      setAnalysisError(error.message);
     } finally {
       setIsAnalyzing(false);
     }
@@ -79,12 +77,10 @@ export const AddInvoiceScreen: React.FC<AddInvoiceScreenProps> = ({ carId, onSav
       const base64 = await fileToGenerativePart(file);
       setFinalBase64(base64);
 
-      // Lancement de l'analyse immédiate
       await performAnalysis(base64, mime);
-      
     } catch (error: any) {
       setIsAnalyzing(false);
-      setAnalysisError("Erreur lors de la lecture du fichier.");
+      setAnalysisError("Impossible de lire le fichier sélectionné.");
     }
   };
 
@@ -109,7 +105,7 @@ export const AddInvoiceScreen: React.FC<AddInvoiceScreenProps> = ({ carId, onSav
     <div className="h-[100dvh] bg-nsp-bg flex flex-col w-full absolute inset-0 z-50 overflow-hidden">
       <div className="p-4 flex items-center justify-between bg-nsp-card border-b border-nsp-border shrink-0 pt-safe-top">
         <button onClick={onCancel} className="text-nsp-sub p-2"><X size={24} /></button>
-        <h2 className="text-sm font-black text-white uppercase tracking-widest">Ajouter Document</h2>
+        <h2 className="text-sm font-black text-white uppercase tracking-widest">Document Numérique</h2>
         <div className="w-6"></div>
       </div>
 
@@ -139,26 +135,29 @@ export const AddInvoiceScreen: React.FC<AddInvoiceScreenProps> = ({ carId, onSav
             ) : currentMimeType === 'application/pdf' && finalBase64 ? (
               <div className="flex flex-col items-center text-nsp-primary">
                 <FileText size={48} />
-                <span className="text-[10px] font-black mt-2">Document PDF chargé</span>
+                <span className="text-[10px] font-black mt-2">PDF Détecté</span>
               </div>
             ) : null}
             
             <div className="z-10 flex flex-col items-center gap-3">
               {isAnalyzing ? (
                 <div className="flex flex-col items-center gap-4">
-                  <Loader2 className="animate-spin text-nsp-primary" size={48} />
-                  <span className="text-[11px] font-black text-white uppercase tracking-[0.3em] animate-pulse">Analyse IA...</span>
+                  <div className="relative">
+                    <Loader2 className="animate-spin text-nsp-primary" size={48} />
+                    <Zap className="absolute inset-0 m-auto text-nsp-primary animate-pulse" size={16} />
+                  </div>
+                  <span className="text-[11px] font-black text-white uppercase tracking-[0.3em] animate-pulse">Extraction IA en cours...</span>
                 </div>
               ) : isSuccess ? (
                 <div className="bg-nsp-success text-white px-8 py-4 rounded-full font-black text-[11px] uppercase tracking-widest flex items-center gap-3 shadow-2xl">
-                  <Check size={20} /> Analyse Réussie
+                  <Check size={20} /> Lecture Terminée
                 </div>
               ) : (
                 <>
                   <div className="w-16 h-16 rounded-full bg-nsp-bg flex items-center justify-center border border-white/5 shadow-2xl mb-2">
                     <Camera size={32} className="text-gray-600" />
                   </div>
-                  <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest text-center">Photo, PDF ou Scan</span>
+                  <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest text-center">Prendre en Photo / PDF</span>
                 </>
               )}
             </div>
@@ -169,21 +168,31 @@ export const AddInvoiceScreen: React.FC<AddInvoiceScreenProps> = ({ carId, onSav
               onClick={() => performAnalysis(finalBase64, currentMimeType)}
               className="mt-4 w-full bg-nsp-primary/10 text-nsp-primary border border-nsp-primary/20 py-4 rounded-2xl text-[10px] font-black uppercase flex items-center justify-center gap-2 transition-transform active:scale-95"
             >
-              <RefreshCw size={14} /> {isSuccess ? 'Scanner à nouveau' : "Réessayer l'analyse IA"}
+              <RefreshCw size={14} /> Réessayer l'analyse IA
             </button>
           )}
         </div>
 
         {analysisError && (
-           <div className="mb-6 bg-red-950/40 border border-red-500/30 p-5 rounded-[2rem] flex items-center gap-4 text-red-200">
-             <AlertTriangle size={24} className="shrink-0 text-red-500" />
-             <p className="text-[10px] font-black uppercase tracking-widest leading-tight">{analysisError}</p>
+           <div className="mb-6 bg-red-950/40 border border-red-500/30 p-5 rounded-[2rem] space-y-3 text-red-200">
+             <div className="flex items-center gap-4">
+                <AlertTriangle size={24} className="shrink-0 text-red-500" />
+                <p className="text-[10px] font-black uppercase tracking-widest leading-tight">{analysisError}</p>
+             </div>
+             {analysisError.includes("CONFIG_ERROR") && (
+               <div className="bg-black/40 p-3 rounded-xl border border-white/5">
+                  <p className="text-[9px] text-gray-400 font-bold flex items-center gap-2">
+                    <Info size={12} className="text-nsp-primary" />
+                    Action : Vérifiez les variables d'environnement sur votre dashboard Vercel et redéployez.
+                  </p>
+               </div>
+             )}
            </div>
         )}
 
         <div className="space-y-6">
           <div>
-            <label className="text-[9px] text-gray-600 font-black uppercase mb-2 ml-1 block tracking-widest">Établissement / Garage</label>
+            <label className="text-[9px] text-gray-600 font-black uppercase mb-2 ml-1 block tracking-widest">Établissement</label>
             <input 
               type="text" 
               className="w-full bg-nsp-input border border-nsp-border rounded-2xl px-6 py-5 text-white font-bold text-sm focus:border-nsp-primary outline-none transition-all" 
@@ -201,33 +210,18 @@ export const AddInvoiceScreen: React.FC<AddInvoiceScreenProps> = ({ carId, onSav
                 className="w-full bg-nsp-input border border-nsp-border rounded-2xl px-6 py-5 text-white font-bold text-sm focus:border-nsp-primary outline-none" 
                 value={formData.km} 
                 onChange={e => setFormData({...formData, km: e.target.value})} 
-                placeholder="0" 
               />
             </div>
             <div>
-              <label className="text-[9px] text-gray-600 font-black uppercase mb-2 ml-1 block tracking-widest">Prix Total (€)</label>
+              <label className="text-[9px] text-gray-600 font-black uppercase mb-2 ml-1 block tracking-widest">Prix (€)</label>
               <input 
                 type="number" 
                 className="w-full bg-nsp-input border border-nsp-border rounded-2xl px-6 py-5 text-white font-bold text-sm focus:border-nsp-primary outline-none" 
                 value={formData.price} 
                 onChange={e => setFormData({...formData, price: e.target.value})} 
-                placeholder="0.00" 
               />
             </div>
           </div>
-
-          {activeTab === 'fuel' && (
-            <div className="animate-slide-up">
-              <label className="text-[9px] text-gray-600 font-black uppercase mb-2 ml-1 block tracking-widest">Volume (Litres)</label>
-              <input 
-                type="number" 
-                className="w-full bg-nsp-input border border-nsp-border rounded-2xl px-6 py-5 text-white font-bold text-sm focus:border-nsp-primary outline-none" 
-                value={formData.volume} 
-                onChange={e => setFormData({...formData, volume: e.target.value})} 
-                placeholder="0.00" 
-              />
-            </div>
-          )}
         </div>
       </div>
 
@@ -237,7 +231,7 @@ export const AddInvoiceScreen: React.FC<AddInvoiceScreenProps> = ({ carId, onSav
           disabled={isAnalyzing}
           className="w-full bg-nsp-primary text-white font-black py-5 rounded-[2.5rem] text-[12px] uppercase tracking-[0.3em] shadow-[0_20px_40px_rgba(230,57,70,0.3)] disabled:opacity-50"
         >
-           {isAnalyzing ? 'Extraction...' : 'VALIDER ET ENREGISTRER'}
+           {isAnalyzing ? 'Synchronisation IA...' : 'ENREGISTRER AU GARAGE'}
         </button>
       </div>
 
@@ -246,7 +240,6 @@ export const AddInvoiceScreen: React.FC<AddInvoiceScreenProps> = ({ carId, onSav
         ref={fileInputRef} 
         className="hidden" 
         accept="image/*,application/pdf" 
-        capture="environment"
         onChange={handleFileChange} 
       />
     </div>
