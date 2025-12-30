@@ -8,6 +8,7 @@ import {
   onSnapshot, 
   doc, 
   setDoc,
+  deleteDoc,
   Timestamp
 } from 'firebase/firestore';
 import { User } from '../types';
@@ -79,21 +80,27 @@ class CloudConnector {
     try {
         const userRef = doc(db, "users", user.id);
         await setDoc(userRef, {
-            id: user.id,
-            name: user.name,
-            email: user.email,
-            clientType: user.clientType || 'new',
-            role: user.role,
+            ...user,
             lastSync: Timestamp.now(),
-            isPremium: !!user.isPremium,
             source: window.location.hostname
         }, { merge: true });
     } catch (e: any) {
-        // Erreur critique : base absente ou permissions
-        if (e.code === 'not-found' || e.code === 'permission-denied' || e.message?.includes('not-found')) {
+        if (e.code === 'not-found' || e.code === 'permission-denied') {
             this.markApiDisabled();
         }
         console.error("Erreur Sync Cloud:", e);
+    }
+  }
+
+  // DELETE : Supprime définitivement l'utilisateur du Cloud
+  async deleteUser(userId: string): Promise<void> {
+    if (!isRealFirebase || apiNeedsActivation) return;
+    try {
+      const userRef = doc(db, "users", userId);
+      await deleteDoc(userRef);
+      console.log(`[Cloud] Utilisateur ${userId} supprimé avec succès.`);
+    } catch (e: any) {
+      console.error("Erreur suppression Cloud:", e);
     }
   }
 
@@ -107,7 +114,12 @@ class CloudConnector {
         const querySnapshot = await getDocs(collection(db, "users"));
         const users: User[] = [];
         querySnapshot.forEach((doc) => {
-            users.push(doc.data() as User);
+            const data = doc.data();
+            users.push({
+              ...data,
+              // Convertir le timestamp Firebase en string lisible si besoin
+              lastSyncDate: data.lastSync?.toDate().toISOString()
+            } as any);
         });
         
         if (users.length > 0) {
@@ -116,7 +128,7 @@ class CloudConnector {
         
         return users;
     } catch (e: any) {
-        if (e.code === 'not-found' || e.code === 'permission-denied' || e.message?.includes('not-found')) {
+        if (e.code === 'not-found' || e.code === 'permission-denied') {
             this.markApiDisabled();
         }
         return JSON.parse(localStorage.getItem('AUTOBOOK_DB_USERS_V2') || '[]');
@@ -135,7 +147,7 @@ class CloudConnector {
             });
             callback(users);
         }, (error) => {
-            if (error.code === 'not-found' || error.code === 'permission-denied' || error.message?.includes('not-found')) {
+            if (error.code === 'not-found' || error.code === 'permission-denied') {
                 this.markApiDisabled();
             }
         });

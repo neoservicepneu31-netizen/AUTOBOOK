@@ -6,7 +6,7 @@ import {
   BarChart3, Users, QrCode, Printer, 
   Globe, Radio, Database, ExternalLink, AlertCircle, RefreshCcw,
   Loader2, Copy, Check, ShieldAlert, ChevronRight, MousePointer2, HardDrive, Plus, ShieldCheck, ArrowRight,
-  Search, Info, Car as CarIcon, X, Smartphone, Globe2, Link, ExternalLink as OpenLink, Trash2, Key, History, Mail
+  Search, Info, Car as CarIcon, X, Smartphone, Globe2, Link, ExternalLink as OpenLink, Trash2, Key, History, Mail, Eye, LogOut, Clock
 } from 'lucide-react';
 
 interface AdminDashboardScreenProps {
@@ -72,18 +72,18 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({
     setTimeout(() => setIsRetrying(false), 2000);
   };
 
-  const handleDeleteUserAction = (userId: string) => {
-    if (confirm("🚨 ATTENTION : Êtes-vous sûr de vouloir supprimer définitivement ce client ? Toutes ses voitures et factures seront inaccessibles.")) {
-      onDeleteUser(userId);
+  const handleDeleteUserAction = async (userId: string) => {
+    if (confirm("🚨 ATTENTION : Suppression Définitive\n\nCette action est irréversible et supprimera le compte de la base de données Cloud.\n\nContinuer ?")) {
+      await onDeleteUser(userId);
       setSelectedUser(null);
     }
   };
 
-  const handleResetPasswordAction = (user: User) => {
+  const handleResetPasswordAction = async (user: User) => {
     const newPass = prompt("Saisissez le nouveau mot de passe temporaire pour ce client :", "NSP" + Math.floor(1000 + Math.random() * 9000));
     if (newPass) {
-      onUpdateUser({ ...user, password: newPass, passwordResetRequested: false });
-      alert("✅ Mot de passe mis à jour. Veuillez le communiquer au client.");
+      await onUpdateUser({ ...user, password: newPass, passwordResetRequested: false });
+      alert("✅ Mot de passe mis à jour sur le Cloud.\nVeuillez le communiquer au client.");
     }
   };
 
@@ -130,7 +130,9 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({
             </div>
           </div>
         </div>
-        <button onClick={onLogout} className="text-white bg-red-600 px-4 py-2 rounded-xl font-black text-[10px] uppercase shadow-lg active:scale-95">Quitter</button>
+        <button onClick={onLogout} className="text-white bg-red-600 px-4 py-2 rounded-xl font-black text-[10px] uppercase shadow-lg active:scale-95 flex items-center gap-2">
+          <LogOut size={14} /> Quitter
+        </button>
       </div>
 
       {/* Navigation Tabs */}
@@ -180,10 +182,11 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({
                               <p className="text-xs text-white font-bold">{u.name}</p>
                               <p className="text-[9px] text-gray-500">{cars.length} véhicule(s)</p>
                            </div>
-                           <div className="text-right">
+                           <div className="text-right flex items-center gap-2">
                              <span className={`text-[8px] font-black px-2 py-0.5 rounded-full ${isCloudActive ? 'bg-green-500/10 text-green-500' : 'bg-red-500/10 text-red-500'}`}>
                                 {isCloudActive ? 'CLOUD' : 'LOCAL'}
                              </span>
+                             <button onClick={() => setSelectedUser(u)} className="p-2 bg-nsp-input rounded-lg text-gray-400 hover:text-white"><Eye size={12}/></button>
                            </div>
                         </div>
                        );
@@ -330,7 +333,7 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({
             <div className="bg-nsp-card border border-nsp-border rounded-[2.5rem] p-8 shadow-2xl relative overflow-hidden">
                <div className="flex items-center gap-6 mb-8">
                   <div className="w-20 h-20 bg-nsp-input rounded-[1.5rem] flex items-center justify-center text-4xl font-black text-nsp-primary border border-white/10">{selectedUser.name.charAt(0)}</div>
-                  <div>
+                  <div className="flex-1">
                     <h2 className="text-2xl font-black text-white uppercase">{selectedUser.name}</h2>
                     <p className="text-gray-500 text-sm flex items-center gap-2"><Mail size={14}/> {selectedUser.email}</p>
                     <div className="mt-3 flex gap-2">
@@ -350,6 +353,15 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({
                      <p className="text-[8px] text-gray-500 uppercase font-black mb-1">Documents</p>
                      <p className="text-white font-bold text-xl">{getUserDetails(selectedUser.id).invoices.length}</p>
                   </div>
+               </div>
+
+               {/* Statut Sync */}
+               <div className="mt-6 pt-6 border-t border-white/5 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                     <Clock size={12} className="text-gray-600" />
+                     <span className="text-[9px] text-gray-500 font-black uppercase">Dernière Sync Cloud</span>
+                  </div>
+                  <span className="text-[10px] text-white font-bold">{(selectedUser as any).lastSyncDate ? new Date((selectedUser as any).lastSyncDate).toLocaleString() : 'Jamais'}</span>
                </div>
             </div>
 
@@ -390,13 +402,13 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({
                     onClick={() => handleResetPasswordAction(selectedUser)}
                     className="w-full bg-white text-black p-5 rounded-[2rem] font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-3 shadow-xl active:scale-95 transition-all"
                   >
-                    <Key size={18} /> FORCER RÉINITIALISATION MDP
+                    <Key size={18} /> FORCER RÉINITIALISATION MDP (CLOUD)
                   </button>
                   <button 
                     onClick={() => handleDeleteUserAction(selectedUser.id)}
                     className="w-full bg-red-600/10 text-red-500 p-5 rounded-[2rem] font-black text-[10px] uppercase tracking-widest border border-red-500/20 flex items-center justify-center gap-3 shadow-xl active:scale-95 transition-all"
                   >
-                    <Trash2 size={18} /> SUPPRIMER LE CLIENT DÉFINITIVEMENT
+                    <Trash2 size={18} /> SUPPRIMER DÉFINITIVEMENT DU CLOUD
                   </button>
                </div>
             </div>

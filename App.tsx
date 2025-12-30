@@ -81,18 +81,33 @@ const App: React.FC = () => {
     }
   };
 
-  const handleUpdateUser = (updatedUser: User) => {
+  const handleUpdateUser = async (updatedUser: User) => {
     const updatedUsers = allUsers.map(u => u.id === updatedUser.id ? updatedUser : u);
     setAllUsers(updatedUsers);
     db.users.saveAll(updatedUsers);
-    if (cloud.isConnected()) cloud.syncUser(updatedUser);
+    if (cloud.isConnected()) {
+      setIsSyncing(true);
+      await cloud.syncUser(updatedUser);
+      setIsSyncing(false);
+    }
   };
 
-  const handleDeleteUser = (userId: string) => {
-    const updatedUsers = allUsers.filter(u => u.id !== userId);
-    setAllUsers(updatedUsers);
-    db.users.saveAll(updatedUsers);
-    // Note: Pour une suppression Cloud réelle, il faudrait ajouter cloud.deleteUser(userId)
+  const handleDeleteUser = async (userId: string) => {
+    setIsSyncing(true);
+    try {
+      // 1. Suppression Cloud (Crucial pour Vercel)
+      if (cloud.isConnected()) {
+        await cloud.deleteUser(userId);
+      }
+      // 2. Suppression Locale
+      const updatedUsers = allUsers.filter(u => u.id !== userId);
+      setAllUsers(updatedUsers);
+      db.users.saveAll(updatedUsers);
+    } catch (e) {
+      console.error("Erreur lors de la suppression:", e);
+    } finally {
+      setIsSyncing(false);
+    }
   };
 
   const handleSaveInvoice = (inv: Invoice, specs?: TechnicalSpecs) => {
