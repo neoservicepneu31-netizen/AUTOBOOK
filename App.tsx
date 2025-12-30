@@ -54,13 +54,7 @@ const App: React.FC = () => {
         if (foundUser) {
           setUser(foundUser);
           if (foundUser.role === 'admin') setScreen(Screen.ADMIN_DASHBOARD);
-          else {
-            const savedCarId = localStorage.getItem('AUTOBOOK_ACTIVE_CAR');
-            if (savedCarId) {
-                setActiveCarId(savedCarId);
-                setScreen(Screen.GARAGE);
-            } else setScreen(Screen.GARAGE);
-          }
+          else setScreen(Screen.GARAGE);
         }
       }
     };
@@ -74,13 +68,31 @@ const App: React.FC = () => {
       setUser(loggedInUser);
       db.session.set(loggedInUser.id);
       const currentUsers = db.users.getAll();
-      if (!currentUsers.some(u => u.id === loggedInUser.id)) db.users.saveAll([...currentUsers, loggedInUser]);
+      if (!currentUsers.some(u => u.id === loggedInUser.id)) {
+        const updatedUsers = [...currentUsers, loggedInUser];
+        db.users.saveAll(updatedUsers);
+        setAllUsers(updatedUsers);
+      }
       setScreen(loggedInUser.role === 'admin' ? Screen.ADMIN_DASHBOARD : Screen.GARAGE);
     } catch (e) {
       console.error("Login failed:", e);
     } finally {
       setTimeout(() => setIsSyncing(false), 800);
     }
+  };
+
+  const handleUpdateUser = (updatedUser: User) => {
+    const updatedUsers = allUsers.map(u => u.id === updatedUser.id ? updatedUser : u);
+    setAllUsers(updatedUsers);
+    db.users.saveAll(updatedUsers);
+    if (cloud.isConnected()) cloud.syncUser(updatedUser);
+  };
+
+  const handleDeleteUser = (userId: string) => {
+    const updatedUsers = allUsers.filter(u => u.id !== userId);
+    setAllUsers(updatedUsers);
+    db.users.saveAll(updatedUsers);
+    // Note: Pour une suppression Cloud réelle, il faudrait ajouter cloud.deleteUser(userId)
   };
 
   const handleSaveInvoice = (inv: Invoice, specs?: TechnicalSpecs) => {
@@ -114,7 +126,7 @@ const App: React.FC = () => {
       ) : (
         <>
          {screen === Screen.AUTH && <AuthScreen onLogin={handleLogin} onForgotPasswordRequest={(e) => !!allUsers.find(x => x.email.toLowerCase() === e.toLowerCase())} existingUsers={allUsers} />}
-         {screen === Screen.ADMIN_DASHBOARD && <AdminDashboardScreen currentUser={user!} allUsers={allUsers} allCars={allCars} allInvoices={allInvoices} onLogout={() => { setUser(null); db.session.clear(); setScreen(Screen.AUTH); }} onUpdateUser={(u) => setAllUsers(prev => prev.map(x => x.id === u.id ? u : x))} onDeleteUser={(id) => setAllUsers(prev => prev.filter(u => u.id !== id))} onRefresh={loadAllData} />}
+         {screen === Screen.ADMIN_DASHBOARD && <AdminDashboardScreen currentUser={user!} allUsers={allUsers} allCars={allCars} allInvoices={allInvoices} onLogout={() => { setUser(null); db.session.clear(); setScreen(Screen.AUTH); }} onUpdateUser={handleUpdateUser} onDeleteUser={handleDeleteUser} onRefresh={loadAllData} />}
          {screen === Screen.GARAGE && <GarageScreen user={user!} cars={allCars.filter(c => c.ownerId === user?.id)} invoices={allInvoices} onSelectCar={(id) => { setActiveCarId(id); localStorage.setItem('AUTOBOOK_ACTIVE_CAR', id); setScreen(Screen.DASHBOARD); }} onViewInvoices={(id) => { setActiveCarId(id); setScreen(Screen.INVOICES_LIST); }} onAddCar={() => setScreen(Screen.ONBOARDING)} onLogout={() => { setUser(null); db.session.clear(); setScreen(Screen.AUTH); }} />}
          {screen === Screen.ONBOARDING && <OnboardingScreen onSave={(c) => { 
            const carWithId = { ...c, ownerId: user!.id };
@@ -137,7 +149,7 @@ const App: React.FC = () => {
         if(t === 'premium') u.isPremium = true;
         else if(t === 'siv') u.hasSivAccess = true;
         else u.hasAssistanceAccess = true;
-        handleLogin(u);
+        handleUpdateUser(u);
         setShowPayment(null);
       }} />}
     </div>
