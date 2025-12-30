@@ -1,7 +1,7 @@
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef } from 'react';
 import { Invoice, TechnicalSpecs } from '../types';
-import { Loader2, X, Check, Camera, Zap, HardDrive, AlertTriangle, ImageIcon, Key, Fuel, Wrench, ArrowRight, RefreshCw } from 'lucide-react';
+import { Loader2, X, Check, Camera, Zap, HardDrive, AlertTriangle, Fuel, Wrench, RefreshCw, Sparkles } from 'lucide-react';
 import { analyzeInvoiceImage, fileToGenerativePart, processFile } from '../services/geminiService';
 
 interface AddInvoiceScreenProps {
@@ -20,10 +20,8 @@ export const AddInvoiceScreen: React.FC<AddInvoiceScreenProps> = ({ carId, onSav
   const [currentMimeType, setCurrentMimeType] = useState<string>('image/jpeg');
   const [detectedSpecs, setDetectedSpecs] = useState<TechnicalSpecs | undefined>(undefined);
   
-  const [hasApiKey, setHasApiKey] = useState(true);
-  
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [formData, setFormData] = useState({
     title: '',
@@ -32,34 +30,6 @@ export const AddInvoiceScreen: React.FC<AddInvoiceScreenProps> = ({ carId, onSav
     price: '',
     volume: ''
   });
-
-  const checkKeyStatus = async () => {
-    if (window.aistudio) {
-      const selected = await window.aistudio.hasSelectedApiKey();
-      setHasApiKey(selected);
-    } else if (process.env.API_KEY) {
-      setHasApiKey(true);
-    } else {
-      setHasApiKey(false);
-    }
-  };
-
-  useEffect(() => {
-    checkKeyStatus();
-  }, []);
-
-  const handleActivateIA = async () => {
-    if (window.aistudio) {
-      await window.aistudio.openSelectKey();
-      // Assume success as per guidelines to mitigate race condition
-      setHasApiKey(true);
-      setAnalysisError(null);
-      // Optional: Auto-retry if data is present
-      if (finalBase64) {
-        performAnalysis(finalBase64, currentMimeType);
-      }
-    }
-  };
 
   const performAnalysis = async (base64: string, mime: string) => {
     setIsAnalyzing(true);
@@ -83,13 +53,8 @@ export const AddInvoiceScreen: React.FC<AddInvoiceScreenProps> = ({ carId, onSav
         setDetectedSpecs(result.specs);
       }
     } catch (error: any) {
-      console.error("Analysis failed:", error);
-      if (error.message === "AUTH_REQUIRED") {
-        setHasApiKey(false);
-        setAnalysisError("IA non activée. Veuillez cliquer sur le bouton jaune 'ACTIVER L'IA'.");
-      } else {
-        setAnalysisError("Échec de l'IA (Vérifiez votre clé API). Saisie manuelle possible.");
-      }
+      console.error("Scan failed:", error);
+      setAnalysisError("Échec de l'analyse automatique. Vous pouvez remplir le formulaire manuellement.");
     } finally {
       setIsAnalyzing(false);
     }
@@ -111,13 +76,11 @@ export const AddInvoiceScreen: React.FC<AddInvoiceScreenProps> = ({ carId, onSav
       }
       setFinalBase64(base64);
 
-      if (hasApiKey) {
-        performAnalysis(base64, file.type);
-      } else {
-        setAnalysisError("Veuillez d'abord activer l'IA pour analyser ce document.");
-      }
+      // Lancement automatique du scan dès que le fichier est sélectionné
+      performAnalysis(base64, file.type);
+      
     } catch (error: any) {
-      setAnalysisError("Erreur de traitement fichier.");
+      setAnalysisError("Erreur lors de la lecture du fichier.");
     }
   };
 
@@ -148,26 +111,6 @@ export const AddInvoiceScreen: React.FC<AddInvoiceScreenProps> = ({ carId, onSav
 
       <div className="flex-1 p-4 overflow-y-auto pb-32">
         
-        {/* API KEY PRIORITY ACTION */}
-        {!hasApiKey && (
-          <div className="mb-6 bg-yellow-500/10 border-2 border-yellow-500/30 p-8 rounded-[2.5rem] flex flex-col items-center gap-5 text-center shadow-2xl animate-pulse-slow">
-             <div className="bg-yellow-500 p-4 rounded-full shadow-lg">
-                <Key size={32} className="text-black" />
-             </div>
-             <div className="space-y-1">
-               <h3 className="text-white font-black text-lg uppercase tracking-widest">Liaison IA Nécessaire</h3>
-               <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest max-w-[250px] mx-auto leading-relaxed">Activez votre licence Gemini pour l'extraction automatique des factures.</p>
-             </div>
-             <button 
-               onClick={handleActivateIA}
-               className="w-full bg-yellow-500 hover:bg-yellow-400 text-black font-black py-5 rounded-2xl text-[11px] uppercase tracking-widest flex items-center justify-center gap-3 transition-all active:scale-95 shadow-[0_10px_20px_rgba(234,179,8,0.2)]"
-             >
-               ACTIVER L'IA MAINTENANT <ArrowRight size={18} />
-             </button>
-             <a href="https://ai.google.dev/gemini-api/docs/billing" target="_blank" className="text-[8px] text-gray-600 underline uppercase font-black">Consulter les tarifs Gemini API</a>
-          </div>
-        )}
-
         {/* TAB SELECTOR */}
         <div className="flex bg-nsp-input p-1 rounded-2xl mb-6">
           <button 
@@ -201,31 +144,32 @@ export const AddInvoiceScreen: React.FC<AddInvoiceScreenProps> = ({ carId, onSav
                        <Zap className="text-nsp-primary animate-pulse" size={16} />
                     </div>
                   </div>
-                  <span className="text-[11px] font-black text-white uppercase tracking-[0.3em]">Cerveau IA en action...</span>
+                  <span className="text-[11px] font-black text-white uppercase tracking-[0.3em]">IA en action...</span>
                 </div>
               ) : isSuccess ? (
                 <div className="flex flex-col items-center gap-2">
                   <div className="bg-nsp-success text-white px-8 py-4 rounded-full font-black text-[11px] uppercase tracking-widest flex items-center gap-3 shadow-2xl animate-fade-in">
-                    <Check size={20} /> Extraction réussie
+                    <Check size={20} /> Analyse Réussie
                   </div>
+                  <span className="text-[9px] text-gray-500 uppercase font-black tracking-widest">Données extraites</span>
                 </div>
               ) : (
                 <>
                   <div className="w-20 h-20 rounded-full bg-nsp-bg flex items-center justify-center border border-white/5 shadow-2xl mb-2">
                     <Camera size={36} className="text-gray-600" />
                   </div>
-                  <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest text-center">Toucher pour Scanner</span>
+                  <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest text-center">Scanner ou Importer Document</span>
                 </>
               )}
             </div>
           </div>
           
-          {finalBase64 && !isAnalyzing && !isSuccess && hasApiKey && (
+          {finalBase64 && !isAnalyzing && !isSuccess && (
             <button 
               onClick={() => performAnalysis(finalBase64, currentMimeType)}
               className="mt-4 w-full bg-nsp-primary/10 text-nsp-primary border border-nsp-primary/20 py-3 rounded-xl text-[10px] font-black uppercase flex items-center justify-center gap-2"
             >
-              <RefreshCw size={14} /> Ré-analyser avec l'IA
+              <RefreshCw size={14} /> Relancer l'analyse IA
             </button>
           )}
         </div>
@@ -239,19 +183,19 @@ export const AddInvoiceScreen: React.FC<AddInvoiceScreenProps> = ({ carId, onSav
 
         {/* FORM FIELDS */}
         <div className="space-y-6">
-          <div>
+          <div className="animate-fade-in">
             <label className="text-[9px] text-gray-600 font-black uppercase mb-2 ml-1 block tracking-widest">Établissement / Garage</label>
             <input 
               type="text" 
               className="w-full bg-nsp-input border border-nsp-border rounded-2xl px-6 py-5 text-white font-bold text-sm focus:border-nsp-primary outline-none transition-all placeholder:text-gray-700" 
               value={formData.title} 
               onChange={e => setFormData({...formData, title: e.target.value})} 
-              placeholder="Ex: Norauto, Total, Garage du Midi..." 
+              placeholder="Extraction auto..." 
             />
           </div>
 
           <div className="grid grid-cols-2 gap-4">
-            <div>
+            <div className="animate-fade-in">
               <label className="text-[9px] text-gray-600 font-black uppercase mb-2 ml-1 block tracking-widest">Kilométrage</label>
               <input 
                 type="number" 
@@ -261,7 +205,7 @@ export const AddInvoiceScreen: React.FC<AddInvoiceScreenProps> = ({ carId, onSav
                 placeholder="0" 
               />
             </div>
-            <div>
+            <div className="animate-fade-in">
               <label className="text-[9px] text-gray-600 font-black uppercase mb-2 ml-1 block tracking-widest">Prix Total (€)</label>
               <input 
                 type="number" 
@@ -289,7 +233,7 @@ export const AddInvoiceScreen: React.FC<AddInvoiceScreenProps> = ({ carId, onSav
           {detectedSpecs && (
             <div className="mt-8 bg-nsp-primary/5 border border-nsp-primary/10 p-6 rounded-[2.5rem] animate-slide-up shadow-inner">
               <h3 className="text-[10px] font-black text-white uppercase tracking-[0.2em] mb-4 flex items-center gap-3">
-                <HardDrive size={16} className="text-nsp-primary" /> Mémoire Technique IA
+                <Sparkles size={16} className="text-nsp-primary" /> Mémoire Technique IA
               </h3>
               <div className="grid grid-cols-2 gap-3">
                 {Object.entries(detectedSpecs).map(([key, val]) => val && (
@@ -311,7 +255,7 @@ export const AddInvoiceScreen: React.FC<AddInvoiceScreenProps> = ({ carId, onSav
           disabled={isAnalyzing}
           className="w-full bg-nsp-primary text-white font-black py-5 rounded-[2.5rem] text-[12px] uppercase tracking-[0.3em] shadow-[0_20px_40px_rgba(230,57,70,0.3)] hover:bg-red-600 transition-all active:scale-95 disabled:opacity-50"
         >
-           {isAnalyzing ? <><Loader2 className="animate-spin inline mr-2" size={18} /> Extraction en cours...</> : 'VALIDER ET ENREGISTRER'}
+           {isAnalyzing ? <><Loader2 className="animate-spin inline mr-2" size={18} /> Extraction...</> : 'VALIDER ET ENREGISTRER'}
         </button>
       </div>
 

@@ -55,9 +55,7 @@ export const fileToGenerativePart = async (file: File): Promise<string> => {
 
 // Analyzes an invoice image using Gemini 3 and returns structured data
 export const analyzeInvoiceImage = async (base64Data: string, mimeType: string = 'image/jpeg') => {
-  // CRITICAL: Create a new GoogleGenAI instance right before making an API call
-  // to ensure it uses the most up-to-date API key from process.env.API_KEY.
-  // Using process.env.API_KEY directly as required by the latest SDK guidelines.
+  // Use the injected API key directly. No local UI checks.
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   
   try {
@@ -67,7 +65,7 @@ export const analyzeInvoiceImage = async (base64Data: string, mimeType: string =
       contents: {
         parts: [
           { inlineData: { mimeType: mimeType.startsWith('image') ? 'image/jpeg' : mimeType, data: base64Data } },
-          { text: "Analyse ce document automobile. Extrais en JSON strict : type (fuel/maintenance), title (nom établissement), date (YYYY-MM-DD), km (nombre), price (nombre), volume (litres si carburant), specs (obj: tireDimensions, oilViscosity, batteryRef)." }
+          { text: "Tu es un expert en maintenance automobile. Analyse ce document (facture, reçu, ticket) et extrais les informations suivantes en JSON strict : type (fuel/maintenance), title (nom du garage ou de l'enseigne), date (format YYYY-MM-DD), km (kilométrage affiché), price (montant total TTC), volume (nombre de litres si c'est un plein de carburant), specs (un objet avec tireDimensions, oilViscosity, batteryRef si ces infos sont présentes)." }
         ]
       },
       config: {
@@ -96,33 +94,20 @@ export const analyzeInvoiceImage = async (base64Data: string, mimeType: string =
     });
 
     const text = response.text;
-    if (!text) return null;
-    return JSON.parse(text);
+    return text ? JSON.parse(text) : null;
   } catch (error: any) {
-    const msg = error.message || "";
-    // Handle Vercel / Auth errors by requesting re-activation
-    if (
-      error.status === 403 || 
-      error.status === 401 || 
-      msg.includes("API_KEY") || 
-      msg.includes("not found") ||
-      msg.includes("Requested entity was not found")
-    ) {
-      throw new Error("AUTH_REQUIRED");
-    }
+    console.error("Gemini Error:", error);
     throw error;
   }
 };
 
 export const getPersonalizedMaintenance = async (car: Car, currentKm: number): Promise<ManufacturerSpecs> => {
-  // CRITICAL: Create a new GoogleGenAI instance right before making an API call
-  // to ensure it uses the most up-to-date API key from process.env.API_KEY as per coding guidelines.
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   
   try {
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
-      contents: `Génère les préconisations d'entretien JSON pour un véhicule ${car.name} (${car.fuelType}) ayant ${currentKm} km.`,
+      contents: `Génère les préconisations d'entretien constructeur en JSON pour un véhicule ${car.name} (${car.fuelType}) ayant ${currentKm} km. Inclus : pression pneus (bar), type d'huile idéal et liste de points de contrôle.`,
       config: {
         responseMimeType: "application/json",
         responseSchema: {
