@@ -1,7 +1,7 @@
 
 import React, { useEffect, useState, useRef } from 'react';
 import { User, Car, Invoice, AIStatus, ManufacturerSpecs, TechnicalSpecs } from '../types';
-import { Plus, FileText, AlertTriangle, ArrowLeft, Sparkles, Calendar, Gauge, Droplet, CheckCircle2, ShieldCheck, PhoneCall, FolderOpen, Bell, BellOff, Info, Wind, ChevronRight, Wrench, HardDrive, Cpu, Battery, Settings2, Zap, LayoutDashboard, Database } from 'lucide-react';
+import { Plus, FileText, AlertTriangle, ArrowLeft, Sparkles, Calendar, Gauge, Droplet, CheckCircle2, ShieldCheck, PhoneCall, FolderOpen, Bell, BellOff, Info, Wind, ChevronRight, Wrench, HardDrive, Cpu, Battery, Settings2, Zap, LayoutDashboard, Database, X, Trash2, ZoomIn, Download } from 'lucide-react';
 import { getPersonalizedMaintenance } from '../services/geminiService';
 import { requestNotificationPermission, sendLocalNotification } from '../services/notificationService';
 import { calculateMaintenanceStatus } from '../services/mechanicRules';
@@ -28,6 +28,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
   const [specs, setSpecs] = useState<ManufacturerSpecs | null>(null);
   const [notifEnabled, setNotifEnabled] = useState(false);
   const [viewingInvoice, setViewingInvoice] = useState<Invoice | null>(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
   const proactiveStatus = calculateMaintenanceStatus(car, invoices);
   const lastMileage = invoices.length > 0 ? Math.max(...invoices.map(i => i.km)) : car.initialKm;
@@ -48,6 +49,8 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
       sendLocalNotification("✅ AUTOBOOK ACTIVE", "Liaison smartphone confirmée.");
     }
   };
+
+  const isPDF = (url?: string) => url?.startsWith('data:application/pdf');
 
   const renderTechnicalMemory = () => {
     const carSpecs = car.specs || {};
@@ -118,8 +121,6 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
       </header>
 
       <main className="p-6 max-w-4xl mx-auto space-y-8 animate-fade-in">
-        
-        {/* STATS RAPIDES DESIGN NSP */}
         <div className="grid grid-cols-3 gap-3">
             <div className="bg-nsp-card border border-nsp-border rounded-3xl p-5 flex flex-col items-center text-center">
                 <div className={`w-12 h-12 rounded-2xl flex items-center justify-center mb-3 ${proactiveStatus.alerts.includes('REVISION') ? 'bg-red-500/20 text-red-500' : 'bg-green-500/20 text-green-500'}`}>
@@ -141,7 +142,6 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
             </div>
         </div>
 
-        {/* AI STATUS BANNER */}
         <div className={`relative overflow-hidden rounded-[2.5rem] border p-8 transition-all shadow-2xl ${
           proactiveStatus.status === 'critical' ? 'border-red-600 bg-red-950/20 shadow-red-900/10' :
           proactiveStatus.status === 'warning' ? 'border-yellow-500/30 bg-yellow-900/10' : 
@@ -182,8 +182,10 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
                 invoices.slice(0, 3).map(inv => (
                     <div key={inv.id} onClick={() => setViewingInvoice(inv)} className="bg-nsp-card p-5 rounded-3xl border border-nsp-border flex items-center justify-between hover:border-nsp-primary transition-all cursor-pointer shadow-lg group">
                         <div className="flex items-center gap-5">
-                            <div className="w-12 h-12 rounded-2xl bg-nsp-input flex items-center justify-center text-nsp-primary group-hover:scale-110 transition-transform">
-                               <FileText size={20}/>
+                            <div className="w-12 h-12 rounded-2xl bg-nsp-input flex items-center justify-center text-nsp-primary group-hover:scale-110 transition-transform overflow-hidden">
+                               {inv.imageUrl ? (
+                                  isPDF(inv.imageUrl) ? <FileText size={20} /> : <img src={inv.imageUrl} className="w-full h-full object-cover opacity-60" />
+                               ) : <FileText size={20}/>}
                             </div>
                             <div>
                                 <h4 className="text-white font-bold text-sm uppercase truncate max-w-[150px]">{inv.title}</h4>
@@ -208,50 +210,104 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
       </div>
 
       {viewingInvoice && (
-        <div className="fixed inset-0 z-[100] bg-black/95 backdrop-blur-xl flex flex-col p-8 animate-fade-in overflow-y-auto">
-           <header className="flex justify-between items-center mb-8 pt-safe-top">
-              <button onClick={() => setViewingInvoice(null)} className="p-3 bg-nsp-input rounded-2xl text-white"><ArrowLeft size={24}/></button>
-              <h3 className="text-white font-black text-xs uppercase tracking-widest">Document Certifié</h3>
-              <div className="w-12"></div>
-           </header>
-           
-           <div className="space-y-6">
-              {viewingInvoice.imageUrl && (
-                <div className="rounded-[2rem] overflow-hidden shadow-2xl border border-white/5">
-                   <img src={viewingInvoice.imageUrl} className="w-full object-contain max-h-[50vh]" alt="Facture" />
-                </div>
-              )}
-              
-              <div className="grid grid-cols-2 gap-4">
-                 <div className="bg-nsp-input p-6 rounded-3xl border border-nsp-border">
-                    <p className="text-[9px] text-gray-500 uppercase font-black mb-1">Montant</p>
-                    <p className="text-white font-black text-2xl">{viewingInvoice.price}€</p>
-                 </div>
-                 <div className="bg-nsp-input p-6 rounded-3xl border border-nsp-border">
-                    <p className="text-[9px] text-gray-500 uppercase font-black mb-1">Kilométrage</p>
-                    <p className="text-white font-black text-2xl">{viewingInvoice.km.toLocaleString()}</p>
-                 </div>
-              </div>
+        <div className="fixed inset-0 z-[100] bg-black/98 backdrop-blur-3xl flex flex-col animate-fade-in overflow-y-auto">
+          <header className="flex justify-between items-center p-6 pt-safe-top bg-black/40 border-b border-white/5 sticky top-0 z-50">
+            <button onClick={() => { setViewingInvoice(null); setIsFullscreen(false); }} className="p-3 bg-nsp-input rounded-2xl text-white"><X size={24}/></button>
+            <div className="text-center">
+               <h3 className="text-white font-black text-xs uppercase tracking-widest">VISIONNEUSE HD</h3>
+               <p className="text-[9px] text-nsp-primary font-black uppercase mt-1">Archive Numérique Certifiée</p>
+            </div>
+            <div className="w-12"></div>
+          </header>
 
-              <div className="bg-nsp-input p-6 rounded-3xl border border-nsp-border">
-                 <p className="text-[9px] text-gray-500 uppercase font-black mb-2">Analyse Technique Détectée</p>
-                 <div className="space-y-2">
-                    {viewingInvoice.detectedSpecs && Object.entries(viewingInvoice.detectedSpecs).map(([key, val]) => val && (
-                      <div key={key} className="flex justify-between border-b border-white/5 pb-2 last:border-0">
-                         <span className="text-[10px] text-gray-400 font-bold uppercase">{key}</span>
-                         <span className="text-[10px] text-white font-black">{val}</span>
-                      </div>
-                    ))}
-                 </div>
-              </div>
-
-              <button 
-                onClick={() => { if(confirm('Supprimer ce document ?')) { onDeleteInvoice(viewingInvoice.id); setViewingInvoice(null); } }} 
-                className="w-full text-red-500 font-black text-[10px] uppercase tracking-widest py-4 border border-red-500/20 rounded-2xl"
+          <div className="max-w-md mx-auto w-full p-6 space-y-8 pb-10">
+            {viewingInvoice.imageUrl ? (
+              <div 
+                className={`rounded-[2.5rem] overflow-hidden border border-white/10 shadow-2xl relative transition-all duration-500 ${isFullscreen ? 'fixed inset-4 z-[110] bg-black m-0 rounded-3xl' : 'bg-nsp-input'}`}
               >
-                Supprimer du Garage
-              </button>
-           </div>
+                {isPDF(viewingInvoice.imageUrl) ? (
+                  <div className="aspect-[3/4] flex flex-col items-center justify-center p-10 text-center gap-6">
+                     <div className="w-20 h-20 bg-red-600/10 rounded-full flex items-center justify-center text-red-500">
+                        <FileText size={48} />
+                     </div>
+                     <div>
+                        <p className="text-white font-black text-sm uppercase mb-2">Document PDF</p>
+                        <p className="text-gray-500 text-[10px] font-bold uppercase leading-relaxed">Fichier archivé en haute définition.</p>
+                     </div>
+                     <a 
+                       href={viewingInvoice.imageUrl} 
+                       download={`facture_${viewingInvoice.date}.pdf`}
+                       className="bg-nsp-primary text-white px-8 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest flex items-center gap-3 shadow-xl"
+                     >
+                       <Download size={18} /> Télécharger le PDF
+                     </a>
+                  </div>
+                ) : (
+                  <div className="relative cursor-zoom-in" onClick={() => setIsFullscreen(!isFullscreen)}>
+                    <img 
+                      src={viewingInvoice.imageUrl} 
+                      className={`w-full transition-all duration-500 ${isFullscreen ? 'h-full object-contain' : 'h-auto max-h-[60vh] object-contain'}`} 
+                      alt="Facture Originale" 
+                    />
+                    {!isFullscreen && (
+                      <div className="absolute bottom-4 right-4 bg-black/60 p-3 rounded-full text-white backdrop-blur-md">
+                        <ZoomIn size={20} />
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="aspect-square bg-nsp-input rounded-[2.5rem] flex items-center justify-center">
+                 <p className="text-gray-600 font-black uppercase text-xs">Aucun visuel</p>
+              </div>
+            )}
+
+            {!isFullscreen && (
+              <>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="bg-nsp-card p-6 rounded-[2rem] border border-nsp-border shadow-xl">
+                    <p className="text-[10px] text-gray-500 uppercase font-black mb-1">Montant Payé</p>
+                    <p className="text-white font-black text-2xl">{viewingInvoice.price}€</p>
+                  </div>
+                  <div className="bg-nsp-card p-6 rounded-[2rem] border border-nsp-border shadow-xl">
+                    <p className="text-[10px] text-gray-500 uppercase font-black mb-1">Index KM</p>
+                    <p className="text-white font-black text-2xl">{viewingInvoice.km.toLocaleString()}</p>
+                  </div>
+                </div>
+
+                <div className="bg-nsp-card p-6 rounded-[2.5rem] border border-nsp-border space-y-5 shadow-2xl relative overflow-hidden">
+                  <div className="flex items-center gap-3 relative z-10">
+                      <Sparkles size={16} className="text-nsp-primary" />
+                      <h5 className="text-[10px] text-white font-black uppercase tracking-widest">EXTRACTION IA CERTIFIÉE</h5>
+                  </div>
+                  <div className="space-y-4 relative z-10">
+                      <div className="flex justify-between items-center border-b border-white/5 pb-2">
+                        <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">Date relevée</span>
+                        <span className="text-sm text-white font-bold">{viewingInvoice.date}</span>
+                      </div>
+                      <div className="flex justify-between items-center border-b border-white/5 pb-2">
+                        <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">Garage</span>
+                        <span className="text-sm text-white font-bold uppercase truncate max-w-[180px] text-right">{viewingInvoice.title}</span>
+                      </div>
+                      {viewingInvoice.detectedSpecs && Object.entries(viewingInvoice.detectedSpecs).map(([key, val]) => val && (
+                        <div key={key} className="flex justify-between items-center border-b border-white/5 pb-2">
+                          <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">{key.replace(/Ref|Dimensions|Viscosity/g, '')}</span>
+                          <span className="text-sm text-nsp-primary font-black uppercase">{val}</span>
+                        </div>
+                      ))}
+                  </div>
+                </div>
+
+                <button 
+                  onClick={() => { if(confirm('Supprimer ce document ?')) { onDeleteInvoice(viewingInvoice.id); setViewingInvoice(null); } }} 
+                  className="w-full bg-red-600/10 text-red-500 font-black py-5 rounded-[2rem] text-[10px] uppercase tracking-widest border border-red-600/20 flex items-center justify-center gap-3 active:bg-red-600/20 transition-colors"
+                >
+                  <Trash2 size={16} /> SUPPRIMER L'ARCHIVE
+                </button>
+              </>
+            )}
+          </div>
         </div>
       )}
     </div>

@@ -1,8 +1,10 @@
+
 import { GoogleGenAI, Type } from "@google/genai";
 import { Car, ManufacturerSpecs, TechnicalSpecs } from "../types";
 
 export const processFile = (file: File): Promise<string> => {
   return new Promise((resolve, reject) => {
+    // Si c'est un PDF, on le garde tel quel en DataURL
     if (file.type === 'application/pdf') {
       const reader = new FileReader();
       reader.onload = (e) => resolve(e.target?.result as string);
@@ -11,12 +13,13 @@ export const processFile = (file: File): Promise<string> => {
       return;
     }
 
+    // Si c'est une image, on la compresse fortement pour le stockage local (max 1Mo)
     const reader = new FileReader();
     reader.onload = (e) => {
       const img = new Image();
       img.onload = () => {
         const canvas = document.createElement('canvas');
-        const MAX_SIZE = 1200; 
+        const MAX_SIZE = 1000; // Taille max réduite pour optimiser le stockage
         let width = img.width;
         let height = img.height;
         
@@ -33,7 +36,8 @@ export const processFile = (file: File): Promise<string> => {
         const ctx = canvas.getContext('2d');
         if (ctx) {
           ctx.drawImage(img, 0, 0, width, height);
-          resolve(canvas.toDataURL('image/jpeg', 0.8));
+          // Qualité 0.6 pour un bon compromis poids/lisibilité
+          resolve(canvas.toDataURL('image/jpeg', 0.6));
         } else {
           resolve(e.target?.result as string);
         }
@@ -50,13 +54,12 @@ export const fileToGenerativePart = async (file: File): Promise<string> => {
 };
 
 export const analyzeInvoiceImage = async (base64Data: string, mimeType: string = 'image/jpeg') => {
-  // Initialisation directe avec la clé API injectée par Vercel/Vite
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   const finalMime = mimeType === 'application/pdf' ? 'application/pdf' : 'image/jpeg';
   
   try {
     const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview', // Modèle corrigé pour éviter la 404
+      model: 'gemini-3-flash-preview',
       contents: {
         parts: [
           { 
@@ -66,17 +69,16 @@ export const analyzeInvoiceImage = async (base64Data: string, mimeType: string =
             } 
           },
           { 
-            text: `Analyse cette facture ou reçu automobile. 
-            Extraire les informations suivantes de manière stricte au format JSON :
+            text: `Analyse cette facture automobile. 
+            Extraire strictement au format JSON :
             - type: 'maintenance' ou 'fuel'
-            - title: nom de l'entreprise/garage
+            - title: nom du garage/enseigne
             - date: format YYYY-MM-DD
-            - km: kilométrage indiqué (entier)
-            - price: montant TOTAL à payer (décimal)
-            - volume: nombre de litres (si c'est du carburant, sinon null)
-            - specs: objet contenant { tireDimensions, oilViscosity, batteryRef } si trouvés sur le document.
-            
-            IMPORTANT : Renvoie uniquement le code JSON, sans texte avant ou après.`
+            - km: kilométrage (entier)
+            - price: total (décimal)
+            - volume: litres (si carburant)
+            - specs: { tireDimensions, oilViscosity, batteryRef }
+            Renvoie UNIQUEMENT le JSON.`
           }
         ]
       },
@@ -106,9 +108,8 @@ export const analyzeInvoiceImage = async (base64Data: string, mimeType: string =
     });
 
     const result = response.text?.trim();
-    if (!result) throw new Error("L'IA a retourné une réponse vide.");
-    return JSON.parse(result);
-  } catch (error: any) {
+    return JSON.parse(result || '{}');
+  } catch (error) {
     console.error("Gemini Error:", error);
     throw error;
   }

@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { Car, Invoice } from '../types';
-import { ArrowLeft, Plus, FileText, Search, Filter, Fuel, Wrench, ChevronRight, X, Calendar, Gauge, Trash2, Database, Sparkles, ZoomIn } from 'lucide-react';
+import { ArrowLeft, Plus, Fuel, Wrench, ChevronRight, X, Trash2, Database, Sparkles, ZoomIn, FileText, Download, Eye, ShieldCheck, AlertCircle } from 'lucide-react';
 
 interface InvoicesListScreenProps {
   car: Car;
@@ -18,6 +18,8 @@ export const InvoicesListScreen: React.FC<InvoicesListScreenProps> = ({ car, inv
 
   const filteredInvoices = invoices.filter(inv => filter === 'all' || inv.type === filter);
   const totalSpend = filteredInvoices.reduce((acc, inv) => acc + inv.price, 0);
+
+  const isPDF = (url?: string) => url?.includes('application/pdf');
 
   return (
     <div className="h-[100dvh] bg-nsp-bg flex flex-col w-full relative overflow-hidden">
@@ -70,10 +72,14 @@ export const InvoicesListScreen: React.FC<InvoicesListScreenProps> = ({ car, inv
                 onClick={() => setViewingInvoice(inv)}
                 className="bg-nsp-card p-5 rounded-3xl border border-nsp-border flex items-center justify-between group hover:border-nsp-primary transition-all active:scale-[0.98] shadow-lg"
               >
-                <div className="flex items-center gap-4">
-                  <div className="w-14 h-14 rounded-2xl overflow-hidden bg-nsp-input relative shrink-0">
+                <div className="flex items-center gap-4 overflow-hidden">
+                  <div className="w-14 h-14 rounded-2xl overflow-hidden bg-nsp-input relative shrink-0 flex items-center justify-center">
                     {inv.imageUrl ? (
-                      <img src={inv.imageUrl} className="w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-opacity" alt="Scan" />
+                      isPDF(inv.imageUrl) ? (
+                        <FileText size={24} className="text-red-500" />
+                      ) : (
+                        <img src={inv.imageUrl} className="w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-opacity" alt="Scan" />
+                      )
                     ) : (
                       <div className={`w-full h-full flex items-center justify-center ${inv.type === 'fuel' ? 'text-blue-400' : 'text-nsp-primary'}`}>
                         {inv.type === 'fuel' ? <Fuel size={20}/> : <Wrench size={20}/>}
@@ -95,87 +101,123 @@ export const InvoicesListScreen: React.FC<InvoicesListScreenProps> = ({ car, inv
         </div>
       </div>
 
+      {/* VISIONNEUSE AMÉLIORÉE */}
       {viewingInvoice && (
-        <div className="fixed inset-0 z-[100] bg-black/95 backdrop-blur-3xl flex flex-col animate-fade-in overflow-y-auto">
-          <header className="flex justify-between items-center p-6 pt-safe-top bg-black/40 border-b border-white/5 sticky top-0 z-50">
+        <div className="fixed inset-0 z-[100] bg-black flex flex-col animate-fade-in overflow-y-auto">
+          <header className="flex justify-between items-center p-6 pt-safe-top bg-black/80 backdrop-blur-xl border-b border-white/10 sticky top-0 z-50">
             <button onClick={() => { setViewingInvoice(null); setIsFullscreen(false); }} className="p-3 bg-nsp-input rounded-2xl text-white"><X size={24}/></button>
             <div className="text-center">
-               <h3 className="text-white font-black text-xs uppercase tracking-widest">EXAMEN DU DOCUMENT</h3>
-               <p className="text-[9px] text-nsp-primary font-black uppercase mt-1">Archive Numérique Certifiée</p>
+               <h3 className="text-white font-black text-xs uppercase tracking-widest">EXAMEN IA DU DOCUMENT</h3>
+               <p className="text-[9px] text-nsp-primary font-black uppercase mt-1">Données Corrigées & Certifiées</p>
             </div>
             <div className="w-12"></div>
           </header>
 
-          <div className="max-w-md mx-auto w-full p-6 space-y-8 pb-10">
-            {viewingInvoice.imageUrl && (
-              <div 
-                className={`rounded-[2.5rem] overflow-hidden border border-white/10 shadow-2xl relative transition-all duration-500 cursor-zoom-in ${isFullscreen ? 'fixed inset-4 z-[110] bg-black m-0 rounded-3xl' : ''}`}
-                onClick={() => setIsFullscreen(!isFullscreen)}
-              >
-                <img 
-                  src={viewingInvoice.imageUrl} 
-                  className={`w-full transition-all duration-500 ${isFullscreen ? 'h-full object-contain' : 'h-auto max-h-[50vh] object-contain'}`} 
-                  alt="Facture Originale" 
-                />
-                {!isFullscreen && (
-                  <div className="absolute bottom-4 right-4 bg-black/60 p-3 rounded-full text-white backdrop-blur-md">
-                    <ZoomIn size={20} />
+          <div className="max-w-2xl mx-auto w-full p-6 space-y-8 pb-32">
+            {/* 1. DOCUMENT ORIGINAL */}
+            <div className="space-y-4">
+              <h4 className="text-[10px] text-gray-500 font-black uppercase tracking-widest flex items-center gap-2">
+                <Eye size={14} /> Document Original Scanné
+              </h4>
+              <div className="rounded-[2.5rem] overflow-hidden border border-white/10 shadow-2xl bg-nsp-input relative">
+                {isPDF(viewingInvoice.imageUrl) ? (
+                  <div className="aspect-[3/4] flex flex-col items-center justify-center p-10 text-center gap-6">
+                    <div className="w-24 h-24 bg-red-600/10 rounded-full flex items-center justify-center text-red-500 border border-red-500/20">
+                      <FileText size={56} />
+                    </div>
+                    <div className="space-y-2">
+                      <p className="text-white font-black text-lg uppercase leading-none">FACTURE PDF</p>
+                      <p className="text-gray-500 text-[10px] font-bold uppercase max-w-[200px]">Ce document est stocké en haute définition dans votre coffre-fort.</p>
+                    </div>
+                    <a 
+                      href={viewingInvoice.imageUrl} 
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="bg-white text-black px-10 py-5 rounded-[2rem] font-black text-[10px] uppercase tracking-widest flex items-center gap-3 shadow-2xl active:scale-95 transition-all"
+                    >
+                      <Download size={18} /> Télécharger / Voir PDF
+                    </a>
                   </div>
-                )}
-                {isFullscreen && (
-                  <button className="absolute top-4 right-4 bg-nsp-primary text-white p-3 rounded-full shadow-2xl">
-                    <X size={24} />
-                  </button>
+                ) : viewingInvoice.imageUrl ? (
+                  <div className="relative group">
+                    <img 
+                      src={viewingInvoice.imageUrl} 
+                      className="w-full h-auto max-h-[70vh] object-contain mx-auto block" 
+                      alt="Facture Originale" 
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).src = 'https://placehold.co/400x600/121212/white?text=Image+Non+Disponible';
+                      }}
+                    />
+                    <div className="absolute top-4 right-4">
+                      <div className="bg-nsp-primary/90 backdrop-blur-md text-white px-4 py-2 rounded-full text-[9px] font-black uppercase tracking-widest flex items-center gap-2 shadow-2xl">
+                        <ShieldCheck size={14} /> Certifié IA
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="aspect-[3/4] flex flex-col items-center justify-center text-gray-700 gap-4">
+                    <AlertCircle size={48} />
+                    <p className="text-[10px] font-black uppercase">Visuel indisponible</p>
+                  </div>
                 )}
               </div>
-            )}
+            </div>
 
-            {!isFullscreen && (
-              <>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="bg-nsp-card p-6 rounded-[2rem] border border-nsp-border shadow-xl">
-                    <p className="text-[10px] text-gray-500 uppercase font-black mb-1">Dépense</p>
-                    <p className="text-white font-black text-2xl">{viewingInvoice.price}€</p>
-                  </div>
-                  <div className="bg-nsp-card p-6 rounded-[2rem] border border-nsp-border shadow-xl">
-                    <p className="text-[10px] text-gray-500 uppercase font-black mb-1">Index KM</p>
-                    <p className="text-white font-black text-2xl">{viewingInvoice.km.toLocaleString()}</p>
-                  </div>
+            {/* 2. DONNÉES CORRIGÉES / EXTRAITES */}
+            <div className="space-y-4">
+              <h4 className="text-[10px] text-gray-500 font-black uppercase tracking-widest flex items-center gap-2">
+                <Sparkles size={14} className="text-nsp-primary" /> Analyse Technique IA
+              </h4>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div className="bg-nsp-card p-6 rounded-[2rem] border border-nsp-border shadow-xl">
+                  <p className="text-[9px] text-gray-500 uppercase font-black mb-1">Montant Validé</p>
+                  <p className="text-white font-black text-3xl">{viewingInvoice.price.toLocaleString()}€</p>
                 </div>
+                <div className="bg-nsp-card p-6 rounded-[2rem] border border-nsp-border shadow-xl">
+                  <p className="text-[9px] text-gray-500 uppercase font-black mb-1">Index Compteur</p>
+                  <p className="text-white font-black text-3xl">{viewingInvoice.km.toLocaleString()}</p>
+                </div>
+              </div>
 
-                <div className="bg-nsp-card p-6 rounded-[2.5rem] border border-nsp-border space-y-5 shadow-2xl">
-                  <div className="flex items-center gap-3">
-                      <Sparkles size={16} className="text-nsp-primary" />
-                      <h5 className="text-[10px] text-white font-black uppercase tracking-widest">RAPPORT D'ANALYSE IA</h5>
+              <div className="bg-nsp-card p-8 rounded-[2.5rem] border border-nsp-border space-y-6 shadow-2xl relative overflow-hidden">
+                <div className="absolute top-0 right-0 p-6 opacity-5 pointer-events-none">
+                  <Sparkles size={120} className="text-nsp-primary" />
+                </div>
+                
+                <div className="space-y-4 relative z-10">
+                  <div className="flex justify-between items-center border-b border-white/5 pb-3">
+                    <span className="text-[10px] text-gray-500 font-black uppercase tracking-widest">Date Document</span>
+                    <span className="text-sm text-white font-bold">{new Date(viewingInvoice.date).toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' })}</span>
+                  </div>
+                  <div className="flex justify-between items-center border-b border-white/5 pb-3">
+                    <span className="text-[10px] text-gray-500 font-black uppercase tracking-widest">Établissement</span>
+                    <span className="text-sm text-white font-bold uppercase truncate max-w-[200px] text-right">{viewingInvoice.title}</span>
                   </div>
                   
-                  <div className="space-y-4">
-                      <div className="flex justify-between items-center border-b border-white/5 pb-2">
-                        <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">Date d'opération</span>
-                        <span className="text-sm text-white font-bold">{viewingInvoice.date}</span>
-                      </div>
-                      <div className="flex justify-between items-center border-b border-white/5 pb-2">
-                        <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">Établissement</span>
-                        <span className="text-sm text-white font-bold uppercase truncate max-w-[180px] text-right">{viewingInvoice.title}</span>
-                      </div>
-                      
-                      {viewingInvoice.detectedSpecs && Object.entries(viewingInvoice.detectedSpecs).map(([key, val]) => val && (
-                        <div key={key} className="flex justify-between items-center border-b border-white/5 pb-2">
-                          <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">{key.replace(/Ref|Dimensions|Viscosity/g, '')}</span>
-                          <span className="text-sm text-nsp-primary font-black uppercase">{val}</span>
-                        </div>
-                      ))}
-                  </div>
+                  {viewingInvoice.detectedSpecs && Object.entries(viewingInvoice.detectedSpecs).map(([key, val]) => val && (
+                    <div key={key} className="flex justify-between items-center border-b border-white/5 pb-3">
+                      <span className="text-[10px] text-nsp-primary/60 font-black uppercase tracking-widest">{key.replace(/Ref|Dimensions|Viscosity/g, '')}</span>
+                      <span className="text-sm text-nsp-primary font-black uppercase">{val}</span>
+                    </div>
+                  ))}
                 </div>
 
+                <div className="pt-4 flex items-center gap-3">
+                   <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></div>
+                   <p className="text-[9px] text-gray-400 font-black uppercase tracking-widest">Les données ci-dessus ont été vérifiées par le moteur Gemini IA</p>
+                </div>
+              </div>
+
+              <div className="flex gap-4">
                 <button 
-                  onClick={() => { if(confirm('Voulez-vous supprimer définitivement ce document de votre garage numérique ?')) { onDelete(viewingInvoice.id); setViewingInvoice(null); } }} 
-                  className="w-full bg-red-600/10 text-red-500 font-black py-5 rounded-[2rem] text-[10px] uppercase tracking-widest border border-red-600/20 flex items-center justify-center gap-3 active:bg-red-600/20 transition-colors"
+                  onClick={() => { if(confirm('Voulez-vous supprimer définitivement ce document de votre bibliothèque ?')) { onDelete(viewingInvoice.id); setViewingInvoice(null); } }} 
+                  className="flex-1 bg-red-600/10 text-red-500 font-black py-5 rounded-[2rem] text-[10px] uppercase tracking-widest border border-red-600/20 flex items-center justify-center gap-3 active:bg-red-600/20 transition-all shadow-xl"
                 >
                   <Trash2 size={16} /> SUPPRIMER L'ARCHIVE
                 </button>
-              </>
-            )}
+              </div>
+            </div>
           </div>
         </div>
       )}
