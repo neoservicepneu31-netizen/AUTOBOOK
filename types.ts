@@ -24,6 +24,7 @@ export interface User {
   isPremium?: boolean;
   hasSivAccess?: boolean;
   hasAssistanceAccess?: boolean;
+  createdAt?: string;
 }
 
 export interface TechnicalSpecs {

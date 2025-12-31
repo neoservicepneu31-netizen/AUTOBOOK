@@ -1,8 +1,7 @@
 
 import React, { useState } from 'react';
 import { User } from '../types';
-// Added missing 'Check' component to the lucide-react imports.
-import { ArrowRight, UserPlus, ShieldCheck, CheckCircle2, Wrench, Car, Lock, AlertCircle, ShieldAlert, LayoutDashboard, CheckSquare, Square, UserCircle2, KeyRound, Check } from 'lucide-react';
+import { ArrowRight, UserPlus, ShieldCheck, CheckCircle2, Wrench, Car, Lock, AlertCircle, ShieldAlert, LayoutDashboard, CheckSquare, Square, UserCircle2, KeyRound, Check, RefreshCw } from 'lucide-react';
 
 interface AuthScreenProps {
   onLogin: (user: User) => void;
@@ -18,26 +17,22 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLogin, onForgotPasswor
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [rememberMe, setRememberMe] = useState(false); // Désactivé par défaut pour la confidentialité
+  const [rememberMe, setRememberMe] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-
-  // Note: Nous ne chargeons plus les identifiants via useEffect pour respecter la demande de "champs vides" à chaque ouverture.
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     setIsLoading(true);
 
-    // Simulation de délai de sécurité
     setTimeout(() => {
       setIsLoading(false);
       const foundUser = existingUsers.find(u => u.email.toLowerCase() === email.toLowerCase());
 
       if (isAdminMode) {
-        // Accès Admin Sécurisé
         if (email === 'neoservicepneu31@gmail.com' && password === 'PAM180279') {
-          onLogin({ id: 'admin-001', name: 'Administrateur', email, role: 'admin' });
+          onLogin({ id: 'admin-001', name: 'Administrateur', email, role: 'admin', createdAt: new Date().toISOString() });
         } else if (foundUser && foundUser.role === 'admin' && foundUser.password === password) {
           onLogin(foundUser);
         } else {
@@ -45,17 +40,11 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLogin, onForgotPasswor
         }
       } else if (mode === 'login') {
         if (foundUser && foundUser.password === password) {
-          if (rememberMe) {
-            localStorage.setItem('AUTOBOOK_CREDS', JSON.stringify({ email, password }));
-          } else {
-            localStorage.removeItem('AUTOBOOK_CREDS');
-          }
           onLogin(foundUser);
         } else {
           setError("Identifiants incorrects ou compte inexistant.");
         }
       } else {
-        // Mode Inscription
         if (foundUser) {
           setError("Cette adresse email est déjà enregistrée.");
         } else if (password.length < 6) {
@@ -68,7 +57,8 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLogin, onForgotPasswor
             password, 
             role: 'user', 
             isValidated: true,
-            isPremium: false 
+            isPremium: false,
+            createdAt: new Date().toISOString()
           });
         }
       }
@@ -78,8 +68,6 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLogin, onForgotPasswor
   return (
     <div className="flex-1 w-full bg-nsp-bg flex flex-col overflow-y-auto min-h-full pb-10">
       <div className="flex-1 flex flex-col items-center justify-center p-6 space-y-10">
-        
-        {/* Logo Section */}
         <div className="flex flex-col items-center gap-4">
           <div className={`w-28 h-28 rounded-[2.5rem] border flex items-center justify-center shadow-2xl transition-all duration-500 ${isAdminMode ? 'bg-red-600/10 border-red-500 shadow-red-900/40' : 'bg-nsp-card border-gray-800 shadow-black'}`}>
              {isAdminMode ? (
@@ -98,30 +86,17 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLogin, onForgotPasswor
           </div>
         </div>
 
-        {/* Auth Card */}
         <div className={`w-full max-w-sm bg-nsp-card p-8 rounded-[3rem] border transition-all duration-500 shadow-2xl ${isAdminMode ? 'border-red-900/50' : 'border-nsp-border'}`}>
           {!isAdminMode && (
             <div className="flex bg-nsp-input p-1.5 rounded-2xl mb-8">
-               <button 
-                onClick={() => { setMode('login'); setError(null); }} 
-                className={`flex-1 py-3 text-[10px] font-black uppercase rounded-xl transition-all ${mode === 'login' ? 'bg-nsp-card text-white shadow-lg' : 'text-gray-500'}`}
-               >
-                Connexion
-               </button>
-               <button 
-                onClick={() => { setMode('register'); setError(null); }} 
-                className={`flex-1 py-3 text-[10px] font-black uppercase rounded-xl transition-all ${mode === 'register' ? 'bg-nsp-card text-white shadow-lg' : 'text-gray-500'}`}
-               >
-                S'inscrire
-               </button>
+               <button onClick={() => { setMode('login'); setError(null); }} className={`flex-1 py-3 text-[10px] font-black uppercase rounded-xl transition-all ${mode === 'login' ? 'bg-nsp-card text-white shadow-lg' : 'text-gray-500'}`}>Connexion</button>
+               <button onClick={() => { setMode('register'); setError(null); }} className={`flex-1 py-3 text-[10px] font-black uppercase rounded-xl transition-all ${mode === 'register' ? 'bg-nsp-card text-white shadow-lg' : 'text-gray-500'}`}>S'inscrire</button>
             </div>
           )}
 
           {isAdminMode && (
             <div className="mb-8 text-center">
-               <span className="bg-red-600 text-white text-[8px] font-black px-4 py-1.5 rounded-full uppercase tracking-[0.2em] shadow-lg">
-                 Accès Restreint : Administrateur
-               </span>
+               <span className="bg-red-600 text-white text-[8px] font-black px-4 py-1.5 rounded-full uppercase tracking-[0.2em] shadow-lg">Accès Restreint : Administrateur</span>
             </div>
           )}
 
@@ -135,59 +110,19 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLogin, onForgotPasswor
             {mode === 'register' && !isAdminMode && (
               <div className="relative">
                 <UserCircle2 className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" size={18} />
-                <input 
-                  type="text" 
-                  placeholder="NOM COMPLET" 
-                  value={name} 
-                  onChange={e => setName(e.target.value)} 
-                  className="w-full bg-nsp-input border border-transparent focus:border-nsp-primary rounded-2xl pl-12 pr-4 py-4 text-white text-xs font-bold outline-none transition-all" 
-                  required 
-                />
+                <input type="text" placeholder="NOM COMPLET" value={name} onChange={e => setName(e.target.value)} className="w-full bg-nsp-input border border-transparent focus:border-nsp-primary rounded-2xl pl-12 pr-4 py-4 text-white text-xs font-bold outline-none transition-all" required />
               </div>
             )}
-            
             <div className="relative">
               <UserCircle2 className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" size={18} />
-              <input 
-                type="email" 
-                placeholder="ADRESSE EMAIL" 
-                value={email} 
-                onChange={e => setEmail(e.target.value)} 
-                className={`w-full bg-nsp-input border border-transparent rounded-2xl pl-12 pr-4 py-4 text-white text-xs font-bold outline-none transition-all ${isAdminMode ? 'focus:border-red-500' : 'focus:border-nsp-primary'}`} 
-                required 
-                autoComplete="off"
-              />
+              <input type="email" placeholder="ADRESSE EMAIL" value={email} onChange={e => setEmail(e.target.value)} className={`w-full bg-nsp-input border border-transparent rounded-2xl pl-12 pr-4 py-4 text-white text-xs font-bold outline-none transition-all ${isAdminMode ? 'focus:border-red-500' : 'focus:border-nsp-primary'}`} required autoComplete="off" />
             </div>
-
             <div className="relative">
               <KeyRound className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" size={18} />
-              <input 
-                type="password" 
-                placeholder="MOT DE PASSE" 
-                value={password} 
-                onChange={e => setPassword(e.target.value)} 
-                className={`w-full bg-nsp-input border border-transparent rounded-2xl pl-12 pr-4 py-4 text-white text-xs font-bold outline-none transition-all ${isAdminMode ? 'focus:border-red-500' : 'focus:border-nsp-primary'}`} 
-                required 
-              />
+              <input type="password" placeholder="MOT DE PASSE" value={password} onChange={e => setPassword(e.target.value)} className={`w-full bg-nsp-input border border-transparent rounded-2xl pl-12 pr-4 py-4 text-white text-xs font-bold outline-none transition-all ${isAdminMode ? 'focus:border-red-500' : 'focus:border-nsp-primary'}`} required />
             </div>
             
-            {!isAdminMode && mode === 'login' && (
-              <button 
-                type="button" 
-                onClick={() => setRememberMe(!rememberMe)}
-                className="flex items-center gap-3 px-2 group"
-              >
-                <div className={`w-5 h-5 rounded-md border flex items-center justify-center transition-all ${rememberMe ? 'bg-nsp-primary border-nsp-primary' : 'border-gray-700 bg-nsp-input group-hover:border-nsp-primary'}`}>
-                  {rememberMe && <CheckCircle2 size={14} className="text-white" />}
-                </div>
-                <span className="text-[9px] text-gray-500 font-black uppercase tracking-widest">Se souvenir de moi</span>
-              </button>
-            )}
-
-            <button 
-              disabled={isLoading} 
-              className={`w-full py-5 rounded-[2rem] font-black text-xs uppercase tracking-widest shadow-2xl active:scale-95 transition-all flex items-center justify-center gap-2 ${isAdminMode ? 'bg-white text-black' : 'bg-nsp-primary text-white'}`}
-            >
+            <button disabled={isLoading} className={`w-full py-5 rounded-[2rem] font-black text-xs uppercase tracking-widest shadow-2xl active:scale-95 transition-all flex items-center justify-center gap-2 ${isAdminMode ? 'bg-white text-black' : 'bg-nsp-primary text-white'}`}>
               {isLoading ? (
                 <><RefreshCw size={18} className="animate-spin" /> Vérification...</>
               ) : isAdminMode ? (
@@ -201,11 +136,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLogin, onForgotPasswor
           </form>
         </div>
 
-        {/* Toggle Admin Section */}
-        <button 
-          onClick={() => { setIsAdminMode(!isAdminMode); setMode('login'); setError(null); setEmail(''); setPassword(''); }} 
-          className="group flex flex-col items-center gap-3 transition-all"
-        >
+        <button onClick={() => { setIsAdminMode(!isAdminMode); setMode('login'); setError(null); setEmail(''); setPassword(''); }} className="group flex flex-col items-center gap-3 transition-all">
           <div className={`p-4 rounded-2xl border transition-all ${isAdminMode ? 'bg-nsp-primary/10 border-nsp-primary text-nsp-primary' : 'bg-nsp-input border-white/5 text-gray-700 group-hover:text-white'}`}>
              {isAdminMode ? <UserCircle2 size={24} /> : <LayoutDashboard size={24} />}
           </div>
@@ -213,10 +144,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLogin, onForgotPasswor
             {isAdminMode ? 'RETOUR ACCÈS CLIENT' : 'ACCÈS PROFESSIONNEL'}
           </span>
         </button>
-
       </div>
     </div>
   );
 };
-
-import { RefreshCw } from 'lucide-react';
