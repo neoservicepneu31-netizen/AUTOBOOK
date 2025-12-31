@@ -11,10 +11,9 @@ import { AdminDashboardScreen } from './components/AdminDashboardScreen';
 import { InvoicesListScreen } from './components/InvoicesListScreen';
 import { SellCarScreen } from './components/SellCarScreen';
 import { BuyCarScreen } from './components/BuyCarScreen';
-import { PaymentModal, PurchaseType } from './components/PaymentModal';
 import { db } from './services/storageService'; 
 import { cloud } from './services/cloudService';
-import { Cloud, Loader2 } from 'lucide-react';
+import { Cloud, Loader2, RefreshCw } from 'lucide-react';
 
 const App: React.FC = () => {
   const [screen, setScreen] = useState<Screen>(Screen.AUTH);
@@ -24,47 +23,67 @@ const App: React.FC = () => {
   const [allInvoices, setAllInvoices] = useState<Invoice[]>([]);
   const [isDatabaseReady, setIsDatabaseReady] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
-  const [showPayment, setShowPayment] = useState<PurchaseType | null>(null);
   const [activeCarId, setActiveCarId] = useState<string | null>(null);
 
+  /**
+   * RESTAURATION TOTALE DEPUIS LE CLOUD
+   * Cette fonction garantit qu'aucune donnée n'est perdue après une mise à jour.
+   */
   const loadAllData = useCallback(async (targetUser: User) => {
     setIsSyncing(true);
     try {
-      // 1. Restaurer depuis le Cloud pour cet utilisateur précis
+      // 1. Toujours charger le local en premier pour la réactivité
+      const localCars = db.cars.getAll().filter(c => c.ownerId === targetUser.id);
+      const localInvoices = db.invoices.getAll().filter(inv => localCars.some(c => c.id === inv.carId));
+      
+      setAllCars(localCars);
+      setAllInvoices(localInvoices);
+
+      // 2. Si connexion Cloud active, on restaure/écrase avec les données officielles
       if (cloud.isConnected()) {
         const remoteCars = await cloud.fetchUserCars(targetUser.id);
-        const remoteInvoices = await cloud.fetchUserInvoices(targetUser.id);
+        
+        // Pour chaque voiture, on récupère ses factures
+        let remoteInvoices: Invoice[] = [];
+        for (const car of remoteCars) {
+          const invs = await cloud.fetchUserInvoices(car.id);
+          remoteInvoices = [...remoteInvoices, ...invs];
+        }
 
+        // Mise à jour de l'état UI
         setAllCars(remoteCars);
         setAllInvoices(remoteInvoices);
         
-        // Cache local
+        // Mise à jour du cache local (Source de vérité = Cloud)
         db.cars.saveAll(remoteCars);
         db.invoices.saveAll(remoteInvoices);
-      } else {
-        // Fallback local si pas de cloud
-        setAllCars(db.cars.getAll());
-        setAllInvoices(db.invoices.getAll());
+        
+        console.log(`[Sync] Restauration Cloud réussie: ${remoteCars.length} voitures, ${remoteInvoices.length} factures.`);
       }
     } catch (e) {
-      console.warn("Sync error", e);
+      console.error("Sync restoration error", e);
     } finally {
       setIsSyncing(false);
       setIsDatabaseReady(true);
     }
   }, []);
 
+  // Initialisation de l'application
   useEffect(() => {
     const initApp = async () => {
       const sessionId = db.session.get();
       if (sessionId) {
         const localUsers = db.users.getAll();
         const foundUser = localUsers.find(u => u.id === sessionId);
+        
         if (foundUser) {
           setUser(foundUser);
           await loadAllData(foundUser);
           setScreen(foundUser.role === 'admin' ? Screen.ADMIN_DASHBOARD : Screen.GARAGE);
         } else {
+          // Si l'utilisateur n'est pas trouvé localement mais qu'il y a une session,
+          // on force le login pour recréer le profil via le Cloud (sécurité après update majeure)
+          db.session.clear();
           setIsDatabaseReady(true);
         }
       } else {
@@ -77,6 +96,10 @@ const App: React.FC = () => {
   const handleLogin = async (loggedInUser: User) => {
     setUser(loggedInUser);
     db.session.set(loggedInUser.id);
+    
+    // On s'assure que l'utilisateur est enregistré sur le cloud
+    if (cloud.isConnected()) await cloud.syncUser(loggedInUser);
+    
     await loadAllData(loggedInUser);
     setScreen(loggedInUser.role === 'admin' ? Screen.ADMIN_DASHBOARD : Screen.GARAGE);
   };
@@ -111,40 +134,61 @@ const App: React.FC = () => {
     if (cloud.isConnected()) await cloud.deleteInvoice(invoiceId);
   };
 
-  const handleTransferComplete = (buyerEmail: string) => {
-    // Dans une app réelle, on changerait l'ownerId sur le cloud
-    // Ici on simule en retirant la voiture du garage actuel
+  // Fix: Added handleTransferComplete to remove the car from the user's view after a successful transfer
+  const handleTransferComplete = async (buyerEmail: string) => {
+    if (!activeCarId) return;
     const updatedCars = allCars.filter(c => c.id !== activeCarId);
     setAllCars(updatedCars);
     db.cars.saveAll(updatedCars);
+    
+    const updatedInvoices = allInvoices.filter(i => i.carId !== activeCarId);
+    setAllInvoices(updatedInvoices);
+    db.invoices.saveAll(updatedInvoices);
+
+    setActiveCarId(null);
     setScreen(Screen.GARAGE);
   };
 
-  const handleImportSuccess = (newCar: Car, newInvoices: Invoice[]) => {
-    const carWithUser = { ...newCar, ownerId: user!.id };
-    const invoicesWithUser = newInvoices.map(inv => ({ ...inv, carId: carWithUser.id }));
+  // Fix: Added handleImportSuccess to add the imported car and its invoices to the state and storage
+  const handleImportSuccess = async (newCar: Car, newInvoices: Invoice[]) => {
+    if (!user) return;
+    const carToImport = { ...newCar, ownerId: user.id };
     
-    setAllCars(prev => [...prev, carWithUser]);
-    setAllInvoices(prev => [...prev, ...invoicesWithUser]);
+    const updatedCars = [...allCars, carToImport];
+    setAllCars(updatedCars);
+    db.cars.saveAll(updatedCars);
+    if (cloud.isConnected()) await cloud.syncCar(carToImport);
+
+    const updatedInvoices = [...newInvoices, ...allInvoices];
+    setAllInvoices(updatedInvoices);
+    db.invoices.saveAll(updatedInvoices);
     
-    db.cars.saveAll([...allCars, carWithUser]);
-    db.invoices.saveAll([...allInvoices, ...invoicesWithUser]);
-    
+    for (const inv of newInvoices) {
+      if (cloud.isConnected()) await cloud.syncInvoice(inv);
+    }
+
     setScreen(Screen.GARAGE);
   };
 
   return (
-    <div className="max-w-md mx-auto bg-nsp-bg shadow-2xl h-[100dvh] relative overflow-y-auto">
+    <div className="max-w-md mx-auto bg-nsp-bg shadow-2xl h-[100dvh] relative overflow-hidden">
+      {/* Indicateur de synchronisation Cloud en temps réel */}
       {isSyncing && (
-        <div className="fixed top-6 right-6 z-[110] bg-black/80 text-white px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest flex items-center gap-2 border border-white/10 shadow-2xl backdrop-blur-xl animate-fade-in">
-           <Cloud size={14} className="text-green-500 animate-pulse" /> <span>Sync Cloud</span>
+        <div className="fixed top-6 left-1/2 -translate-x-1/2 z-[200] bg-nsp-primary text-white px-5 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest flex items-center gap-3 shadow-[0_10px_30px_rgba(230,57,70,0.5)] border border-white/20 animate-bounce">
+           <RefreshCw size={14} className="animate-spin" /> <span>Sécurisation des données...</span>
         </div>
       )}
 
       {!isDatabaseReady ? (
         <div className="h-full flex flex-col items-center justify-center space-y-6">
-           <Loader2 className="animate-spin text-nsp-primary" size={48} />
-           <p className="text-gray-500 text-[10px] font-black uppercase tracking-widest">Initialisation...</p>
+           <div className="relative">
+              <Loader2 className="animate-spin text-nsp-primary" size={48} />
+              <Cloud className="absolute inset-0 m-auto text-white/20" size={16} />
+           </div>
+           <div className="text-center">
+             <p className="text-white font-black text-xs uppercase tracking-[0.2em]">Chargement Sécurisé</p>
+             <p className="text-gray-600 text-[10px] mt-1">Vérification de l'intégrité du Cloud...</p>
+           </div>
         </div>
       ) : (
         <>

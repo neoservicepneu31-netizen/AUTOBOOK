@@ -7,18 +7,25 @@ const wait = (ms: number) => new Promise(res => setTimeout(res, ms));
 export const processFile = (file: File): Promise<string> => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
+    
     reader.onload = (e) => {
       const result = e.target?.result as string;
+      
+      // Si c'est un PDF, on garde le résultat tel quel
       if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
         resolve(result);
         return;
       }
+
+      // Pour les images, on redimensionne et on compresse pour économiser le LocalStorage
       const img = new Image();
       img.onload = () => {
         const canvas = document.createElement('canvas');
-        const MAX_SIZE = 700; 
+        // Taille équilibrée pour lisibilité sur PC et performance sur Mobile
+        const MAX_SIZE = 1200; 
         let width = img.width;
         let height = img.height;
+        
         if (width > height && width > MAX_SIZE) {
           height *= MAX_SIZE / width;
           width = MAX_SIZE;
@@ -26,12 +33,16 @@ export const processFile = (file: File): Promise<string> => {
           width *= MAX_SIZE / height;
           height = MAX_SIZE;
         }
+        
         canvas.width = width;
         canvas.height = height;
         const ctx = canvas.getContext('2d');
         if (ctx) {
+          ctx.imageSmoothingEnabled = true;
+          ctx.imageSmoothingQuality = 'high';
           ctx.drawImage(img, 0, 0, width, height);
-          resolve(canvas.toDataURL('image/jpeg', 0.4));
+          // Qualité 0.6 pour garder les textes lisibles (factures) tout en étant léger
+          resolve(canvas.toDataURL('image/jpeg', 0.6));
         } else {
           resolve(result);
         }
@@ -39,6 +50,7 @@ export const processFile = (file: File): Promise<string> => {
       img.onerror = () => resolve(result);
       img.src = result;
     };
+    
     reader.onerror = reject;
     reader.readAsDataURL(file);
   });
@@ -46,8 +58,11 @@ export const processFile = (file: File): Promise<string> => {
 
 export const safeBase64ToBlobUrl = (base64Data: string): string => {
   if (!base64Data) return "";
+  // Si c'est déjà un data URL complet, on le retourne
   if (base64Data.startsWith('data:')) return base64Data;
-  const isPDF = base64Data.length > 100 && base64Data.substring(0, 10).includes('JVBER');
+  
+  // Détection du type pour les chaînes base64 pures issues du cloud
+  const isPDF = base64Data.length > 20 && base64Data.substring(0, 30).includes('JVBER');
   const prefix = isPDF ? 'data:application/pdf;base64,' : 'data:image/jpeg;base64,';
   return `${prefix}${base64Data}`;
 };
@@ -78,9 +93,6 @@ export const analyzeInvoiceImage = async (base64Data: string, mimeType: string =
   }
 };
 
-/**
- * RÉCUPÈRE LES SPÉCIFICITÉS CONSTRUCTEUR RÉELLES (RENAULT, BMW, PEUGEOT, ETC.)
- */
 export const getPersonalizedMaintenance = async (car: Car, currentKm: number): Promise<ManufacturerSpecs> => {
   try {
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
@@ -104,7 +116,6 @@ export const getPersonalizedMaintenance = async (car: Car, currentKm: number): P
     });
     return JSON.parse(response.text?.trim() || '{}');
   } catch {
-    // Fallback sécurité
     return { 
       tirePressureFront: "2.3 bar", 
       tirePressureRear: "2.1 bar", 
