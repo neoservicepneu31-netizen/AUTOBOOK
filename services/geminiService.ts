@@ -2,29 +2,23 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { Car, ManufacturerSpecs, TechnicalSpecs } from "../types";
 
-// Fonction utilitaire pour attendre (Backoff)
 const wait = (ms: number) => new Promise(res => setTimeout(res, ms));
 
 export const processFile = (file: File): Promise<string> => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    
     reader.onload = (e) => {
       const result = e.target?.result as string;
-      
       if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
         resolve(result);
         return;
       }
-
       const img = new Image();
       img.onload = () => {
         const canvas = document.createElement('canvas');
-        // Taille réduite pour économiser la bande passante sur 10 000 users
         const MAX_SIZE = 700; 
         let width = img.width;
         let height = img.height;
-        
         if (width > height && width > MAX_SIZE) {
           height *= MAX_SIZE / width;
           width = MAX_SIZE;
@@ -32,7 +26,6 @@ export const processFile = (file: File): Promise<string> => {
           width *= MAX_SIZE / height;
           height = MAX_SIZE;
         }
-        
         canvas.width = width;
         canvas.height = height;
         const ctx = canvas.getContext('2d');
@@ -46,7 +39,6 @@ export const processFile = (file: File): Promise<string> => {
       img.onerror = () => resolve(result);
       img.src = result;
     };
-    
     reader.onerror = reject;
     reader.readAsDataURL(file);
   });
@@ -60,7 +52,6 @@ export const safeBase64ToBlobUrl = (base64Data: string): string => {
   return `${prefix}${base64Data}`;
 };
 
-// Analyse avec gestion de la file d'attente (Retry si serveur surchargé)
 export const analyzeInvoiceImage = async (base64Data: string, mimeType: string = 'image/jpeg', retryCount = 0): Promise<any> => {
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   const finalMime = mimeType.includes('pdf') ? 'application/pdf' : 'image/jpeg';
@@ -79,26 +70,48 @@ export const analyzeInvoiceImage = async (base64Data: string, mimeType: string =
     });
     return JSON.parse(response.text?.trim() || '{}');
   } catch (error: any) {
-    // Si quota dépassé (429) et qu'on a fait moins de 3 essais
     if (error?.status === 429 && retryCount < 3) {
-        await wait(2000 * (retryCount + 1)); // Attendre de plus en plus longtemps
+        await wait(2000 * (retryCount + 1));
         return analyzeInvoiceImage(base64Data, mimeType, retryCount + 1);
     }
-    console.error("Gemini Error:", error);
     throw error;
   }
 };
 
+/**
+ * RÉCUPÈRE LES SPÉCIFICITÉS CONSTRUCTEUR RÉELLES (RENAULT, BMW, PEUGEOT, ETC.)
+ */
 export const getPersonalizedMaintenance = async (car: Car, currentKm: number): Promise<ManufacturerSpecs> => {
   try {
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const prompt = `Tu es un ingénieur expert pour la marque ${car.name.split(' ')[0]}. 
+    Identifie précisément ce véhicule : ${car.name} (${car.fuelType}). 
+    Donne les spécifications techniques officielles en JSON strict :
+    {
+      "tirePressureFront": "valeur en bar",
+      "tirePressureRear": "valeur en bar",
+      "oilType": "viscosité exacte ex: 5W30 Norme RN17",
+      "maintenanceIntervalKm": intervalle en km (entier),
+      "timingBeltIntervalKm": intervalle courroie en km (si applicable, sinon 0),
+      "coolantType": "type de liquide",
+      "checkPoints": ["point 1", "point 2", "point 3"]
+    }`;
+
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
-      contents: `Génère préconisations JSON pour ${car.name} (${car.fuelType}) à ${currentKm} km: { tirePressure, oilType, checkPoints: [] }`,
+      contents: prompt,
       config: { responseMimeType: "application/json" }
     });
     return JSON.parse(response.text?.trim() || '{}');
   } catch {
-    return { tirePressure: "2.5 bar", oilType: "5W30", checkPoints: ["Niveaux", "Pneus"] };
+    // Fallback sécurité
+    return { 
+      tirePressureFront: "2.3 bar", 
+      tirePressureRear: "2.1 bar", 
+      oilType: "5W30", 
+      maintenanceIntervalKm: 20000, 
+      coolantType: "Universel Rose",
+      checkPoints: ["Niveaux", "Freins", "Pneus"] 
+    };
   }
 };

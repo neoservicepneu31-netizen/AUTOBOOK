@@ -28,16 +28,17 @@ export interface User {
 
 export interface TechnicalSpecs {
   tireDimensions?: string;
-  tirePressure?: string;
+  tirePressureFront?: string;
+  tirePressureRear?: string;
   oilViscosity?: string;
   oilCapacity?: string;
   batteryRef?: string;
   colorCode?: string;
-  oilFilterRef?: string;
-  airFilterRef?: string;
-  fuelFilterRef?: string;
-  cabinFilterRef?: string;
-  wiperRef?: string;
+  timingBeltIntervalKm?: number;
+  timingBeltIntervalYears?: number;
+  sparkPlugsIntervalKm?: number;
+  coolantType?: string;
+  brakeFluidType?: string;
 }
 
 export interface NewsArticle {
@@ -105,7 +106,11 @@ export interface AIStatus {
 }
 
 export interface ManufacturerSpecs {
-  tirePressure: string;
+  tirePressureFront: string;
+  tirePressureRear: string;
   oilType: string;
+  maintenanceIntervalKm: number;
+  timingBeltIntervalKm?: number;
+  coolantType: string;
   checkPoints: string[];
 }
