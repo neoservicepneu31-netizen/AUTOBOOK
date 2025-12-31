@@ -3,32 +3,36 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
 
-// Register Service Worker for PWA capabilities
-if ('serviceWorker' in navigator) {
+// Register Service Worker pour PWA capabilities avec protection d'origine
+if ('serviceWorker' in navigator && window.location.protocol === 'https:') {
   window.addEventListener('load', () => {
-    // Utilisation d'un chemin relatif pour Vercel
-    navigator.serviceWorker.register('./sw.js')
-      .then(registration => {
-        console.log('SW registered: ', registration);
-        
-        // Si une mise à jour est trouvée, on force le rechargement
-        registration.onupdatefound = () => {
-          const installingWorker = registration.installing;
-          if (installingWorker) {
-            installingWorker.onstatechange = () => {
-              if (installingWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                console.log('New content is available; please refresh.');
-                if(confirm('Une nouvelle version est disponible. Mettre à jour ?')) {
-                    window.location.reload();
+    // On construit l'URL absolue du SW pour vérifier son origine
+    const swUrl = new URL('./sw.js', window.location.href);
+    
+    // On n'enregistre que si l'origine correspond pour éviter les erreurs de sécurité CORS/Origin
+    if (swUrl.origin === window.location.origin) {
+      navigator.serviceWorker.register(swUrl.pathname)
+        .then(registration => {
+          console.log('SW registered successfully');
+          registration.onupdatefound = () => {
+            const installingWorker = registration.installing;
+            if (installingWorker) {
+              installingWorker.onstatechange = () => {
+                if (installingWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                  if(confirm('Mise à jour disponible ! Recharger pour appliquer ?')) {
+                      window.location.reload();
+                  }
                 }
-              }
-            };
-          }
-        };
-      })
-      .catch(registrationError => {
-        console.log('SW registration failed: ', registrationError);
-      });
+              };
+            }
+          };
+        })
+        .catch(err => {
+          console.warn('SW registration skipped or failed:', err.message);
+        });
+    } else {
+      console.log('SW registration skipped: Origin mismatch (Preview mode)');
+    }
   });
 }
 

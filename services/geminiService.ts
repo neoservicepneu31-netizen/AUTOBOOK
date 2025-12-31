@@ -11,18 +11,15 @@ export const processFile = (file: File): Promise<string> => {
     reader.onload = (e) => {
       const result = e.target?.result as string;
       
-      // Si c'est un PDF, on garde le résultat tel quel
       if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
         resolve(result);
         return;
       }
 
-      // Pour les images, on redimensionne et on compresse pour économiser le LocalStorage
       const img = new Image();
       img.onload = () => {
         const canvas = document.createElement('canvas');
-        // Taille équilibrée pour lisibilité sur PC et performance sur Mobile
-        const MAX_SIZE = 1200; 
+        const MAX_SIZE = 800; 
         let width = img.width;
         let height = img.height;
         
@@ -39,10 +36,9 @@ export const processFile = (file: File): Promise<string> => {
         const ctx = canvas.getContext('2d');
         if (ctx) {
           ctx.imageSmoothingEnabled = true;
-          ctx.imageSmoothingQuality = 'high';
+          ctx.imageSmoothingQuality = 'medium';
           ctx.drawImage(img, 0, 0, width, height);
-          // Qualité 0.6 pour garder les textes lisibles (factures) tout en étant léger
-          resolve(canvas.toDataURL('image/jpeg', 0.6));
+          resolve(canvas.toDataURL('image/jpeg', 0.2));
         } else {
           resolve(result);
         }
@@ -58,13 +54,40 @@ export const processFile = (file: File): Promise<string> => {
 
 export const safeBase64ToBlobUrl = (base64Data: string): string => {
   if (!base64Data) return "";
-  // Si c'est déjà un data URL complet, on le retourne
   if (base64Data.startsWith('data:')) return base64Data;
   
-  // Détection du type pour les chaînes base64 pures issues du cloud
-  const isPDF = base64Data.length > 20 && base64Data.substring(0, 30).includes('JVBER');
-  const prefix = isPDF ? 'data:application/pdf;base64,' : 'data:image/jpeg;base64,';
-  return `${prefix}${base64Data}`;
+  try {
+    const isPDF = base64Data.length > 20 && base64Data.substring(0, 30).includes('JVBER');
+    const prefix = isPDF ? 'data:application/pdf;base64,' : 'data:image/jpeg;base64,';
+    return `${prefix}${base64Data}`;
+  } catch (e) {
+    return base64Data;
+  }
+};
+
+export const base64ToRealBlobUrl = (base64: string, mimeType: string = 'application/pdf'): string => {
+  try {
+    const sliceSize = 1024;
+    const byteCharacters = atob(base64.includes(',') ? base64.split(',')[1] : base64);
+    const bytesLength = byteCharacters.length;
+    const slicesCount = Math.ceil(bytesLength / sliceSize);
+    const byteArrays = new Array(slicesCount);
+
+    for (let sliceIndex = 0; sliceIndex < slicesCount; ++sliceIndex) {
+      const begin = sliceIndex * sliceSize;
+      const end = Math.min(begin + sliceSize, bytesLength);
+      const bytes = new Array(end - begin);
+      for (let offset = begin, i = 0; offset < end; ++i, ++offset) {
+        bytes[i] = byteCharacters[offset].charCodeAt(0);
+      }
+      byteArrays[sliceIndex] = new Uint8Array(bytes);
+    }
+    const blob = new Blob(byteArrays, { type: mimeType });
+    return URL.createObjectURL(blob);
+  } catch (e) {
+    console.error("Blob conversion error", e);
+    return base64;
+  }
 };
 
 export const analyzeInvoiceImage = async (base64Data: string, mimeType: string = 'image/jpeg', retryCount = 0): Promise<any> => {
@@ -78,7 +101,22 @@ export const analyzeInvoiceImage = async (base64Data: string, mimeType: string =
       contents: {
         parts: [
           { inlineData: { mimeType: finalMime, data: pureBase64 } },
-          { text: `Extraire en JSON strict: { type, title, date (YYYY-MM-DD), km (entier), price (total), specs: { tireDimensions, oilViscosity, batteryRef } }` }
+          { text: `Extraire précisément en JSON strict : 
+          { 
+            "type": "maintenance" | "fuel", 
+            "title": "Nom du garage ou type d'intervention", 
+            "date": "YYYY-MM-DD", 
+            "km": entier, 
+            "price": total décimal, 
+            "specs": { 
+              "tireDimensions": "ex: 205/55 R16 91V", 
+              "oilViscosity": "ex: 5W30",
+              "oilQuantity": "ex: 4.5L", 
+              "batteryRef": "ex: L3 70Ah 720A",
+              "filterRefs": ["liste des refs filtres trouvées ex: Purflux LS932, Filtre habitacle Bosch"],
+              "mechanicalParts": ["liste des pièces ex: Disques freins Brembo, Courroie Gates"]
+            } 
+          }` }
         ]
       },
       config: { responseMimeType: "application/json" }

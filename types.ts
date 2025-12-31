@@ -32,6 +32,7 @@ export interface TechnicalSpecs {
   tirePressureRear?: string;
   oilViscosity?: string;
   oilCapacity?: string;
+  oilQuantity?: string;
   batteryRef?: string;
   colorCode?: string;
   timingBeltIntervalKm?: number;
@@ -39,6 +40,8 @@ export interface TechnicalSpecs {
   sparkPlugsIntervalKm?: number;
   coolantType?: string;
   brakeFluidType?: string;
+  filterRefs?: string[];
+  mechanicalParts?: string[];
 }
 
 export interface NewsArticle {

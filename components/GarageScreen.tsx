@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { Car, User, NewsArticle, Invoice } from '../types';
-import { Plus, Car as CarIcon, Bike, ChevronRight, LogOut, Newspaper, X, ArrowRight, FolderOpen, DownloadCloud, ShieldCheck } from 'lucide-react';
+import { Plus, Car as CarIcon, Bike, ChevronRight, LogOut, Newspaper, X, ArrowRight, FolderOpen, DownloadCloud, ShieldCheck, Zap, Bell } from 'lucide-react';
 
 interface GarageScreenProps {
   user: User;
@@ -18,126 +18,184 @@ const NEWS_DATA: NewsArticle[] = [
   {
     id: '1',
     category: 'REGLEMENTATION',
-    title: 'Malus 2025 : Nouveau barème',
-    date: '02/12/2024',
-    summary: 'Le seuil du malus CO2 s\'abaisse encore au 1er janvier. Les hybrides dans le viseur.',
-    content: "Dès le 1er janvier 2025, le seuil de déclenchement du malus écologique passe de 118 g/km à 113 g/km. Le malus au poids est également revu à la baisse (1,6 tonne).",
-    imageUrl: 'https://images.unsplash.com/photo-1532939163844-547f958e91b4?auto=format&fit=crop&q=80&w=800', 
+    title: 'Nouveau contrôle technique 2025',
+    date: 'Aujourd\'hui',
+    summary: 'Les points de contrôle sur les batteries électriques et hybrides se durcissent dès janvier.',
+    content: "Dès le 1er janvier 2025, le seuil de déclenchement du malus écologique passe de 118 g/km à 113 g/km. Préparez votre passage au centre agréé.",
+    imageUrl: 'https://images.unsplash.com/photo-1486006920555-c77dcf18193c?auto=format&fit=crop&q=80&w=800', 
     readTime: '2 min'
+  },
+  {
+    id: '2',
+    category: 'CONSEIL',
+    title: 'Hiver : Pensez à vos pneus',
+    date: 'Hier',
+    summary: 'La Loi Montagne est active. Vérifiez vos équipements pour éviter l\'amende.',
+    content: "La Loi Montagne oblige l'équipement de pneus hiver ou de chaînes dans certaines zones de montagne. Vérifiez vos dimensions de pneus dans votre rapport AutoBook.",
+    imageUrl: 'https://images.unsplash.com/photo-1484136524693-231d5836d905?auto=format&fit=crop&q=80&w=800',
+    readTime: '3 min'
+  },
+  {
+    id: '3',
+    category: 'NOUVEAUTE',
+    title: 'Paiement en 3x Sans Frais',
+    date: '3 jours',
+    summary: 'Réglez vos réparations importantes en plusieurs fois via nos garages partenaires.',
+    content: "Simplifiez-vous la vie avec le paiement échelonné pour les gros entretiens (courroie, pneus).",
+    imageUrl: 'https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?auto=format&fit=crop&q=80&w=800',
+    readTime: '1 min'
   }
 ];
 
 export const GarageScreen: React.FC<GarageScreenProps> = ({ user, cars, invoices, onSelectCar, onViewInvoices, onAddCar, onLogout, onBuyCar }) => {
-  const [showNews, setShowNews] = useState(false);
   const [selectedArticle, setSelectedArticle] = useState<NewsArticle | null>(null);
 
-  const getInvoicesCount = (carId: string) => {
-    return invoices.filter(inv => inv.carId === carId).length;
-  };
-
   return (
-    <div className="min-h-full bg-nsp-bg flex flex-col">
+    <div className="min-h-full bg-nsp-bg flex flex-col pb-20">
       <div className="p-6 bg-nsp-card border-b border-nsp-border sticky top-0 z-20 shadow-md">
-        <div className="flex justify-between items-center mb-4">
+        <div className="flex justify-between items-center mb-6">
           <div>
             <h1 className="text-2xl font-bold text-white uppercase tracking-tighter">Mon <span className="text-nsp-primary">Garage</span></h1>
             <p className="text-nsp-sub text-[10px] font-black uppercase tracking-widest">{user.name}</p>
           </div>
           <div className="flex items-center gap-2">
-            <button onClick={() => setShowNews(true)} className="p-3 bg-nsp-input rounded-2xl text-white">
-              <Newspaper size={20} />
-            </button>
-            <button onClick={onLogout} className="p-3 bg-nsp-input rounded-2xl text-nsp-sub hover:text-white">
+            <button onClick={onLogout} className="p-3 bg-nsp-input rounded-2xl text-nsp-sub hover:text-white border border-white/5 transition-colors">
               <LogOut size={20} />
             </button>
           </div>
         </div>
 
-        <div className="flex gap-2">
-           <button onClick={onAddCar} className="flex-1 bg-nsp-primary text-white py-3 rounded-xl font-black text-[10px] uppercase tracking-widest shadow-lg flex items-center justify-center gap-2">
-             <Plus size={16}/> Nouveau
+        <div className="flex gap-3">
+           <button onClick={onAddCar} className="flex-1 bg-nsp-primary text-white py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-[0_10px_20px_rgba(230,57,70,0.3)] flex items-center justify-center gap-2 active:scale-95 transition-all">
+             <Plus size={18} strokeWidth={3}/> Nouveau véhicule
            </button>
-           <button onClick={onBuyCar} className="flex-1 bg-white/5 border border-white/10 text-white py-3 rounded-xl font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-2">
-             <DownloadCloud size={16}/> Importer
+           <button onClick={onBuyCar} className="flex-none aspect-square bg-white/5 border border-white/10 text-white p-4 rounded-2xl flex items-center justify-center active:scale-95 transition-all">
+             <DownloadCloud size={20}/>
            </button>
         </div>
       </div>
 
-      <div className="flex-1 p-6 space-y-6 overflow-y-auto pb-32">
-        {cars.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-20 text-center space-y-6">
-            <div className="w-24 h-24 bg-nsp-input rounded-[2rem] flex items-center justify-center border-4 border-dashed border-nsp-border text-gray-700">
-              <CarIcon size={48} />
-            </div>
-            <p className="text-gray-500 font-bold uppercase text-xs">Votre garage est vide</p>
+      <div className="flex-1 p-6 space-y-10 overflow-y-auto">
+        {/* News Feed - Plus visible et interactif */}
+        <div className="space-y-6">
+           <div className="flex items-center justify-between px-2">
+             <h2 className="text-[10px] text-gray-500 font-black uppercase tracking-[0.2em] flex items-center gap-2">
+               <Zap size={14} className="text-nsp-primary" /> Le Journal AutoBook
+             </h2>
+             <span className="bg-nsp-primary/20 text-nsp-primary text-[8px] font-black px-2 py-0.5 rounded-full uppercase">Nouveau</span>
+           </div>
+           
+           <div className="flex gap-5 overflow-x-auto no-scrollbar pb-6 -mx-2 px-2 scroll-smooth">
+              {NEWS_DATA.map(article => (
+                <div 
+                  key={article.id} 
+                  onClick={() => setSelectedArticle(article)}
+                  className="flex-none w-[300px] bg-nsp-card rounded-[3rem] border border-nsp-border overflow-hidden shadow-2xl active:scale-[0.98] transition-all relative group"
+                >
+                  <div className="h-36 w-full relative overflow-hidden">
+                    <img src={article.imageUrl} className="w-full h-full object-cover opacity-60 group-hover:scale-110 transition-transform duration-700" alt={article.title} />
+                    <div className="absolute inset-0 bg-gradient-to-t from-nsp-card via-transparent to-transparent"></div>
+                    <div className="absolute top-4 left-4 bg-nsp-primary text-white text-[8px] font-black px-2.5 py-1 rounded-full uppercase tracking-widest shadow-lg">
+                       {article.category}
+                    </div>
+                  </div>
+                  <div className="p-6">
+                    <h3 className="text-white font-black text-sm leading-tight mb-3 line-clamp-2 uppercase tracking-tight">{article.title}</h3>
+                    <p className="text-gray-500 text-[10px] leading-relaxed line-clamp-2 font-medium">{article.summary}</p>
+                    <div className="mt-5 flex items-center justify-between border-t border-white/5 pt-4">
+                       <span className="text-[8px] text-gray-600 font-black uppercase tracking-widest">{article.date}</span>
+                       <span className="text-[9px] text-nsp-primary font-black uppercase flex items-center gap-1 group-hover:translate-x-1 transition-transform">Consulter <ArrowRight size={12}/></span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+           </div>
+        </div>
+
+        {/* Car Section */}
+        <div className="space-y-5">
+          <div className="flex items-center justify-between px-2">
+            <h2 className="text-[10px] text-gray-500 font-black uppercase tracking-[0.2em]">Mes Véhicules</h2>
+            <p className="text-[10px] text-gray-700 font-black uppercase">{cars.length} Véhicules</p>
           </div>
-        ) : (
-          <div className="grid grid-cols-1 gap-6">
-            {cars.map((car) => {
-              const count = getInvoicesCount(car.id);
-              return (
-                <div key={car.id} className="bg-nsp-card rounded-[2.5rem] border border-nsp-border overflow-hidden shadow-2xl relative group">
-                  <div className="h-44 w-full bg-nsp-input relative" onClick={() => onSelectCar(car.id)}>
+          {cars.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-20 text-center space-y-6 bg-nsp-card/30 rounded-[3rem] border-2 border-dashed border-nsp-border">
+              <div className="w-20 h-20 bg-nsp-input rounded-[2rem] flex items-center justify-center text-gray-700">
+                <CarIcon size={40} />
+              </div>
+              <p className="text-gray-500 font-black uppercase text-[10px] tracking-widest">Votre garage est vide</p>
+              <button onClick={onAddCar} className="text-nsp-primary font-black text-xs uppercase underline underline-offset-4">Ajouter maintenant</button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 gap-8">
+              {cars.map((car) => (
+                <div key={car.id} className="bg-nsp-card rounded-[3rem] border border-nsp-border overflow-hidden shadow-2xl relative group active:scale-[0.98] transition-all" onClick={() => onSelectCar(car.id)}>
+                  <div className="h-52 w-full bg-nsp-input relative">
                     {car.photos.front ? (
-                      <img src={car.photos.front} alt={car.name} className="w-full h-full object-cover opacity-80" />
+                      <img src={car.photos.front} alt={car.name} className="w-full h-full object-cover" />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center bg-gray-900">
                         {car.type === 'motorcycle' ? <Bike size={48} className="text-gray-800"/> : <CarIcon size={48} className="text-gray-800"/>}
                       </div>
                     )}
                     <div className="absolute inset-0 bg-gradient-to-t from-nsp-card via-transparent to-transparent"></div>
-                    <div className="absolute top-4 left-4 bg-[#003399] text-white px-3 py-1.5 rounded-lg text-xs font-black tracking-widest shadow-xl">
+                    <div className="absolute top-5 left-5 bg-[#003399] text-white px-4 py-2 rounded-xl text-xs font-black tracking-widest shadow-2xl border border-white/10">
                       {car.plate}
                     </div>
+                    <div className="absolute top-5 right-5 bg-nsp-success text-white px-3.5 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest flex items-center gap-1.5 shadow-2xl backdrop-blur-md">
+                       <ShieldCheck size={12} /> Certifié IA
+                    </div>
                   </div>
 
-                  <div className="p-6 flex items-center justify-between" onClick={() => onSelectCar(car.id)}>
+                  <div className="p-7 pt-2 flex items-center justify-between">
                     <div>
-                      <h3 className="text-xl font-black text-white">{car.name}</h3>
-                      <div className="flex items-center gap-2 mt-1">
-                        <span className="text-[9px] text-gray-500 font-black uppercase tracking-widest">{car.fuelType}</span>
-                        <span className="w-1 h-1 rounded-full bg-gray-700"></span>
-                        <span className="text-[9px] text-gray-500 font-black uppercase tracking-widest">{car.initialKm.toLocaleString()} KM</span>
+                      <h3 className="text-2xl font-black text-white uppercase tracking-tighter">{car.name}</h3>
+                      <div className="flex items-center gap-3 mt-1.5">
+                        <span className="text-[10px] text-nsp-primary font-black uppercase tracking-widest">{car.fuelType}</span>
+                        <span className="w-1.5 h-1.5 rounded-full bg-gray-800"></span>
+                        <span className="text-[10px] text-gray-500 font-black uppercase tracking-widest">{car.initialKm.toLocaleString()} KM</span>
                       </div>
                     </div>
-                    <div className="w-12 h-12 bg-nsp-primary rounded-2xl flex items-center justify-center text-white shadow-lg">
-                      <ChevronRight size={24} />
+                    <div className="w-14 h-14 bg-nsp-primary rounded-[1.5rem] flex items-center justify-center text-white shadow-xl group-hover:scale-110 transition-transform">
+                      <ChevronRight size={28} />
                     </div>
                   </div>
-
-                  <div className="px-6 pb-6 pt-2 flex items-center gap-3">
-                    <button 
-                      onClick={(e) => { e.stopPropagation(); onViewInvoices(car.id); }}
-                      className="flex-1 bg-white/5 border border-white/10 hover:bg-nsp-primary hover:border-nsp-primary transition-all py-3 rounded-2xl flex items-center justify-center gap-3 text-white"
-                    >
-                      <FolderOpen size={18} className="text-nsp-primary group-hover:text-white" />
-                      <span className="text-[10px] font-black uppercase tracking-widest">Carnet de santé ({count})</span>
-                    </button>
-                    <div className="bg-nsp-input border border-nsp-border px-4 py-3 rounded-2xl flex items-center gap-2">
-                       <ShieldCheck size={14} className="text-green-500" />
-                       <span className="text-[9px] text-white font-black uppercase tracking-widest">Certifié</span>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
-
-      {showNews && (
-        <div className="fixed inset-0 z-50 bg-nsp-bg flex flex-col animate-slide-up">
-           <div className="p-4 bg-nsp-card border-b border-nsp-border flex items-center justify-between pt-safe-top">
-             <h2 className="text-xl font-bold text-white flex items-center gap-2"><Newspaper size={24} className="text-nsp-primary" /> Journal</h2>
-             <button onClick={() => setShowNews(false)} className="p-2 bg-white/10 rounded-full text-white"><X size={24} /></button>
-           </div>
-           <div className="flex-1 overflow-y-auto p-4">
-              {NEWS_DATA.map(article => (
-                <div key={article.id} className="bg-nsp-card border border-nsp-border rounded-xl p-4 mb-4">
-                  <h3 className="text-white font-bold mb-2">{article.title}</h3>
-                  <p className="text-gray-400 text-sm">{article.summary}</p>
                 </div>
               ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Article Modal */}
+      {selectedArticle && (
+        <div className="fixed inset-0 z-[300] bg-black flex flex-col pt-safe-top animate-fade-in overflow-hidden">
+           <header className="p-6 flex justify-between items-center border-b border-white/10 bg-black/50 backdrop-blur-md">
+              <button onClick={() => setSelectedArticle(null)} className="p-3 bg-nsp-input rounded-xl text-white"><X size={24}/></button>
+              <h3 className="text-white font-black text-xs uppercase tracking-[0.2em]">{selectedArticle.category}</h3>
+              <div className="w-12"></div>
+           </header>
+           <div className="flex-1 overflow-y-auto">
+              <img src={selectedArticle.imageUrl} className="w-full aspect-video object-cover" alt={selectedArticle.title} />
+              <div className="p-8 space-y-6">
+                 <h2 className="text-4xl font-black text-white tracking-tighter leading-tight uppercase">{selectedArticle.title}</h2>
+                 <div className="flex items-center gap-4 text-gray-500 text-[10px] font-black uppercase tracking-widest">
+                    <span className="bg-nsp-input px-3 py-1 rounded-full text-nsp-primary">{selectedArticle.date}</span>
+                    <span className="w-1.5 h-1.5 rounded-full bg-gray-800"></span>
+                    <span>{selectedArticle.readTime} de lecture</span>
+                 </div>
+                 <p className="text-gray-300 text-lg font-medium leading-relaxed">{selectedArticle.summary}</p>
+                 <div className="h-px bg-white/5 w-full"></div>
+                 <p className="text-gray-400 leading-relaxed font-medium">{selectedArticle.content}</p>
+                 <div className="bg-nsp-input p-6 rounded-[2rem] border border-white/5 mt-10">
+                   <p className="text-gray-400 leading-relaxed italic text-sm">Information certifiée pour les membres AUTOBOOK. Restez informés des changements de réglementation pour éviter les amendes et optimiser la revente de votre véhicule.</p>
+                 </div>
+              </div>
+           </div>
+           <div className="p-6 pb-safe-bottom bg-black/80 backdrop-blur-md border-t border-white/10">
+              <button onClick={() => setSelectedArticle(null)} className="w-full bg-nsp-primary text-white py-5 rounded-[2rem] font-black text-xs uppercase tracking-widest shadow-2xl active:scale-95 transition-all">
+                J'ai compris
+              </button>
            </div>
         </div>
       )}

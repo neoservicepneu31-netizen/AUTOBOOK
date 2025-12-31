@@ -1,3 +1,4 @@
+
 import { initializeApp } from 'firebase/app';
 import { 
   getFirestore, 
@@ -39,6 +40,27 @@ try {
     console.error("❌ Erreur d'initialisation Firebase:", e);
 }
 
+const cleanData = (obj: any): any => {
+  if (obj === null || typeof obj !== 'object' || obj instanceof Timestamp) {
+    return obj;
+  }
+  
+  if (Array.isArray(obj)) {
+    return obj.map(item => cleanData(item)).filter(item => item !== undefined);
+  }
+  
+  const newObj: any = {};
+  for (const key in obj) {
+    if (Object.prototype.hasOwnProperty.call(obj, key)) {
+      const val = obj[key];
+      if (val !== undefined) {
+        newObj[key] = cleanData(val);
+      }
+    }
+  }
+  return newObj;
+};
+
 class CloudConnector {
   private static instance: CloudConnector;
   private constructor() {}
@@ -62,22 +84,21 @@ class CloudConnector {
     localStorage.removeItem(API_DISABLED_KEY);
   }
 
-  // --- SYNC ROBUSTE ---
-  // Utilisation de merge: true pour éviter d'écraser des données concurrentes
   async syncUser(user: User): Promise<void> {
     if (!this.isConnected()) return;
     try {
+        const cleaned = cleanData(user);
         await setDoc(doc(db, "users", user.id), { 
-          ...user, 
+          ...cleaned, 
           lastSync: Timestamp.now(),
           platform: 'web-mobile'
         }, { merge: true });
     } catch (e: any) { 
+        console.error("Sync User Error", e);
         if(e.code === 'permission-denied') localStorage.setItem(API_DISABLED_KEY, 'true');
     }
   }
 
-  // Fetch avec limite pour éviter de saturer la mémoire si 10k users
   async fetchAllUsers(): Promise<User[]> {
     if (!this.isConnected()) return [];
     try {
@@ -90,9 +111,9 @@ class CloudConnector {
   async syncCar(car: Car): Promise<void> {
     if (!this.isConnected()) return;
     try {
-      // Nettoyage des données lourdes avant sync si nécessaire (préparation Storage)
+      const cleaned = cleanData(car);
       await setDoc(doc(db, "cars", car.id), { 
-        ...car, 
+        ...cleaned, 
         lastSync: Timestamp.now(),
         searchPlate: car.plate.replace(/-/g, '').toUpperCase()
       }, { merge: true });
@@ -111,20 +132,32 @@ class CloudConnector {
   async syncInvoice(invoice: Invoice): Promise<void> {
     if (!this.isConnected()) return;
     try {
+      const cleaned = cleanData(invoice);
+      const encoded = new TextEncoder().encode(JSON.stringify(cleaned));
+      if (encoded.length > 1040000) {
+        const { imageUrl, ...metadataOnly } = cleaned;
+        await setDoc(doc(db, "invoices", invoice.id), { 
+          ...metadataOnly, 
+          imageTooLargeForCloud: true,
+          lastSync: Timestamp.now() 
+        }, { merge: true });
+        return;
+      }
       await setDoc(doc(db, "invoices", invoice.id), { 
-        ...invoice, 
+        ...cleaned, 
         lastSync: Timestamp.now() 
       }, { merge: true });
-    } catch (e) { console.error("Sync Invoice Error", e); }
+    } catch (e) { console.error("❌ Sync Invoice Error", e); }
   }
 
-  // Added deleteInvoice method to fix error in App.tsx
   async deleteInvoice(invoiceId: string): Promise<void> {
     if (!this.isConnected()) return;
     try {
-      await deleteDoc(doc(db, "invoices", invoiceId));
+      const docRef = doc(db, "invoices", invoiceId);
+      await deleteDoc(docRef);
+      console.log(`✅ Document ${invoiceId} supprimé du Cloud.`);
     } catch (e) {
-      console.error("Delete Invoice Error", e);
+      console.error("❌ Delete Invoice Cloud Error", e);
     }
   }
 
@@ -135,7 +168,6 @@ class CloudConnector {
       const snap = await getDocs(q);
       return snap.docs.map(d => d.data() as Invoice);
     } catch (e) { 
-      // Si l'index orderBy n'est pas encore créé sur Firebase
       const snap = await getDocs(query(collection(db, "invoices"), where("carId", "==", carId)));
       return snap.docs.map(d => d.data() as Invoice);
     }
