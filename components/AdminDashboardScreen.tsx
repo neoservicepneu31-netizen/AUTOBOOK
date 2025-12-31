@@ -2,10 +2,11 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { User, Car, Invoice } from '../types';
 import { cloud } from '../services/cloudService';
+import { safeBase64ToBlobUrl, base64ToRealBlobUrl } from '../services/geminiService';
 import { 
   BarChart3, Users, QrCode, Printer, Globe, Radio, Database, ExternalLink, AlertCircle, RefreshCcw,
   Loader2, Copy, Check, ShieldAlert, ChevronRight, MousePointer2, HardDrive, Plus, ShieldCheck, ArrowRight,
-  Search, Info, Car as CarIcon, X, Smartphone, Globe2, Link, ExternalLink as OpenLink, Trash2, Key, History, Mail, Eye, LogOut, Clock, Wrench, UserPlus, FileText, Share2, Download
+  Search, Info, Car as CarIcon, X, Smartphone, Globe2, Link, ExternalLink as OpenLink, Trash2, Key, History, Mail, Eye, LogOut, Clock, Wrench, UserPlus, FileText, Share2, Download, Image as ImageIcon, Maximize2
 } from 'lucide-react';
 
 interface AdminDashboardScreenProps {
@@ -25,14 +26,19 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({
   const [activeTab, setActiveTab] = useState<'overview' | 'diffusion' | 'users' | 'setup'>('overview');
   const [searchTerm, setSearchTerm] = useState('');
   const [cloudStatus, setCloudStatus] = useState<'online' | 'syncing' | 'warning' | 'error'>('online');
-  const [isRetrying, setIsRetrying] = useState(false);
   const [copySuccess, setCopySuccess] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
+  const [viewingDoc, setViewingDoc] = useState<{title: string, url: string} | null>(null);
   const [customDomain, setCustomDomain] = useState('autobook-zxwf.vercel.app');
   
   const isCloudActive = cloud.isConnected();
   const isApiDisabled = cloud.isApiDisabled();
   
+  const isPDF = (url?: string) => {
+    if (!url) return false;
+    return url.includes('application/pdf') || url.substring(0, 30).includes('JVBER');
+  };
+
   const publicUrl = useMemo(() => {
     let domain = customDomain.trim();
     if (!domain.startsWith('http')) domain = `https://${domain}`;
@@ -392,7 +398,7 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({
                <h4 className="text-[10px] text-gray-500 font-black uppercase tracking-widest flex items-center gap-2 ml-2">
                  <CarIcon size={14} className="text-nsp-primary" /> Parc Automobile du Client
                </h4>
-               <div className="space-y-4">
+               <div className="space-y-8">
                   {getUserDetails(selectedUser.id).cars.length === 0 ? (
                     <div className="p-10 border-2 border-dashed border-nsp-border rounded-3xl text-center text-gray-700 font-black text-[10px] uppercase">Aucun véhicule enregistré</div>
                   ) : (
@@ -413,14 +419,73 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({
                                 <p className="text-[8px] text-gray-600 uppercase font-bold">{carInvoices.length} Interventions</p>
                               </div>
                            </div>
-                           <div className="p-4 grid grid-cols-2 gap-2">
-                              <div className="bg-black/20 p-3 rounded-xl border border-white/5">
-                                 <p className="text-[8px] text-gray-600 font-black uppercase mb-1">Pneus</p>
-                                 <p className="text-white font-bold text-[10px] truncate">{car.specs?.tireDimensions || 'Non scanné'}</p>
+
+                           {/* DOCUMENTS & PHOTOS CERTIFIÉS */}
+                           <div className="p-6 space-y-6">
+                              <div className="space-y-3">
+                                <h6 className="text-[8px] text-gray-500 font-black uppercase tracking-widest flex items-center gap-2">
+                                  <ShieldCheck size={12} className="text-green-500" /> Documents & Photos Certifiés
+                                </h6>
+                                <div className="grid grid-cols-4 gap-2">
+                                   {/* CARTE GRISE */}
+                                   <button 
+                                      onClick={() => car.grayCardUrl && setViewingDoc({ title: 'Carte Grise', url: car.grayCardUrl })}
+                                      className={`aspect-square rounded-xl border flex flex-col items-center justify-center gap-1 transition-all overflow-hidden relative group ${car.grayCardUrl ? 'border-nsp-primary/30 bg-nsp-input/50' : 'border-dashed border-white/5 opacity-30 grayscale'}`}
+                                   >
+                                      {car.grayCardUrl ? (
+                                        <>
+                                          <img src={safeBase64ToBlobUrl(car.grayCardUrl)} className="absolute inset-0 w-full h-full object-cover opacity-50" />
+                                          <FileText size={16} className="text-white relative z-10" />
+                                          <span className="text-[7px] text-white font-black uppercase relative z-10">C. Grise</span>
+                                        </>
+                                      ) : (
+                                        <FileText size={16} />
+                                      )}
+                                   </button>
+
+                                   {/* PHOTOS 4 ANGLES */}
+                                   {(['front', 'back', 'left', 'right', 'engine'] as const).map(angle => (
+                                     <button 
+                                        key={angle}
+                                        onClick={() => car.photos[angle] && setViewingDoc({ title: angle.toUpperCase(), url: car.photos[angle]! })}
+                                        className={`aspect-square rounded-xl border flex flex-col items-center justify-center gap-1 transition-all overflow-hidden relative ${car.photos[angle] ? 'border-nsp-primary/30 bg-nsp-input/50' : 'border-dashed border-white/5 opacity-30 grayscale'}`}
+                                     >
+                                        {car.photos[angle] ? (
+                                          <>
+                                            <img src={safeBase64ToBlobUrl(car.photos[angle]!)} className="absolute inset-0 w-full h-full object-cover opacity-50" />
+                                            <ImageIcon size={16} className="text-white relative z-10" />
+                                            <span className="text-[7px] text-white font-black uppercase relative z-10">{angle}</span>
+                                          </>
+                                        ) : (
+                                          <ImageIcon size={16} />
+                                        )}
+                                     </button>
+                                   ))}
+
+                                   {/* DOMMAGES */}
+                                   {car.photos.damages.map((dmg, idx) => (
+                                      <button 
+                                        key={idx}
+                                        onClick={() => setViewingDoc({ title: `Dommage #${idx+1}`, url: dmg })}
+                                        className="aspect-square rounded-xl border border-red-500/30 bg-red-950/20 flex flex-col items-center justify-center gap-1 transition-all overflow-hidden relative"
+                                      >
+                                        <img src={safeBase64ToBlobUrl(dmg)} className="absolute inset-0 w-full h-full object-cover opacity-50" />
+                                        <AlertCircle size={14} className="text-red-500 relative z-10" />
+                                        <span className="text-[7px] text-red-500 font-black uppercase relative z-10">Dégât</span>
+                                      </button>
+                                   ))}
+                                </div>
                               </div>
-                              <div className="bg-black/20 p-3 rounded-xl border border-white/5">
-                                 <p className="text-[8px] text-gray-600 font-black uppercase mb-1">Huile</p>
-                                 <p className="text-white font-bold text-[10px] truncate">{car.specs?.oilViscosity || 'Non scanné'}</p>
+
+                              <div className="grid grid-cols-2 gap-2">
+                                <div className="bg-black/20 p-3 rounded-xl border border-white/5">
+                                   <p className="text-[8px] text-gray-600 font-black uppercase mb-1">Pneus</p>
+                                   <p className="text-white font-bold text-[10px] truncate">{car.specs?.tireDimensions || 'Non scanné'}</p>
+                                </div>
+                                <div className="bg-black/20 p-3 rounded-xl border border-white/5">
+                                   <p className="text-[8px] text-gray-600 font-black uppercase mb-1">Huile</p>
+                                   <p className="text-white font-bold text-[10px] truncate">{car.specs?.oilViscosity || 'Non scanné'}</p>
+                                </div>
                               </div>
                            </div>
                         </div>
@@ -444,6 +509,39 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({
                </div>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* DOCUMENT VIEWER MODAL */}
+      {viewingDoc && (
+        <div className="fixed inset-0 z-[200] bg-black/98 flex flex-col animate-fade-in overflow-hidden pt-safe-top">
+           <header className="p-6 flex justify-between items-center border-b border-white/10 bg-black/50 backdrop-blur-md">
+              <button onClick={() => setViewingDoc(null)} className="p-3 bg-nsp-input rounded-xl text-white"><X size={24}/></button>
+              <div className="text-center">
+                 <h3 className="text-white font-black text-xs uppercase tracking-widest">{viewingDoc.title}</h3>
+                 <p className="text-[9px] text-nsp-primary font-black uppercase mt-1">Inspection Expert</p>
+              </div>
+              <button 
+                onClick={() => window.open(base64ToRealBlobUrl(viewingDoc.url, isPDF(viewingDoc.url) ? 'application/pdf' : 'image/jpeg'), '_blank')}
+                className="p-3 bg-nsp-input rounded-xl text-white"
+              >
+                <Maximize2 size={24}/>
+              </button>
+           </header>
+           
+           <div className="flex-1 flex items-center justify-center p-4">
+              <div className="w-full h-full max-w-4xl bg-nsp-card rounded-[2.5rem] overflow-hidden border border-white/10 shadow-2xl relative">
+                {isPDF(viewingDoc.url) ? (
+                  <iframe 
+                    src={base64ToRealBlobUrl(viewingDoc.url, 'application/pdf') + '#toolbar=0'} 
+                    className="w-full h-full border-0"
+                    title="Document PDF"
+                  />
+                ) : (
+                  <img src={safeBase64ToBlobUrl(viewingDoc.url)} className="w-full h-full object-contain" alt="Document" />
+                )}
+              </div>
+           </div>
         </div>
       )}
     </div>
