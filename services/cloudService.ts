@@ -99,10 +99,20 @@ class CloudConnector {
     }
   }
 
+  async deleteUser(userId: string): Promise<void> {
+    if (!this.isConnected()) return;
+    try {
+      await deleteDoc(doc(db, "users", userId));
+      console.log(`✅ Utilisateur ${userId} supprimé du Cloud.`);
+    } catch (e) {
+      console.error("❌ Erreur suppression utilisateur Cloud", e);
+    }
+  }
+
   async fetchAllUsers(): Promise<User[]> {
     if (!this.isConnected()) return [];
     try {
-        const q = query(collection(db, "users"), limit(500)); 
+        const q = query(collection(db, "users"), limit(1000)); 
         const querySnapshot = await getDocs(q);
         return querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as User));
     } catch (e: any) { return []; }
@@ -118,6 +128,24 @@ class CloudConnector {
         searchPlate: car.plate.replace(/-/g, '').toUpperCase()
       }, { merge: true });
     } catch (e) { console.error("Sync Car Error", e); }
+  }
+
+  async deleteCar(carId: string): Promise<void> {
+    if (!this.isConnected()) return;
+    try {
+      await deleteDoc(doc(db, "cars", carId));
+    } catch (e) {
+      console.error("❌ Erreur suppression voiture Cloud", e);
+    }
+  }
+
+  async fetchAllCars(): Promise<Car[]> {
+    if (!this.isConnected()) return [];
+    try {
+      const q = query(collection(db, "cars"), limit(2000));
+      const snap = await getDocs(q);
+      return snap.docs.map(d => d.data() as Car);
+    } catch (e) { return []; }
   }
 
   async fetchUserCars(userId: string): Promise<Car[]> {
@@ -155,9 +183,20 @@ class CloudConnector {
     try {
       const docRef = doc(db, "invoices", invoiceId);
       await deleteDoc(docRef);
-      console.log(`✅ Document ${invoiceId} supprimé du Cloud.`);
     } catch (e) {
       console.error("❌ Delete Invoice Cloud Error", e);
+    }
+  }
+
+  async fetchAllInvoices(): Promise<Invoice[]> {
+    if (!this.isConnected()) return [];
+    try {
+      const q = query(collection(db, "invoices"), orderBy("date", "desc"), limit(5000));
+      const snap = await getDocs(q);
+      return snap.docs.map(d => d.data() as Invoice);
+    } catch (e) { 
+      const snap = await getDocs(collection(db, "invoices"));
+      return snap.docs.map(d => d.data() as Invoice);
     }
   }
 
