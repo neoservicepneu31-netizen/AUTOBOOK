@@ -1,7 +1,13 @@
 
+import { Car, Invoice } from '../types';
+import { calculateMaintenanceStatus } from './mechanicRules';
+
+/**
+ * Demande la permission d'envoyer des notifications
+ */
 export const requestNotificationPermission = async (): Promise<boolean> => {
   if (!("Notification" in window)) {
-    console.log("Les notifications ne sont pas supportées par ce navigateur.");
+    console.warn("Les notifications ne sont pas supportées.");
     return false;
   }
 
@@ -14,31 +20,60 @@ export const requestNotificationPermission = async (): Promise<boolean> => {
 };
 
 /**
- * Envoie une notification via le Service Worker pour un affichage "natif" sur mobile.
+ * Envoie une notification système native
  */
 export const sendLocalNotification = async (title: string, body: string) => {
-  if (!("serviceWorker" in navigator)) {
-    // Fallback si pas de SW
-    if (Notification.permission === "granted") {
-      new Notification(title, { body });
-    }
-    return;
-  }
+  if (Notification.permission !== "granted") return;
 
-  const registration = await navigator.serviceWorker.ready;
-  if (registration && Notification.permission === "granted") {
-    // Fix: Cast the options to any to avoid TypeScript errors regarding 'vibrate' property 
-    // which is supported in browsers but might be missing from some NotificationOptions type definitions.
-    registration.showNotification(title, {
-      body: body,
-      icon: 'https://cdn-icons-png.flaticon.com/512/3202/3202926.png',
-      badge: 'https://cdn-icons-png.flaticon.com/512/3202/3202926.png',
-      vibrate: [200, 100, 200],
-      tag: 'autobook-alert',
-      renotify: true,
-      data: {
-        url: window.location.origin
-      }
-    } as any);
+  if ("serviceWorker" in navigator) {
+    const registration = await navigator.serviceWorker.ready;
+    if (registration) {
+      registration.showNotification(title, {
+        body: body,
+        icon: 'https://cdn-icons-png.flaticon.com/512/3202/3202926.png',
+        badge: 'https://cdn-icons-png.flaticon.com/512/3202/3202926.png',
+        vibrate: [200, 100, 200],
+        tag: 'autobook-alert',
+        renotify: true,
+      } as any);
+      return;
+    }
+  }
+  
+  // Fallback
+  new Notification(title, { body });
+};
+
+/**
+ * Simule l'envoi d'un email de rappel via le Cloud
+ */
+export const simulateCloudEmail = (email: string, carName: string, reason: string) => {
+  console.log(`[CLOUD EMAIL] Envoi de l'alerte à ${email} pour la ${carName}. Raison: ${reason}`);
+  // Ici on pourrait appeler une cloud function réelle
+};
+
+/**
+ * Vérifie l'état d'un véhicule et envoie une alerte si nécessaire
+ */
+export const checkVehicleHealthAndNotify = async (car: Car, invoices: Invoice[], userEmail: string) => {
+  const health = calculateMaintenanceStatus(car, invoices);
+  
+  if (health.status === 'critical' || health.status === 'warning') {
+    const lastAlertKey = `last_alert_${car.id}_${health.status}`;
+    const lastAlertTime = localStorage.getItem(lastAlertKey);
+    const now = Date.now();
+
+    // On n'alerte pas plus d'une fois toutes les 24h pour le même statut
+    if (!lastAlertTime || (now - parseInt(lastAlertTime)) > 24 * 60 * 60 * 1000) {
+      const title = health.status === 'critical' ? `🚨 ALERTE CRITIQUE : ${car.plate}` : `⚠️ RAPPEL ENTRETIEN : ${car.plate}`;
+      
+      // Notification Push
+      await sendLocalNotification(title, health.message);
+      
+      // Simulation Email
+      simulateCloudEmail(userEmail, car.name, health.message);
+      
+      localStorage.setItem(lastAlertKey, now.toString());
+    }
   }
 };

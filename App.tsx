@@ -13,6 +13,7 @@ import { SellCarScreen } from './components/SellCarScreen';
 import { BuyCarScreen } from './components/BuyCarScreen';
 import { db } from './services/storageService'; 
 import { cloud } from './services/cloudService';
+import { checkVehicleHealthAndNotify } from './services/notificationService';
 import { Cloud, Loader2, RefreshCw, ShieldAlert } from 'lucide-react';
 
 const App: React.FC = () => {
@@ -25,11 +26,17 @@ const App: React.FC = () => {
   const [isSyncing, setIsSyncing] = useState(false);
   const [activeCarId, setActiveCarId] = useState<string | null>(null);
 
+  const performHealthChecks = useCallback((cars: Car[], invoices: Invoice[], email: string) => {
+    cars.forEach(car => {
+      const carInvoices = invoices.filter(i => i.carId === car.id);
+      checkVehicleHealthAndNotify(car, carInvoices, email);
+    });
+  }, []);
+
   const loadAllData = useCallback(async (targetUser: User) => {
     setIsSyncing(true);
     try {
       if (targetUser.role === 'admin') {
-        // MODE ADMIN : Surveillance globale
         if (cloud.isConnected()) {
           const [remoteUsers, remoteCars, remoteInvoices] = await Promise.all([
             cloud.fetchAllUsers(),
@@ -40,13 +47,11 @@ const App: React.FC = () => {
           setAllCars(remoteCars);
           setAllInvoices(remoteInvoices);
         } else {
-          // Fallback local si pas de cloud (admin local)
           setAllUsers(db.users.getAll());
           setAllCars(db.cars.getAll());
           setAllInvoices(db.invoices.getAll());
         }
       } else {
-        // MODE CLIENT : Données personnelles uniquement
         const localCars = db.cars.getAll().filter(c => c.ownerId === targetUser.id);
         const localInvoices = db.invoices.getAll().filter(inv => localCars.some(c => c.id === inv.carId));
         
@@ -68,6 +73,8 @@ const App: React.FC = () => {
             db.invoices.saveAll(remoteInvoices);
           }
         }
+        // Check health after loading
+        performHealthChecks(allCars, allInvoices, targetUser.email);
       }
     } catch (e) {
       console.error("Sync error", e);
@@ -75,7 +82,7 @@ const App: React.FC = () => {
       setIsSyncing(false);
       setIsDatabaseReady(true);
     }
-  }, []);
+  }, [allCars, allInvoices, performHealthChecks]);
 
   useEffect(() => {
     const initApp = async () => {
@@ -135,28 +142,18 @@ const App: React.FC = () => {
     setIsSyncing(true);
     try {
       if (cloud.isConnected()) {
-        // 1. Trouver tous les véhicules de l'utilisateur pour nettoyer aussi leurs factures
         const userCars = allCars.filter(c => c.ownerId === userId);
-        
-        // 2. Supprimer chaque facture des voitures de cet utilisateur
         for (const car of userCars) {
           const carInvoices = allInvoices.filter(i => i.carId === car.id);
           for (const inv of carInvoices) {
             await cloud.deleteInvoice(inv.id);
           }
-          // 3. Supprimer la voiture elle-même
           await cloud.deleteCar(car.id);
         }
-
-        // 4. Supprimer l'utilisateur
         await cloud.deleteUser(userId);
       }
-      
-      // Mise à jour locale de l'état
       setAllUsers(prev => prev.filter(u => u.id !== userId));
       setAllCars(prev => prev.filter(c => c.ownerId !== userId));
-      // Les factures seront nettoyées lors du prochain refresh
-      
     } catch (e) {
       console.error("Erreur lors de la suppression globale", e);
     } finally {
@@ -169,6 +166,7 @@ const App: React.FC = () => {
     setAllCars(updatedCars);
     db.cars.saveAll(updatedCars);
     if (cloud.isConnected()) await cloud.syncCar(car);
+    if (user) performHealthChecks(updatedCars, allInvoices, user.email);
   };
 
   const handleSaveInvoice = async (inv: Invoice, specs?: TechnicalSpecs) => {
@@ -183,6 +181,7 @@ const App: React.FC = () => {
         await handleSaveCar(updatedCar);
       }
     }
+    if (user) performHealthChecks(allCars, updatedInvoices, user.email);
     setScreen(Screen.INVOICES_LIST);
   };
 
@@ -190,7 +189,6 @@ const App: React.FC = () => {
     const updated = allInvoices.filter(i => i.id !== invoiceId);
     setAllInvoices(updated);
     db.invoices.saveAll(updated);
-    
     if (cloud.isConnected()) {
       cloud.deleteInvoice(invoiceId).catch(err => {
         console.error("Background Cloud delete failed", err);
@@ -211,9 +209,13 @@ const App: React.FC = () => {
     if (!user) return;
     const carToImport = { ...newCar, ownerId: user.id };
     const updatedCars = [...allCars, carToImport];
+    const updatedInvoices = [...allInvoices, ...newInvoices];
     setAllCars(updatedCars);
+    setAllInvoices(updatedInvoices);
     db.cars.saveAll(updatedCars);
+    db.invoices.saveAll(updatedInvoices);
     if (cloud.isConnected()) await cloud.syncCar(carToImport);
+    performHealthChecks(updatedCars, updatedInvoices, user.email);
     setScreen(Screen.GARAGE);
   };
 

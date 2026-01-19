@@ -1,7 +1,8 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Car, User, NewsArticle, Invoice } from '../types';
-import { Plus, Car as CarIcon, Bike, ChevronRight, LogOut, Newspaper, X, ArrowRight, FolderOpen, DownloadCloud, ShieldCheck, Zap, Bell } from 'lucide-react';
+import { Plus, Car as CarIcon, Bike, ChevronRight, LogOut, Newspaper, X, ArrowRight, FolderOpen, DownloadCloud, ShieldCheck, Zap, Bell, BellRing, ShieldAlert } from 'lucide-react';
+import { requestNotificationPermission, checkVehicleHealthAndNotify } from '../services/notificationService';
 
 interface GarageScreenProps {
   user: User;
@@ -34,21 +35,34 @@ const NEWS_DATA: NewsArticle[] = [
     content: "La Loi Montagne oblige l'équipement de pneus hiver ou de chaînes dans certaines zones de montagne. Vérifiez vos dimensions de pneus dans votre rapport AutoBook.",
     imageUrl: 'https://images.unsplash.com/photo-1484136524693-231d5836d905?auto=format&fit=crop&q=80&w=800',
     readTime: '3 min'
-  },
-  {
-    id: '3',
-    category: 'NOUVEAUTE',
-    title: 'Paiement en 3x Sans Frais',
-    date: '3 jours',
-    summary: 'Réglez vos réparations importantes en plusieurs fois via nos garages partenaires.',
-    content: "Simplifiez-vous la vie avec le paiement échelonné pour les gros entretiens (courroie, pneus).",
-    imageUrl: 'https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?auto=format&fit=crop&q=80&w=800',
-    readTime: '1 min'
   }
 ];
 
-export const GarageScreen: React.FC<GarageScreenProps> = ({ user, cars, invoices, onSelectCar, onViewInvoices, onAddCar, onLogout, onBuyCar }) => {
+export const GarageScreen: React.FC<GarageScreenProps> = ({ user, cars, invoices, onSelectCar, onAddCar, onLogout, onBuyCar }) => {
   const [selectedArticle, setSelectedArticle] = useState<NewsArticle | null>(null);
+  const [showNotifyPrompt, setShowNotifyPrompt] = useState(false);
+
+  useEffect(() => {
+    // Vérifier si les notifications sont activées
+    if ("Notification" in window && Notification.permission === "default") {
+      setShowNotifyPrompt(true);
+    }
+
+    // Effectuer un check de santé global pour tous les véhicules au chargement
+    cars.forEach(car => {
+      const carInvoices = invoices.filter(i => i.carId === car.id);
+      checkVehicleHealthAndNotify(car, carInvoices, user.email);
+    });
+  }, [cars, invoices, user.email]);
+
+  const handleEnableNotifications = async () => {
+    const granted = await requestNotificationPermission();
+    if (granted) {
+      setShowNotifyPrompt(false);
+      // Petite confirmation visuelle
+      alert("✅ Alertes activées ! Vous recevrez désormais vos rappels de révision et contrôle technique.");
+    }
+  };
 
   return (
     <div className="min-h-full bg-nsp-bg flex flex-col pb-20">
@@ -76,7 +90,21 @@ export const GarageScreen: React.FC<GarageScreenProps> = ({ user, cars, invoices
       </div>
 
       <div className="flex-1 p-6 space-y-10 overflow-y-auto">
-        {/* News Feed - Plus visible et interactif */}
+        {/* BANNIERE NOTIFICATION */}
+        {showNotifyPrompt && (
+          <div className="bg-nsp-primary/10 border border-nsp-primary/30 p-5 rounded-[2.5rem] flex items-center gap-4 animate-bounce-subtle">
+             <div className="p-3 bg-nsp-primary rounded-2xl text-white">
+                <BellRing size={24} />
+             </div>
+             <div className="flex-1">
+                <h4 className="text-white font-black text-[10px] uppercase tracking-widest">Activer les alertes ?</h4>
+                <p className="text-gray-500 text-[9px] font-medium leading-tight mt-1">Ne ratez plus vos contrôles techniques et révisions constructeur.</p>
+             </div>
+             <button onClick={handleEnableNotifications} className="bg-white text-black px-4 py-2.5 rounded-xl font-black text-[9px] uppercase shadow-lg active:scale-95">ACTIVER</button>
+          </div>
+        )}
+
+        {/* News Feed */}
         <div className="space-y-6">
            <div className="flex items-center justify-between px-2">
              <h2 className="text-[10px] text-gray-500 font-black uppercase tracking-[0.2em] flex items-center gap-2">

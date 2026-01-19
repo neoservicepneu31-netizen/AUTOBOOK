@@ -3,7 +3,7 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { User, Car, Invoice, AIStatus, ManufacturerSpecs, TechnicalSpecs } from '../types';
 import { 
   Plus, FileText, ArrowLeft, Sparkles, Gauge, Droplet, PhoneCall, X, 
-  Wrench, AlertCircle, Share2, ShieldCheck, ChevronRight, Activity, Info, Eye, Download, Maximize2, Loader2, Trash2, Layers, Search, History, CheckCircle2, AlertTriangle, ListChecks, Calendar, Scale, Image as ImageIcon
+  Wrench, AlertCircle, Share2, ShieldCheck, ChevronRight, Activity, Info, Eye, Download, Maximize2, Loader2, Trash2, Layers, Search, History, CheckCircle2, AlertTriangle, ListChecks, Calendar, Scale, Image as ImageIcon, BellRing, Clock
 } from 'lucide-react';
 import { getPersonalizedMaintenance, safeBase64ToBlobUrl, base64ToRealBlobUrl } from '../services/geminiService';
 import { calculateMaintenanceStatus } from '../services/mechanicRules';
@@ -103,13 +103,26 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
             ))}
         </div>
 
-        {/* AI Diagnostic Banner */}
+        {/* AI Diagnostic Banner + Timeline Logic */}
         <div className={`relative overflow-hidden rounded-[2.5rem] border p-8 shadow-2xl ${proactiveStatus.status === 'critical' ? 'border-red-600 bg-red-900/10' : 'border-nsp-success/30 bg-green-900/10'}`}>
           <div className="flex items-start gap-4">
-            <div className="p-3 rounded-2xl bg-nsp-input text-nsp-primary"><Sparkles size={24} /></div>
+            <div className={`p-3 rounded-2xl bg-nsp-input ${proactiveStatus.status === 'critical' ? 'text-red-500' : 'text-nsp-primary'}`}><BellRing size={24} className={proactiveStatus.status === 'critical' ? 'animate-pulse' : ''} /></div>
             <div className="flex-1">
-              <h3 className="font-black text-white text-[10px] uppercase tracking-[0.2em] mb-2">Diagnostic IA</h3>
-              <p className="text-gray-300 text-sm font-medium leading-relaxed">{proactiveStatus.message}</p>
+              <h3 className="font-black text-white text-[10px] uppercase tracking-[0.2em] mb-2">État de Conformité IA</h3>
+              <p className="text-gray-200 text-sm font-bold leading-relaxed">{proactiveStatus.message}</p>
+              
+              {/* Timeline Detail from Invoices */}
+              <div className="mt-6 space-y-3">
+                 {proactiveStatus.pendingTasks.map(task => (
+                   <div key={task.id} className="bg-black/20 p-4 rounded-2xl border border-white/5">
+                      <div className="flex items-center justify-between mb-1">
+                        <p className={`text-[9px] font-black uppercase ${task.severity === 'high' ? 'text-red-500' : 'text-nsp-primary'}`}>{task.label}</p>
+                        <AlertCircle size={10} className={task.severity === 'high' ? 'text-red-500' : 'text-gray-600'} />
+                      </div>
+                      <p className="text-[10px] text-gray-400 font-medium italic">{task.basis}</p>
+                   </div>
+                 ))}
+              </div>
             </div>
           </div>
         </div>
@@ -124,7 +137,6 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
            </div>
 
            <div className="grid grid-cols-4 gap-2">
-              {/* Carte Grise */}
               <button 
                 onClick={() => car.grayCardUrl && setViewingDoc({ title: 'Carte Grise', url: car.grayCardUrl })}
                 className={`aspect-square rounded-2xl border flex flex-col items-center justify-center gap-1 transition-all overflow-hidden relative group ${car.grayCardUrl ? 'border-nsp-primary/30 bg-nsp-input/50' : 'border-dashed border-white/5 opacity-30 grayscale'}`}
@@ -140,7 +152,6 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
                 )}
               </button>
 
-              {/* Photos Angles Principaux */}
               {(['front', 'back', 'left', 'right'] as const).map(angle => (
                 <button 
                   key={angle}
@@ -159,7 +170,6 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
                 </button>
               ))}
 
-              {/* Moteur */}
               <button 
                 onClick={() => car.photos.engine && setViewingDoc({ title: 'Compartiment Moteur', url: car.photos.engine! })}
                 className={`aspect-square rounded-2xl border flex flex-col items-center justify-center gap-1 transition-all overflow-hidden relative group ${car.photos.engine ? 'border-nsp-primary/30 bg-nsp-input/50' : 'border-dashed border-white/5 opacity-30 grayscale'}`}
@@ -245,7 +255,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
         </div>
       )}
 
-      {/* --- MODAL RAPPORT TECHNIQUE ENRICHI --- */}
+      {/* RAPPORT TECHNIQUE ENRICHI */}
       {activeReport && (
         <div className="fixed inset-0 z-[1000] bg-black/80 backdrop-blur-xl flex items-end animate-fade-in p-4">
           <div className="w-full bg-nsp-card rounded-[3rem] border border-white/10 p-8 pb-12 animate-slide-up max-h-[90vh] overflow-y-auto shadow-2xl no-scrollbar">
@@ -317,7 +327,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
                   )}
                </section>
 
-               {/* 2. SECTION HISTORIQUE IA DÉTAILLÉ */}
+               {/* 2. HISTORIQUE IA DÉTAILLÉ */}
                <section className="space-y-5">
                   <div className="flex items-center justify-between px-2">
                      <h3 className="text-[10px] text-gray-500 font-black uppercase tracking-[0.2em] flex items-center gap-2">
@@ -354,7 +364,6 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
                               <span className="text-gray-500 font-bold text-[8px] whitespace-nowrap">{item.date} • {item.km.toLocaleString()} KM</span>
                            </div>
                            <div className="p-6 space-y-5">
-                              {/* RAPPORTS SPÉCIFIQUES DÉTAILLÉS */}
                               {activeReport === 'tires' && item.specs.tireDimensions && (
                                 <div className="flex items-start gap-4 bg-blue-500/5 p-4 rounded-2xl border border-blue-500/10">
                                    <div className="w-10 h-10 bg-blue-500/10 rounded-xl flex items-center justify-center text-blue-400 shrink-0"><Layers size={20}/></div>
@@ -379,15 +388,6 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
                                          </div>
                                       </div>
                                    )}
-                                   {item.specs.filterRefs && item.specs.filterRefs.some(f => f.toLowerCase().includes('huile')) && (
-                                     <div className="flex items-center gap-4 px-2">
-                                        <div className="w-8 h-8 rounded-lg bg-nsp-input flex items-center justify-center text-gray-500"><ListChecks size={14}/></div>
-                                        <div className="flex-1">
-                                           <p className="text-[8px] text-gray-500 uppercase font-black mb-1">Filtre à Huile :</p>
-                                           <p className="text-white font-bold text-xs">{item.specs.filterRefs.find(f => f.toLowerCase().includes('huile'))}</p>
-                                        </div>
-                                     </div>
-                                   )}
                                 </div>
                               )}
 
@@ -403,24 +403,6 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
                                               <span key={i} className="bg-white/5 px-3 py-1.5 rounded-xl text-white font-bold text-[10px] border border-white/10 shadow-sm">{part}</span>
                                             ))}
                                          </div>
-                                      </div>
-                                   )}
-                                   {item.specs.filterRefs && item.specs.filterRefs.length > 0 && (
-                                      <div className="space-y-3">
-                                         <p className="text-[8px] text-gray-500 font-black uppercase tracking-widest ml-1 flex items-center gap-2">
-                                            <ListChecks size={10} /> Filtres & Consommables :
-                                         </p>
-                                         <div className="flex flex-wrap gap-2">
-                                            {item.specs.filterRefs.map((filter, i) => (
-                                              <span key={i} className="bg-nsp-input px-3 py-1.5 rounded-xl text-nsp-primary font-black text-[10px] border border-nsp-primary/20 shadow-inner">{filter}</span>
-                                            ))}
-                                         </div>
-                                      </div>
-                                   )}
-                                   {item.specs.batteryRef && (
-                                      <div className="bg-nsp-input p-4 rounded-2xl border border-white/5">
-                                         <p className="text-[8px] text-gray-500 font-black uppercase mb-1">Batterie Installée :</p>
-                                         <p className="text-white font-black text-xs">{item.specs.batteryRef}</p>
                                       </div>
                                    )}
                                 </div>
@@ -453,7 +435,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
         </div>
       )}
 
-      {/* --- VISIONNEUSE DE DOCUMENTS --- */}
+      {/* VISIONNEUSE DE DOCUMENTS */}
       {viewingInvoice && (
         <div className="fixed inset-0 z-[2000] bg-black/98 flex flex-col pt-safe-top animate-fade-in overflow-hidden">
           <header className="p-6 flex justify-between items-center bg-black/50 border-b border-white/10 z-[2001]">
@@ -476,13 +458,6 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
                       className="w-full h-full border-0"
                       title="PDF Viewer"
                    />
-                   <div className="absolute inset-0 flex items-center justify-center bg-black pointer-events-none opacity-0 hover:opacity-100 transition-opacity">
-                      <div className="text-center p-10">
-                         <AlertTriangle className="text-nsp-primary mx-auto mb-4" size={48} />
-                         <p className="text-white font-bold text-sm mb-4 uppercase">Impossible d'afficher l'aperçu PDF</p>
-                         <button onClick={() => window.open(base64ToRealBlobUrl(viewingInvoice.imageUrl || '', 'application/pdf'), '_blank')} className="bg-nsp-primary text-white px-8 py-3 rounded-full text-[10px] font-black uppercase pointer-events-auto">Ouvrir dans le navigateur</button>
-                      </div>
-                   </div>
                 </div>
               ) : (
                 <img src={safeBase64ToBlobUrl(viewingInvoice.imageUrl || '')} className="w-full h-full object-contain bg-[#050505]" alt="Facture" />
