@@ -4,17 +4,6 @@ import { Car, User, NewsArticle, Invoice } from '../types';
 import { Plus, Car as CarIcon, Bike, ChevronRight, LogOut, Newspaper, X, ArrowRight, FolderOpen, DownloadCloud, ShieldCheck, Zap, Bell, BellRing, ShieldAlert } from 'lucide-react';
 import { requestNotificationPermission, checkVehicleHealthAndNotify } from '../services/notificationService';
 
-interface GarageScreenProps {
-  user: User;
-  cars: Car[];
-  invoices: Invoice[];
-  onSelectCar: (carId: string) => void;
-  onViewInvoices: (carId: string) => void;
-  onAddCar: () => void;
-  onLogout: () => void;
-  onBuyCar: () => void;
-}
-
 const NEWS_DATA: NewsArticle[] = [
   {
     id: '1',
@@ -22,7 +11,7 @@ const NEWS_DATA: NewsArticle[] = [
     title: 'Nouveau contrôle technique 2025',
     date: 'Aujourd\'hui',
     summary: 'Les points de contrôle sur les batteries électriques et hybrides se durcissent dès janvier.',
-    content: "Dès le 1er janvier 2025, le seuil de déclenchement du malus écologique passe de 118 g/km à 113 g/km. Préparez votre passage au centre agréé.",
+    content: "Dès le 1er janvier 2025, le seuil de déclenchement du malus écologique passe de 118 g/km à 113 g/km. Préparez votre passage au centre agréé pour éviter une contre-visite sur les éléments haute tension.",
     imageUrl: 'https://images.unsplash.com/photo-1486006920555-c77dcf18193c?auto=format&fit=crop&q=80&w=800', 
     readTime: '2 min'
   },
@@ -32,11 +21,65 @@ const NEWS_DATA: NewsArticle[] = [
     title: 'Hiver : Pensez à vos pneus',
     date: 'Hier',
     summary: 'La Loi Montagne est active. Vérifiez vos équipements pour éviter l\'amende.',
-    content: "La Loi Montagne oblige l'équipement de pneus hiver ou de chaînes dans certaines zones de montagne. Vérifiez vos dimensions de pneus dans votre rapport AutoBook.",
+    content: "La Loi Montagne oblige l'équipement de pneus hiver ou de chaînes dans certaines zones de montagne. Vérifiez vos dimensions de pneus dans votre rapport AutoBook pour commander les bons équipements.",
     imageUrl: 'https://images.unsplash.com/photo-1484136524693-231d5836d905?auto=format&fit=crop&q=80&w=800',
     readTime: '3 min'
+  },
+  {
+    id: '3',
+    category: 'ELECTRIQUE',
+    title: 'Bornes de recharge : Le guide',
+    date: 'Il y a 2 jours',
+    summary: 'Trouvez les bornes les moins chères sur votre trajet cet été.',
+    content: "Avec l'augmentation des tarifs de l'électricité, choisir le bon réseau de recharge est crucial. Nous comparons les tarifs de Tesla Superchargers, Ionity et Fastned pour vos longs trajets.",
+    imageUrl: 'https://images.unsplash.com/photo-1593941707882-a5bba14938c7?auto=format&fit=crop&q=80&w=800',
+    readTime: '4 min'
+  },
+  {
+    id: '4',
+    category: 'ECONOMIE',
+    title: 'Bonus Éco 2025 : Ce qui change',
+    date: 'Il y a 3 jours',
+    summary: 'Le montant du bonus pour les véhicules électriques va être raboté.',
+    content: "Le gouvernement prévoit une baisse du bonus écologique pour 2025. C'est peut-être le moment d'anticiper votre achat pour bénéficier des conditions actuelles plus avantageuses.",
+    imageUrl: 'https://images.unsplash.com/photo-1563986768609-322da13575f3?auto=format&fit=crop&q=80&w=800',
+    readTime: '3 min'
+  },
+  {
+    id: '5',
+    category: 'MARCHÉ',
+    title: 'Vendre sa voiture au meilleur prix',
+    date: 'Il y a 1 semaine',
+    summary: 'Nos astuces pour booster la valeur de revente de votre véhicule.',
+    content: "Un carnet d'entretien numérique complet comme AutoBook peut augmenter le prix de revente de votre véhicule de 10% à 15%. La transparence rassure les acheteurs et justifie un prix ferme.",
+    imageUrl: 'https://images.unsplash.com/photo-1552519507-da3b142c6e3d?auto=format&fit=crop&q=80&w=800',
+    readTime: '5 min'
+  },
+  {
+    id: '6',
+    category: 'CONSEIL',
+    title: 'Niveau d\'huile : Le reflexe vital',
+    date: 'Il y a 10 jours',
+    summary: 'Comment vérifier son huile correctement sans passer au garage.',
+    content: "Une simple vérification mensuelle peut sauver votre moteur. Attendez que le moteur soit froid, sur un terrain plat, et utilisez la jauge manuelle pour un résultat précis.",
+    imageUrl: 'https://images.unsplash.com/photo-1487754180451-c456f719c141?auto=format&fit=crop&q=80&w=800',
+    readTime: '2 min'
   }
 ];
+
+/**
+ * Definition of props for the GarageScreen component.
+ */
+interface GarageScreenProps {
+  user: User;
+  cars: Car[];
+  invoices: Invoice[];
+  onSelectCar: (id: string) => void;
+  onViewInvoices: (id: string) => void;
+  onAddCar: () => void;
+  onLogout: () => void;
+  onBuyCar: () => void;
+}
 
 export const GarageScreen: React.FC<GarageScreenProps> = ({ user, cars, invoices, onSelectCar, onAddCar, onLogout, onBuyCar }) => {
   const [selectedArticle, setSelectedArticle] = useState<NewsArticle | null>(null);

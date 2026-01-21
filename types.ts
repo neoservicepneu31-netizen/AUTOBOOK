@@ -48,7 +48,10 @@ export interface TechnicalSpecs {
 export interface NewsArticle {
   id: string;
   title: string;
-  category: 'REGLEMENTATION' | 'NOUVEAUTE' | 'CONSEIL' | 'ALERT';
+  /**
+   * Updated category to include all values used in the application.
+   */
+  category: 'REGLEMENTATION' | 'NOUVEAUTE' | 'CONSEIL' | 'ALERT' | 'ELECTRIQUE' | 'ECONOMIE' | 'MARCHÉ';
   date: string;
   summary: string;
   content: string;
