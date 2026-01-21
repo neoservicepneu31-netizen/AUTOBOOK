@@ -34,6 +34,7 @@ const App: React.FC = () => {
   }, []);
 
   const loadAllData = useCallback(async (targetUser: User) => {
+    // Évite les re-déclenchements si déjà en cours
     setIsSyncing(true);
     try {
       if (targetUser.role === 'admin') {
@@ -52,12 +53,14 @@ const App: React.FC = () => {
           setAllInvoices(db.invoices.getAll());
         }
       } else {
+        // Chargement local immédiat
         const localCars = db.cars.getAll().filter(c => c.ownerId === targetUser.id);
         const localInvoices = db.invoices.getAll().filter(inv => localCars.some(c => c.id === inv.carId));
         
         setAllCars(localCars);
         setAllInvoices(localInvoices);
 
+        // Synchronisation Cloud en arrière-plan
         if (cloud.isConnected()) {
           const remoteCars = await cloud.fetchUserCars(targetUser.id);
           let remoteInvoices: Invoice[] = [];
@@ -72,9 +75,14 @@ const App: React.FC = () => {
             db.cars.saveAll(remoteCars);
             db.invoices.saveAll(remoteInvoices);
           }
+          
+          // Lancer les checks de santé après sync
+          performHealthChecks(remoteCars.length > 0 ? remoteCars : localCars, 
+                             remoteInvoices.length > 0 ? remoteInvoices : localInvoices, 
+                             targetUser.email);
+        } else {
+          performHealthChecks(localCars, localInvoices, targetUser.email);
         }
-        // Check health after loading
-        performHealthChecks(allCars, allInvoices, targetUser.email);
       }
     } catch (e) {
       console.error("Sync error", e);
@@ -82,7 +90,8 @@ const App: React.FC = () => {
       setIsSyncing(false);
       setIsDatabaseReady(true);
     }
-  }, [allCars, allInvoices, performHealthChecks]);
+    // On retire les dépendances allCars/allInvoices pour casser la boucle infinie
+  }, [performHealthChecks]);
 
   useEffect(() => {
     const initApp = async () => {
@@ -117,7 +126,8 @@ const App: React.FC = () => {
       }
     };
     initApp();
-  }, [loadAllData]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // On ne dépend de rien pour l'init initial
 
   const handleLogin = async (loggedInUser: User) => {
     setUser(loggedInUser);
@@ -221,9 +231,10 @@ const App: React.FC = () => {
 
   return (
     <div className="max-w-md mx-auto bg-nsp-bg shadow-2xl min-h-[100dvh] flex flex-col overflow-x-hidden relative">
+      {/* Correction : pointer-events-none pour ne pas bloquer les clics utilisateur */}
       {isSyncing && (
-        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[200] bg-nsp-primary text-white px-4 py-2 rounded-full text-[9px] font-black uppercase flex items-center gap-2 shadow-2xl border border-white/10">
-           <RefreshCw size={12} className="animate-spin" /> Protection Cloud Active
+        <div className="fixed top-2 left-1/2 -translate-x-1/2 z-[3000] bg-nsp-primary text-white px-3 py-1.5 rounded-full text-[8px] font-black uppercase flex items-center gap-2 shadow-2xl border border-white/10 pointer-events-none animate-fade-in">
+           <RefreshCw size={10} className="animate-spin" /> Protection Cloud Active
         </div>
       )}
       {!isDatabaseReady ? (
