@@ -332,7 +332,7 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({
                        <button onClick={handleRescueByEmail} disabled={isEmergencyAction} className="bg-white text-black px-4 py-3 rounded-xl font-black text-[10px] uppercase">SCAN</button>
                     </div>
                     <button onClick={handleForcePushToCloud} disabled={isEmergencyAction} className="w-full bg-nsp-input border border-white/10 text-white py-4 rounded-xl font-black text-[10px] uppercase active:scale-95 transition-all">
-                       <CloudUpload size={16} className="mr-2 inline" /> Forcer Poussée Local -> Cloud
+                       <CloudUpload size={16} className="mr-2 inline" /> {"Forcer Poussée Local → Cloud"}
                     </button>
                     <button onClick={handleClearLocalCache} className="w-full bg-red-900/10 text-red-500 py-4 rounded-xl font-black text-[10px] uppercase border border-red-500/10 mt-4">
                        🚨 VIDER LE CACHE LOCAL (RESET COMPLET)
