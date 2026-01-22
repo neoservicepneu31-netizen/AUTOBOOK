@@ -34,33 +34,36 @@ const App: React.FC = () => {
   }, []);
 
   const loadAllData = useCallback(async (targetUser: User) => {
-    // Évite les re-déclenchements si déjà en cours
     setIsSyncing(true);
     try {
       if (targetUser.role === 'admin') {
+        // Chargement local en premier par sécurité
+        setAllUsers(db.users.getAll());
+        setAllCars(db.cars.getAll());
+        setAllInvoices(db.invoices.getAll());
+
         if (cloud.isConnected()) {
           const [remoteUsers, remoteCars, remoteInvoices] = await Promise.all([
             cloud.fetchAllUsers(),
             cloud.fetchAllCars(),
             cloud.fetchAllInvoices()
           ]);
-          setAllUsers(remoteUsers);
-          setAllCars(remoteCars);
-          setAllInvoices(remoteInvoices);
-        } else {
-          setAllUsers(db.users.getAll());
-          setAllCars(db.cars.getAll());
-          setAllInvoices(db.invoices.getAll());
+          
+          // Mise à jour uniquement si on a récupéré des données pour éviter d'effacer le local
+          if (remoteUsers.length > 0) {
+            setAllUsers(remoteUsers);
+            db.users.saveAll(remoteUsers);
+          }
+          if (remoteCars.length > 0) setAllCars(remoteCars);
+          if (remoteInvoices.length > 0) setAllInvoices(remoteInvoices);
         }
       } else {
-        // Chargement local immédiat
         const localCars = db.cars.getAll().filter(c => c.ownerId === targetUser.id);
         const localInvoices = db.invoices.getAll().filter(inv => localCars.some(c => c.id === inv.carId));
         
         setAllCars(localCars);
         setAllInvoices(localInvoices);
 
-        // Synchronisation Cloud en arrière-plan
         if (cloud.isConnected()) {
           const remoteCars = await cloud.fetchUserCars(targetUser.id);
           let remoteInvoices: Invoice[] = [];
@@ -69,14 +72,16 @@ const App: React.FC = () => {
             remoteInvoices = [...remoteInvoices, ...invs];
           }
 
-          if (remoteCars.length > 0 || remoteInvoices.length > 0) {
+          if (remoteCars.length > 0) {
             setAllCars(remoteCars);
-            setAllInvoices(remoteInvoices);
-            db.cars.saveAll(remoteCars);
-            db.invoices.saveAll(remoteInvoices);
+            db.cars.saveAll(db.cars.getAll().filter(c => c.ownerId !== targetUser.id).concat(remoteCars));
           }
           
-          // Lancer les checks de santé après sync
+          if (remoteInvoices.length > 0) {
+            setAllInvoices(remoteInvoices);
+            db.invoices.saveAll(db.invoices.getAll().filter(inv => !remoteInvoices.some(ri => ri.id === inv.id)).concat(remoteInvoices));
+          }
+          
           performHealthChecks(remoteCars.length > 0 ? remoteCars : localCars, 
                              remoteInvoices.length > 0 ? remoteInvoices : localInvoices, 
                              targetUser.email);
@@ -90,7 +95,6 @@ const App: React.FC = () => {
       setIsSyncing(false);
       setIsDatabaseReady(true);
     }
-    // On retire les dépendances allCars/allInvoices pour casser la boucle infinie
   }, [performHealthChecks]);
 
   useEffect(() => {
@@ -126,8 +130,7 @@ const App: React.FC = () => {
       }
     };
     initApp();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // On ne dépend de rien pour l'init initial
+  }, [loadAllData]);
 
   const handleLogin = async (loggedInUser: User) => {
     setUser(loggedInUser);
@@ -145,6 +148,7 @@ const App: React.FC = () => {
 
   const handleUpdateUser = async (updatedUser: User) => {
     setAllUsers(prev => prev.map(u => u.id === updatedUser.id ? updatedUser : u));
+    db.users.addOne(updatedUser);
     if (cloud.isConnected()) await cloud.syncUser(updatedUser);
   };
 
@@ -163,6 +167,7 @@ const App: React.FC = () => {
         await cloud.deleteUser(userId);
       }
       setAllUsers(prev => prev.filter(u => u.id !== userId));
+      db.users.saveAll(db.users.getAll().filter(u => u.id !== userId));
       setAllCars(prev => prev.filter(c => c.ownerId !== userId));
     } catch (e) {
       console.error("Erreur lors de la suppression globale", e);
@@ -231,7 +236,6 @@ const App: React.FC = () => {
 
   return (
     <div className="max-w-md mx-auto bg-nsp-bg shadow-2xl min-h-[100dvh] flex flex-col overflow-x-hidden relative">
-      {/* Correction : pointer-events-none pour ne pas bloquer les clics utilisateur */}
       {isSyncing && (
         <div className="fixed top-2 left-1/2 -translate-x-1/2 z-[3000] bg-nsp-primary text-white px-3 py-1.5 rounded-full text-[8px] font-black uppercase flex items-center gap-2 shadow-2xl border border-white/10 pointer-events-none animate-fade-in">
            <RefreshCw size={10} className="animate-spin" /> Protection Cloud Active

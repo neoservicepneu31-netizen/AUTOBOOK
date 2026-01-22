@@ -82,6 +82,7 @@ class CloudConnector {
 
   public resetActivationFlag(): void {
     localStorage.removeItem(API_DISABLED_KEY);
+    console.log("☁️ Cloud Liaison Réinitialisée.");
   }
 
   async syncUser(user: User): Promise<void> {
@@ -95,7 +96,10 @@ class CloudConnector {
         }, { merge: true });
     } catch (e: any) { 
         console.error("Sync User Error", e);
-        if(e.code === 'permission-denied') localStorage.setItem(API_DISABLED_KEY, 'true');
+        if(e.code === 'permission-denied') {
+          console.warn("⚠️ Firebase a bloqué l'accès (Permission Denied). Mode protection activé.");
+          localStorage.setItem(API_DISABLED_KEY, 'true');
+        }
     }
   }
 
@@ -103,7 +107,6 @@ class CloudConnector {
     if (!this.isConnected()) return;
     try {
       await deleteDoc(doc(db, "users", userId));
-      console.log(`✅ Utilisateur ${userId} supprimé du Cloud.`);
     } catch (e) {
       console.error("❌ Erreur suppression utilisateur Cloud", e);
     }
@@ -115,7 +118,10 @@ class CloudConnector {
         const q = query(collection(db, "users"), limit(1000)); 
         const querySnapshot = await getDocs(q);
         return querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as User));
-    } catch (e: any) { return []; }
+    } catch (e: any) { 
+      console.error("Fetch Users Error", e);
+      return []; 
+    }
   }
 
   async syncCar(car: Car): Promise<void> {
