@@ -2,11 +2,12 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { User, Car, Invoice } from '../types';
 import { cloud } from '../services/cloudService';
+import { db } from '../services/storageService';
 import { safeBase64ToBlobUrl, base64ToRealBlobUrl } from '../services/geminiService';
 import { 
   BarChart3, Users, QrCode, Printer, Globe, Radio, Database, ExternalLink, AlertCircle, RefreshCcw,
   Loader2, Copy, Check, ShieldAlert, ChevronRight, MousePointer2, HardDrive, Plus, ShieldCheck, ArrowRight,
-  Search, Info, Car as CarIcon, X, Smartphone, Globe2, Link, ExternalLink as OpenLink, Trash2, Key, History, Mail, Eye, LogOut, Clock, Wrench, UserPlus, FileText, Share2, Download, Image as ImageIcon, Maximize2
+  Search, Info, Car as CarIcon, X, Smartphone, Globe2, Link, ExternalLink as OpenLink, Trash2, Key, History, Mail, Eye, LogOut, Clock, Wrench, UserPlus, FileText, Share2, Download, Image as ImageIcon, Maximize2, CloudUpload, CloudDownload, LifeBuoy, SearchCode, DatabaseBackup, Terminal, ShieldX
 } from 'lucide-react';
 
 interface AdminDashboardScreenProps {
@@ -26,10 +27,13 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({
   const [activeTab, setActiveTab] = useState<'overview' | 'diffusion' | 'users' | 'setup'>('overview');
   const [searchTerm, setSearchTerm] = useState('');
   const [cloudStatus, setCloudStatus] = useState<'online' | 'syncing' | 'warning' | 'error'>('online');
+  const [isEmergencyAction, setIsEmergencyAction] = useState(false);
   const [copySuccess, setCopySuccess] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [viewingDoc, setViewingDoc] = useState<{title: string, url: string} | null>(null);
   const [customDomain, setCustomDomain] = useState('autobook-zxwf.vercel.app');
+  const [rescueEmail, setRescueEmail] = useState('');
+  const [diagResult, setDiagResult] = useState<{success?: boolean, message?: string, code?: string} | null>(null);
   
   const isCloudActive = cloud.isConnected();
   const isApiDisabled = cloud.isApiDisabled();
@@ -77,35 +81,93 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({
     window.location.reload();
   };
 
+  const handleRunDiagnostic = async () => {
+    setIsEmergencyAction(true);
+    setDiagResult(null);
+    const result = await cloud.testConnectionDiagnostic();
+    setDiagResult(result);
+    setIsEmergencyAction(false);
+    if (result.success) onRefresh();
+  };
+
+  const handleForcePushToCloud = async () => {
+    if (!confirm("🚨 ACTION CRITIQUE : Cette opération va forcer l'envoi de TOUS les utilisateurs locaux vers Firebase.\n\nUtilisez cela si vous voyez des utilisateurs ici mais qu'ils ont disparu du Cloud.\n\nContinuer ?")) return;
+    
+    setIsEmergencyAction(true);
+    try {
+      for (const u of allUsers) {
+        await cloud.syncUser(u);
+      }
+      for (const c of allCars) {
+        await cloud.syncCar(c);
+      }
+      alert("✅ Restauration terminée !");
+      onRefresh();
+    } catch (e) {
+      alert("❌ Échec.");
+    } finally {
+      setIsEmergencyAction(false);
+    }
+  }
+
+  const handleDeepScanCloud = async () => {
+    setIsEmergencyAction(true);
+    try {
+      const users = await cloud.fetchAllUsersRaw();
+      if (users.length > 0) {
+        db.users.saveAll(users);
+        alert(`✅ SCAN RÉUSSI : ${users.length} utilisateurs rapatriés.`);
+        onRefresh();
+      } else {
+        alert("⚠️ Le Cloud semble vide.");
+      }
+    } catch (e: any) {
+      alert(`❌ Erreur : ${e.code || 'Accès refusé'}. Vérifiez vos règles Firebase.`);
+    } finally {
+      setIsEmergencyAction(false);
+    }
+  };
+
+  const handleRescueByEmail = async () => {
+    if (!rescueEmail.includes('@')) return;
+    setIsEmergencyAction(true);
+    try {
+      const user = await cloud.fetchUserByEmail(rescueEmail);
+      if (user) {
+        db.users.addOne(user);
+        alert(`✅ Dossier trouvé pour ${user.name} !`);
+        onRefresh();
+        setRescueEmail('');
+      } else {
+        alert("❌ Aucun dossier trouvé pour cet email.");
+      }
+    } catch (e) {
+      alert("❌ Erreur de recherche.");
+    } finally {
+      setIsEmergencyAction(false);
+    }
+  };
+
+  const handleClearLocalCache = () => {
+    if (confirm("🚨 ATTENTION : Vous allez vider la mémoire locale de ce navigateur.\n\nCela forcera l'application à re-télécharger TOUT depuis le Cloud au prochain démarrage.\n\nContinuer ?")) {
+      localStorage.clear();
+      window.location.reload();
+    }
+  };
+
   const handleDeleteUserAction = async (userId: string) => {
-    if (confirm("🚨 ATTENTION : Suppression Définitive\n\nCette action est irréversible et supprimera le compte de la base de données Cloud.\n\nContinuer ?")) {
+    if (confirm("🚨 ATTENTION : Suppression Définitive\n\nCette action est irréversible.\n\nContinuer ?")) {
       await onDeleteUser(userId);
       setSelectedUser(null);
     }
   };
 
-  const handleResetPasswordAction = async (user: User) => {
-    const newPass = prompt("Saisissez le nouveau mot de passe temporaire pour ce client :", "NSP" + Math.floor(1000 + Math.random() * 9000));
-    if (newPass) {
-      await onUpdateUser({ ...user, password: newPass, passwordResetRequested: false });
-      alert("✅ Mot de passe mis à jour sur le Cloud.\nVeuillez le communiquer au client.");
-    }
-  };
-
   const stats = useMemo(() => {
     const realUsers = allUsers.filter(u => u.role !== 'admin');
-    const newUsers = realUsers.filter(u => {
-      if (!u.createdAt) return false;
-      const createdDate = new Date(u.createdAt);
-      const now = new Date();
-      return (now.getTime() - createdDate.getTime()) < (48 * 60 * 60 * 1000);
-    });
     return { 
       totalUsers: realUsers.length, 
-      newUsers: newUsers.length,
       totalCars: allCars.length,
-      totalInvoices: allInvoices.length,
-      totalRevenue: allInvoices.reduce((acc, inv) => acc + (inv.price || 0), 0)
+      totalInvoices: allInvoices.length
     };
   }, [allUsers, allCars, allInvoices]);
 
@@ -117,20 +179,7 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({
 
   const filteredUsers = allUsers
     .filter(u => u.role !== 'admin')
-    .filter(u => u.name.toLowerCase().includes(searchTerm.toLowerCase()) || u.email.toLowerCase().includes(searchTerm.toLowerCase()))
-    .sort((a, b) => {
-      const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-      const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-      return dateB - dateA;
-    });
-
-  const renderKPI = (label: string, value: string | number, icon: React.ReactNode, color: string) => (
-    <div className="bg-nsp-card border border-nsp-border p-5 rounded-2xl relative overflow-hidden shadow-xl">
-      <div className={`absolute top-0 right-0 p-4 opacity-10 ${color}`}>{icon}</div>
-      <span className="text-gray-500 text-[9px] uppercase font-black tracking-widest block mb-1">{label}</span>
-      <div className="text-2xl font-black text-white">{value}</div>
-    </div>
-  );
+    .filter(u => u.name.toLowerCase().includes(searchTerm.toLowerCase()) || u.email.toLowerCase().includes(searchTerm.toLowerCase()));
 
   return (
     <div className="min-h-screen bg-[#070707] flex flex-col font-sans">
@@ -138,9 +187,9 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({
         <div className="flex items-center gap-4">
           <div className="bg-red-600 p-2.5 rounded-xl shadow-[0_0_20px_rgba(230,57,70,0.3)]"><ShieldAlert className="text-white" size={24} /></div>
           <div>
-            <h1 className="text-xl font-black text-white tracking-tighter uppercase leading-none">Console<span className="text-red-600">Global</span></h1>
+            <h1 className="text-xl font-black text-white uppercase leading-none">Console<span className="text-red-600">Global</span></h1>
             <div className="flex items-center gap-2 mt-1">
-              <div className={`w-2 h-2 rounded-full ${cloudStatus === 'online' ? 'bg-green-500 animate-pulse' : cloudStatus === 'error' ? 'bg-red-500 animate-bounce' : cloudStatus === 'warning' ? 'bg-yellow-500' : 'bg-blue-500 animate-spin'}`}></div>
+              <div className={`w-2 h-2 rounded-full ${cloudStatus === 'online' ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`}></div>
               <p className="text-green-500 text-[8px] uppercase font-black tracking-widest">Surveillance Active</p>
             </div>
           </div>
@@ -150,25 +199,12 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({
         </button>
       </div>
 
-      {isApiDisabled && (
-        <div className="bg-red-600 p-4 flex items-center justify-between animate-fade-in sticky top-[84px] z-50">
-           <div className="flex items-center gap-3">
-              <AlertCircle className="text-white" size={24} />
-              <div>
-                <p className="text-white font-black text-[10px] uppercase">Liaison Cloud Interrompue</p>
-                <p className="text-white/80 text-[8px] uppercase font-bold">Erreur de permissions Firebase détectée.</p>
-              </div>
-           </div>
-           <button onClick={handleReconnectCloud} className="bg-white text-red-600 px-4 py-2 rounded-lg font-black text-[9px] uppercase shadow-lg">RÉTABLIR LA LIAISON</button>
-        </div>
-      )}
-
       <div className="flex border-b border-nsp-border px-4 bg-nsp-card/20 overflow-x-auto no-scrollbar backdrop-blur-sm sticky top-[84px] z-40">
         {[
           { id: 'overview', label: 'Surveillance', icon: <BarChart3 size={14}/> },
           { id: 'users', label: 'Tous les Clients', icon: <Users size={14}/> },
           { id: 'diffusion', label: 'Diffusion', icon: <QrCode size={14}/> },
-          { id: 'setup', label: 'Cloud Liaison', icon: <Database size={14}/> }
+          { id: 'setup', label: 'SOS Restauration', icon: <LifeBuoy size={14}/> }
         ].map(tab => (
           <button key={tab.id} onClick={() => setActiveTab(tab.id as any)} className={`py-4 px-6 text-[10px] font-black border-b-2 transition-all uppercase tracking-widest flex items-center gap-2 whitespace-nowrap ${activeTab === tab.id ? 'border-nsp-primary text-white' : 'border-transparent text-gray-600'}`}>
             {tab.icon} {tab.label}
@@ -179,147 +215,33 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({
       <div className="flex-1 p-6 max-w-4xl mx-auto w-full pb-24">
          {activeTab === 'overview' && (
            <div className="space-y-6 animate-fade-in">
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                {renderKPI("Total Clients", stats.totalUsers, <Users size={20}/>, "text-blue-500")}
-                {renderKPI("Nouveaux (48h)", stats.newUsers, <UserPlus size={20}/>, "text-yellow-500")}
-                {renderKPI("Véhicules", stats.totalCars, <CarIcon size={20}/>, "text-green-500")}
-                {renderKPI("Documents", stats.totalInvoices, <FileText size={20}/>, "text-red-500")}
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="bg-nsp-card border border-nsp-border rounded-3xl p-6">
-                  <h3 className="text-white font-black text-[10px] uppercase tracking-widest mb-4 flex items-center gap-2">
-                    <History size={14} className="text-nsp-primary" /> Dernières Inscriptions
-                  </h3>
-                  <div className="space-y-4">
-                    {allUsers.filter(u => u.role !== 'admin').length === 0 ? (
-                      <div className="text-center py-10"><Database className="mx-auto text-gray-800 mb-2" size={32}/><p className="text-gray-700 text-[10px] font-black uppercase">Aucun client</p></div>
-                    ) : (
-                      allUsers.filter(u => u.role !== 'admin').sort((a,b) => (b.createdAt || '').localeCompare(a.createdAt || '')).slice(0, 5).map(u => (
-                        <div key={u.id} className="flex items-center gap-3 p-3 bg-nsp-input/30 rounded-2xl border border-white/5">
-                           <div className="w-10 h-10 rounded-full bg-nsp-input flex items-center justify-center text-xs font-black text-nsp-primary border border-white/10">{u.name.charAt(0)}</div>
-                           <div className="flex-1">
-                              <p className="text-xs text-white font-bold uppercase">{u.name}</p>
-                              <p className="text-[8px] text-gray-500">{u.createdAt ? new Date(u.createdAt).toLocaleString() : 'Date inconnue'}</p>
-                           </div>
-                           <button onClick={() => setSelectedUser(u)} className="p-2 bg-nsp-primary/10 rounded-lg text-nsp-primary hover:bg-nsp-primary hover:text-white transition-colors"><Eye size={12}/></button>
-                        </div>
-                      ))
-                    )}
-                  </div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                <div className="bg-nsp-card border border-nsp-border p-5 rounded-2xl">
+                   <span className="text-gray-500 text-[9px] uppercase font-black tracking-widest block mb-1">Total Clients</span>
+                   <div className="text-2xl font-black text-white">{stats.totalUsers}</div>
                 </div>
-
-                <div className="bg-nsp-card border border-nsp-border rounded-3xl p-6">
-                  <h3 className="text-white font-black text-[10px] uppercase tracking-widest mb-4 flex items-center gap-2">
-                    <Radio size={14} className="text-green-500 animate-pulse" /> Activité Flux
-                  </h3>
-                  <div className="space-y-4">
-                    <div className="p-4 bg-nsp-input/30 rounded-2xl border border-white/5 flex items-center gap-4">
-                       <Smartphone size={20} className="text-gray-600" />
-                       <p className="text-[10px] text-gray-400 font-bold leading-relaxed">Le système Cloud surveille <span className="text-white font-black">{stats.totalInvoices} archives numériques</span> certifiées.</p>
-                    </div>
-                  </div>
+                <div className="bg-nsp-card border border-nsp-border p-5 rounded-2xl">
+                   <span className="text-gray-500 text-[9px] uppercase font-black tracking-widest block mb-1">Véhicules</span>
+                   <div className="text-2xl font-black text-white">{stats.totalCars}</div>
+                </div>
+                <div className="bg-nsp-card border border-nsp-border p-5 rounded-2xl">
+                   <span className="text-gray-500 text-[9px] uppercase font-black tracking-widest block mb-1">Documents</span>
+                   <div className="text-2xl font-black text-white">{stats.totalInvoices}</div>
                 </div>
               </div>
-           </div>
-         )}
-
-         {activeTab === 'users' && (
-           <div className="space-y-4 animate-fade-in">
-              <div className="bg-nsp-input p-5 rounded-[2rem] flex items-center gap-4 border border-nsp-border shadow-inner">
-                <Search size={22} className="text-gray-500" />
-                <input type="text" placeholder="Chercher un nom ou un email..." className="bg-transparent text-white outline-none text-sm font-bold w-full" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
-              </div>
-
-              <div className="grid grid-cols-1 gap-3">
-                {filteredUsers.map(u => {
-                  const { cars } = getUserDetails(u.id);
-                  const isNew = u.createdAt && (new Date().getTime() - new Date(u.createdAt).getTime()) < (48 * 60 * 60 * 1000);
-                  return (
-                    <div key={u.id} onClick={() => setSelectedUser(u)} className="bg-nsp-card p-4 rounded-3xl border border-nsp-border flex justify-between items-center hover:border-nsp-primary transition-all group cursor-pointer shadow-lg active:scale-95">
-                      <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 bg-nsp-input rounded-2xl flex items-center justify-center font-black text-nsp-primary border border-white/5 group-hover:scale-110 transition-transform">{u.name.charAt(0)}</div>
-                        <div>
-                          <p className="text-white font-bold text-sm uppercase flex items-center gap-2">
-                             {u.name}
-                             {isNew && <span className="text-[7px] bg-nsp-primary text-white px-1.5 py-0.5 rounded-full animate-pulse">NOUVEAU</span>}
-                          </p>
-                          <div className="flex items-center gap-2 mt-0.5">
-                            <span className="text-[9px] text-gray-500 font-bold uppercase">{cars.length} Véhicule(s)</span>
-                            <span className="w-1 h-1 rounded-full bg-gray-800"></span>
-                            <span className="text-[9px] text-gray-600 font-medium truncate max-w-[150px]">{u.email}</span>
-                          </div>
-                        </div>
-                      </div>
-                      <ChevronRight size={20} className="text-gray-700 group-hover:text-white transition-colors" />
-                    </div>
-                  );
-                })}
-              </div>
-           </div>
-         )}
-
-         {activeTab === 'diffusion' && (
-           <div className="space-y-8 animate-fade-in">
-              <div className="bg-nsp-card border border-nsp-border rounded-[2.5rem] p-8 text-center shadow-2xl relative overflow-hidden">
-                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-nsp-primary to-transparent opacity-50"></div>
-                
-                <h3 className="text-white font-black text-lg uppercase tracking-widest mb-2 flex items-center justify-center gap-2">
-                   <QrCode className="text-nsp-primary" size={24} /> Point d'Accès Client
+              <div className="bg-nsp-card border border-nsp-border rounded-3xl p-6">
+                <h3 className="text-white font-black text-[10px] uppercase tracking-widest mb-4 flex items-center gap-2">
+                  <History size={14} className="text-nsp-primary" /> Derniers Clients Locaux
                 </h3>
-                <p className="text-gray-500 text-[10px] font-black uppercase tracking-[0.2em] mb-10">Partagez votre Garage Numérique</p>
-
-                <div className="bg-white p-6 rounded-[2rem] inline-block shadow-[0_0_50px_rgba(230,57,70,0.15)] mb-10 relative group">
-                  <img 
-                    src={qrCodeUrl} 
-                    alt="QR Code de Diffusion" 
-                    className="w-56 h-56 transition-transform duration-500 group-hover:scale-105"
-                  />
-                  <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-white/80 rounded-[2rem]">
-                     <Printer className="text-nsp-primary" size={40} />
-                  </div>
-                </div>
-
-                <div className="space-y-4 max-w-sm mx-auto">
-                   <div className="bg-nsp-input p-5 rounded-2xl border border-white/5 flex items-center gap-4 group">
-                      <Globe2 size={24} className="text-nsp-primary" />
-                      <div className="flex-1 text-left overflow-hidden">
-                         <p className="text-[8px] text-gray-600 font-black uppercase tracking-widest">URL Vercel de l'App :</p>
-                         <p className="text-white font-bold text-xs truncate">{publicUrl}</p>
-                      </div>
-                      <button 
-                        onClick={handleCopyLink}
-                        className={`p-3 rounded-xl transition-all ${copySuccess ? 'bg-green-600 text-white' : 'bg-white/5 text-white hover:bg-nsp-primary'}`}
-                      >
-                         {copySuccess ? <Check size={18} /> : <Copy size={18} />}
-                      </button>
-                   </div>
-                   
-                   <div className="flex gap-3">
-                      <button onClick={() => window.open(publicUrl, '_blank')} className="flex-1 bg-white text-black py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 active:scale-95 transition-all shadow-xl">
-                        <OpenLink size={16} /> Tester le lien
-                      </button>
-                      <button onClick={() => window.print()} className="flex-1 bg-nsp-input border border-white/10 text-white py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 active:scale-95 transition-all">
-                        <Printer size={16} /> Imprimer QR
-                      </button>
-                   </div>
-                </div>
-              </div>
-
-              <div className="bg-nsp-card border border-nsp-border rounded-[2.5rem] p-8">
-                <h4 className="text-white font-black text-xs uppercase tracking-widest mb-6 flex items-center gap-2">
-                   <ShieldCheck size={16} className="text-green-500" /> Guide d'Installation
-                </h4>
-                <div className="space-y-4">
-                  {[
-                    { step: 1, text: "Imprimez le QR Code sur vos factures ou comptoirs." },
-                    { step: 2, text: "Le client scanne avec son mobile (aucune application à installer)." },
-                    { step: 3, text: "Le carnet de santé numérique NSP s'ouvre instantanément." },
-                    { step: 4, text: "Le client accède à son coffre-fort d'entretien 24/7." }
-                  ].map((item, idx) => (
-                    <div key={idx} className="flex gap-4 items-start bg-nsp-input/30 p-4 rounded-2xl border border-white/5">
-                       <span className="w-6 h-6 rounded-full bg-nsp-primary text-white flex items-center justify-center text-[10px] font-black shrink-0">{item.step}</span>
-                       <p className="text-gray-400 text-xs font-medium leading-relaxed">{item.text}</p>
+                <div className="space-y-2">
+                  {allUsers.filter(u => u.role !== 'admin').slice(0, 5).map(u => (
+                    <div key={u.id} className="flex items-center gap-3 p-3 bg-nsp-input/30 rounded-xl border border-white/5">
+                       <div className="w-8 h-8 rounded-lg bg-nsp-input flex items-center justify-center text-xs font-black text-nsp-primary">{u.name.charAt(0)}</div>
+                       <div className="flex-1 overflow-hidden">
+                          <p className="text-[10px] text-white font-bold uppercase truncate">{u.name}</p>
+                          <p className="text-[8px] text-gray-500 truncate">{u.email}</p>
+                       </div>
+                       <button onClick={() => setSelectedUser(u)} className="p-2 text-nsp-primary"><Eye size={12}/></button>
                     </div>
                   ))}
                 </div>
@@ -327,239 +249,125 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({
            </div>
          )}
 
+         {activeTab === 'users' && (
+           <div className="space-y-4 animate-fade-in">
+              <div className="bg-nsp-input p-5 rounded-[2rem] flex items-center gap-4 border border-nsp-border">
+                <Search size={22} className="text-gray-500" />
+                <input type="text" placeholder="Chercher un nom ou un email..." className="bg-transparent text-white outline-none text-sm font-bold w-full" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+              </div>
+              <div className="grid grid-cols-1 gap-2">
+                {filteredUsers.map(u => (
+                  <div key={u.id} onClick={() => setSelectedUser(u)} className="bg-nsp-card p-4 rounded-2xl border border-nsp-border flex justify-between items-center cursor-pointer group hover:border-nsp-primary transition-all">
+                    <div className="flex items-center gap-4">
+                      <div className="w-10 h-10 bg-nsp-input rounded-xl flex items-center justify-center font-black text-nsp-primary">{u.name.charAt(0)}</div>
+                      <div>
+                        <p className="text-white font-bold text-xs uppercase">{u.name}</p>
+                        <p className="text-[9px] text-gray-500">{u.email}</p>
+                      </div>
+                    </div>
+                    <ChevronRight size={16} className="text-gray-700" />
+                  </div>
+                ))}
+              </div>
+           </div>
+         )}
+
          {activeTab === 'setup' && (
             <div className="space-y-6 animate-fade-in">
-              <div className="bg-nsp-card border border-nsp-border rounded-[2.5rem] p-8 shadow-2xl">
-                 <h3 className="text-white font-black text-xs uppercase tracking-widest mb-6 flex items-center gap-2">
-                    <Database size={18} className="text-nsp-primary" /> Configuration des Domaines
-                 </h3>
-                 <div className="space-y-6">
-                    <div>
-                      <label className="text-[9px] text-gray-500 font-black uppercase mb-2 block ml-1">Domaine de Diffusion Vercel</label>
-                      <div className="relative">
-                        <input 
-                          type="text" 
-                          value={customDomain} 
-                          onChange={(e) => setCustomDomain(e.target.value)}
-                          className="w-full bg-nsp-input border border-transparent focus:border-nsp-primary rounded-2xl px-5 py-4 text-white font-bold text-sm outline-none transition-all"
-                        />
-                        <div className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center gap-2">
-                           <Globe size={14} className="text-gray-600" />
-                        </div>
-                      </div>
-                      <p className="text-[8px] text-gray-600 font-bold uppercase mt-2 ml-1">Modifie dynamiquement le QR code généré ci-dessus.</p>
-                    </div>
+              {/* TERMINAL DE DIAGNOSTIC */}
+              <div className="bg-black border border-white/10 rounded-[2rem] p-6 shadow-2xl relative overflow-hidden">
+                 <div className="flex items-center justify-between mb-6">
+                    <h3 className="text-white font-black text-[10px] uppercase tracking-widest flex items-center gap-2">
+                       <Terminal size={16} className="text-green-500" /> Terminal de Diagnostic Cloud
+                    </h3>
+                    <button 
+                      onClick={handleRunDiagnostic} 
+                      disabled={isEmergencyAction}
+                      className="bg-green-600 text-white px-4 py-2 rounded-lg font-black text-[9px] uppercase shadow-lg active:scale-95 disabled:opacity-50"
+                    >
+                      {isEmergencyAction ? <Loader2 size={12} className="animate-spin" /> : "Lancer le Test"}
+                    </button>
+                 </div>
 
-                    <div className="pt-6 border-t border-white/5 flex flex-col gap-4">
-                       <div className="p-4 bg-yellow-500/10 border border-yellow-500/20 rounded-2xl flex items-start gap-4">
-                          <AlertCircle size={20} className="text-yellow-500 shrink-0" />
-                          <p className="text-[10px] text-yellow-500 font-bold leading-relaxed uppercase">La base de données Cloud est actuellement synchronisée avec le projet : <span className="text-white">autobook-nsp</span>.</p>
-                       </div>
-                       <button onClick={handleReconnectCloud} className="w-full bg-nsp-primary text-white py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 shadow-xl active:scale-95 transition-all">
-                         <RefreshCcw size={16} /> Forcer la Synchronisation Globale
-                       </button>
+                 {diagResult ? (
+                   <div className={`p-4 rounded-xl border flex gap-4 ${diagResult.success ? 'bg-green-950/20 border-green-500/30' : 'bg-red-950/20 border-red-500/30'}`}>
+                      {diagResult.success ? <ShieldCheck className="text-green-500" size={24} /> : <ShieldX className="text-red-500" size={24} />}
+                      <div className="flex-1">
+                        <p className={`font-black text-[10px] uppercase ${diagResult.success ? 'text-green-500' : 'text-red-500'}`}>
+                           {diagResult.success ? "RÉUSSI" : "ÉCHEC CRITIQUE"}
+                        </p>
+                        <p className="text-white text-[11px] font-bold mt-1 leading-relaxed">{diagResult.message}</p>
+                        {diagResult.code && (
+                          <div className="mt-2 bg-black/50 p-2 rounded font-mono text-[9px] text-gray-400">Code: {diagResult.code}</div>
+                        )}
+                        {!diagResult.success && diagResult.code === 'permission-denied' && (
+                          <p className="text-yellow-500 text-[9px] font-black uppercase mt-2">Vérifiez vos règles Firebase !</p>
+                        )}
+                      </div>
+                   </div>
+                 ) : (
+                   <div className="p-8 text-center text-gray-700">
+                      <Database className="mx-auto mb-2 opacity-20" size={32} />
+                      <p className="text-[9px] font-black uppercase tracking-widest">En attente de diagnostic...</p>
+                   </div>
+                 )}
+              </div>
+
+              <div className="bg-red-950/10 border border-red-500/20 rounded-[2rem] p-6 space-y-4">
+                 <h3 className="text-red-500 font-black text-[10px] uppercase tracking-widest flex items-center gap-2">
+                    <LifeBuoy size={16} /> Outils de Restauration
+                 </h3>
+                 <div className="grid grid-cols-1 gap-3">
+                    <button onClick={handleDeepScanCloud} disabled={isEmergencyAction} className="w-full bg-red-600 text-white py-4 rounded-xl font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-3 active:scale-95 transition-all">
+                       <SearchCode size={16} /> Scanner TOUT le Cloud (Restauration Massive)
+                    </button>
+                    <div className="flex gap-2">
+                       <input 
+                         type="email" 
+                         placeholder="Chercher email précis..." 
+                         value={rescueEmail} 
+                         onChange={(e) => setRescueEmail(e.target.value)} 
+                         className="flex-1 bg-nsp-input border border-white/10 rounded-xl px-4 text-white text-xs outline-none"
+                       />
+                       <button onClick={handleRescueByEmail} disabled={isEmergencyAction} className="bg-white text-black px-4 py-3 rounded-xl font-black text-[10px] uppercase">SCAN</button>
                     </div>
+                    <button onClick={handleForcePushToCloud} disabled={isEmergencyAction} className="w-full bg-nsp-input border border-white/10 text-white py-4 rounded-xl font-black text-[10px] uppercase active:scale-95 transition-all">
+                       <CloudUpload size={16} className="mr-2 inline" /> Forcer Poussée Local -> Cloud
+                    </button>
+                    <button onClick={handleClearLocalCache} className="w-full bg-red-900/10 text-red-500 py-4 rounded-xl font-black text-[10px] uppercase border border-red-500/10 mt-4">
+                       🚨 VIDER LE CACHE LOCAL (RESET COMPLET)
+                    </button>
                  </div>
               </div>
             </div>
          )}
       </div>
 
-      {/* DETAILED DOSSIER CLIENT MODAL */}
       {selectedUser && (
-        <div className="fixed inset-0 z-[100] bg-black/95 backdrop-blur-2xl flex flex-col animate-fade-in overflow-y-auto">
+        <div className="fixed inset-0 z-[100] bg-black/98 flex flex-col animate-fade-in overflow-y-auto">
           <header className="flex justify-between items-center p-6 pt-safe-top sticky top-0 bg-black/50 border-b border-white/5 z-20">
-            <button onClick={() => setSelectedUser(null)} className="p-3 bg-nsp-input rounded-2xl text-white"><X size={24}/></button>
-            <div className="text-center">
-              <h3 className="text-white font-black text-xs uppercase tracking-widest">DOSSIER COMPLET DU CLIENT</h3>
-              <p className="text-[9px] text-nsp-primary font-black uppercase mt-1">Personnel NSP Autorisé</p>
-            </div>
-            <div className="w-12"></div>
+            <button onClick={() => setSelectedUser(null)} className="p-3 bg-nsp-input rounded-xl text-white"><X size={20}/></button>
+            <h3 className="text-white font-black text-[10px] uppercase tracking-widest">Dossier Client</h3>
+            <div className="w-10"></div>
           </header>
-
-          <div className="max-w-2xl mx-auto w-full p-6 space-y-10 pb-32">
-            <div className="bg-nsp-card border border-nsp-border rounded-[2.5rem] p-8 shadow-2xl relative overflow-hidden">
-               <div className="flex items-center gap-6 mb-8">
-                  <div className="w-20 h-20 bg-nsp-input rounded-[1.5rem] flex items-center justify-center text-4xl font-black text-nsp-primary border border-white/10">{selectedUser.name.charAt(0)}</div>
-                  <div className="flex-1">
-                    <h2 className="text-2xl font-black text-white uppercase">{selectedUser.name}</h2>
-                    <p className="text-gray-500 text-sm flex items-center gap-2"><Mail size={14}/> {selectedUser.email}</p>
-                    <div className="mt-3 flex gap-2">
-                       <span className={`text-[9px] font-black uppercase px-2 py-1 rounded-md ${selectedUser.isPremium ? 'bg-yellow-500 text-black' : 'bg-gray-800 text-gray-400'}`}>
-                         {selectedUser.isPremium ? '💎 Membre Premium' : 'Utilisateur Gratuit'}
-                       </span>
-                    </div>
+          <div className="max-w-2xl mx-auto w-full p-6 space-y-6">
+            <div className="bg-nsp-card border border-nsp-border rounded-[2rem] p-6 text-center">
+               <div className="w-16 h-16 bg-nsp-input rounded-full mx-auto flex items-center justify-center text-2xl font-black text-nsp-primary mb-4">{selectedUser.name.charAt(0)}</div>
+               <h2 className="text-xl font-black text-white uppercase">{selectedUser.name}</h2>
+               <p className="text-gray-500 text-xs mb-6">{selectedUser.email}</p>
+               <div className="grid grid-cols-2 gap-3 mb-6">
+                  <div className="bg-black/40 p-3 rounded-xl border border-white/5">
+                     <p className="text-[8px] text-gray-500 uppercase font-black">Véhicules</p>
+                     <p className="text-white font-bold">{getUserDetails(selectedUser.id).cars.length}</p>
+                  </div>
+                  <div className="bg-black/40 p-3 rounded-xl border border-white/5">
+                     <p className="text-[8px] text-gray-500 uppercase font-black">Docs</p>
+                     <p className="text-white font-bold">{getUserDetails(selectedUser.id).invoices.length}</p>
                   </div>
                </div>
-               
-               <div className="grid grid-cols-2 gap-4">
-                  <div className="bg-black/40 p-4 rounded-2xl border border-white/5">
-                     <p className="text-[8px] text-gray-500 uppercase font-black mb-1">Véhicules Inscrits</p>
-                     <p className="text-white font-bold text-xl">{getUserDetails(selectedUser.id).cars.length}</p>
-                  </div>
-                  <div className="bg-black/40 p-4 rounded-2xl border border-white/5">
-                     <p className="text-[8px] text-gray-500 uppercase font-black mb-1">Documents Archivés</p>
-                     <p className="text-white font-bold text-xl">{getUserDetails(selectedUser.id).invoices.length}</p>
-                  </div>
-               </div>
-
-               <div className="mt-6 pt-6 border-t border-white/5 flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                     <Clock size={12} className="text-gray-600" />
-                     <span className="text-[9px] text-gray-500 font-black uppercase tracking-widest">Compte créé le</span>
-                  </div>
-                  <span className="text-[10px] text-white font-bold">{selectedUser.createdAt ? new Date(selectedUser.createdAt).toLocaleDateString() : 'Inconnue'}</span>
-               </div>
-            </div>
-
-            <div className="space-y-4">
-               <h4 className="text-[10px] text-gray-500 font-black uppercase tracking-widest flex items-center gap-2 ml-2">
-                 <CarIcon size={14} className="text-nsp-primary" /> Parc Automobile du Client
-               </h4>
-               <div className="space-y-8">
-                  {getUserDetails(selectedUser.id).cars.length === 0 ? (
-                    <div className="p-10 border-2 border-dashed border-nsp-border rounded-3xl text-center text-gray-700 font-black text-[10px] uppercase">Aucun véhicule enregistré</div>
-                  ) : (
-                    getUserDetails(selectedUser.id).cars.map(car => {
-                      const carInvoices = allInvoices.filter(i => i.carId === car.id);
-                      return (
-                        <div key={car.id} className="bg-nsp-card border border-nsp-border rounded-[2rem] overflow-hidden shadow-xl">
-                           <div className="p-5 bg-nsp-input/50 border-b border-white/5 flex justify-between items-center">
-                              <div className="flex items-center gap-4">
-                                 <div className="w-10 h-10 rounded-xl bg-nsp-input flex items-center justify-center text-nsp-primary font-black border border-white/5">{car.name.charAt(0)}</div>
-                                 <div>
-                                   <h5 className="text-white font-black text-sm uppercase">{car.name}</h5>
-                                   <p className="text-[9px] text-nsp-primary font-black uppercase tracking-widest">{car.plate}</p>
-                                 </div>
-                              </div>
-                              <div className="text-right">
-                                <p className="text-white font-black text-xs">{car.initialKm.toLocaleString()} KM</p>
-                                <p className="text-[8px] text-gray-600 uppercase font-bold">{carInvoices.length} Interventions</p>
-                              </div>
-                           </div>
-
-                           {/* DOCUMENTS & PHOTOS CERTIFIÉS */}
-                           <div className="p-6 space-y-6">
-                              <div className="space-y-3">
-                                <h6 className="text-[8px] text-gray-500 font-black uppercase tracking-widest flex items-center gap-2">
-                                  <ShieldCheck size={12} className="text-green-500" /> Documents & Photos Certifiés
-                                </h6>
-                                <div className="grid grid-cols-4 gap-2">
-                                   {/* CARTE GRISE */}
-                                   <button 
-                                      onClick={() => car.grayCardUrl && setViewingDoc({ title: 'Carte Grise', url: car.grayCardUrl })}
-                                      className={`aspect-square rounded-xl border flex flex-col items-center justify-center gap-1 transition-all overflow-hidden relative group ${car.grayCardUrl ? 'border-nsp-primary/30 bg-nsp-input/50' : 'border-dashed border-white/5 opacity-30 grayscale'}`}
-                                   >
-                                      {car.grayCardUrl ? (
-                                        <>
-                                          <img src={safeBase64ToBlobUrl(car.grayCardUrl)} className="absolute inset-0 w-full h-full object-cover opacity-50" />
-                                          <FileText size={16} className="text-white relative z-10" />
-                                          <span className="text-[7px] text-white font-black uppercase relative z-10">C. Grise</span>
-                                        </>
-                                      ) : (
-                                        <FileText size={16} />
-                                      )}
-                                   </button>
-
-                                   {/* PHOTOS 4 ANGLES */}
-                                   {(['front', 'back', 'left', 'right', 'engine'] as const).map(angle => (
-                                     <button 
-                                        key={angle}
-                                        onClick={() => car.photos[angle] && setViewingDoc({ title: angle.toUpperCase(), url: car.photos[angle]! })}
-                                        className={`aspect-square rounded-xl border flex flex-col items-center justify-center gap-1 transition-all overflow-hidden relative ${car.photos[angle] ? 'border-nsp-primary/30 bg-nsp-input/50' : 'border-dashed border-white/5 opacity-30 grayscale'}`}
-                                     >
-                                        {car.photos[angle] ? (
-                                          <>
-                                            <img src={safeBase64ToBlobUrl(car.photos[angle]!)} className="absolute inset-0 w-full h-full object-cover opacity-50" />
-                                            <ImageIcon size={16} className="text-white relative z-10" />
-                                            <span className="text-[7px] text-white font-black uppercase relative z-10">{angle}</span>
-                                          </>
-                                        ) : (
-                                          <ImageIcon size={16} />
-                                        )}
-                                     </button>
-                                   ))}
-
-                                   {/* DOMMAGES */}
-                                   {car.photos.damages.map((dmg, idx) => (
-                                      <button 
-                                        key={idx}
-                                        onClick={() => setViewingDoc({ title: `Dommage #${idx+1}`, url: dmg })}
-                                        className="aspect-square rounded-xl border border-red-500/30 bg-red-950/20 flex flex-col items-center justify-center gap-1 transition-all overflow-hidden relative"
-                                      >
-                                        <img src={safeBase64ToBlobUrl(dmg)} className="absolute inset-0 w-full h-full object-cover opacity-50" />
-                                        <AlertCircle size={14} className="text-red-500 relative z-10" />
-                                        <span className="text-[7px] text-red-500 font-black uppercase relative z-10">Dégât</span>
-                                      </button>
-                                   ))}
-                                </div>
-                              </div>
-
-                              <div className="grid grid-cols-2 gap-2">
-                                <div className="bg-black/20 p-3 rounded-xl border border-white/5">
-                                   <p className="text-[8px] text-gray-600 font-black uppercase mb-1">Pneus</p>
-                                   <p className="text-white font-bold text-[10px] truncate">{car.specs?.tireDimensions || 'Non scanné'}</p>
-                                </div>
-                                <div className="bg-black/20 p-3 rounded-xl border border-white/5">
-                                   <p className="text-[8px] text-gray-600 font-black uppercase mb-1">Huile</p>
-                                   <p className="text-white font-bold text-[10px] truncate">{car.specs?.oilViscosity || 'Non scanné'}</p>
-                                </div>
-                              </div>
-                           </div>
-                        </div>
-                      );
-                    })
-                  )}
-               </div>
-            </div>
-
-            <div className="space-y-4">
-               <h4 className="text-[10px] text-gray-500 font-black uppercase tracking-widest flex items-center gap-2 ml-2">
-                 <ShieldAlert size={14} className="text-red-500" /> Actions de Sécurité Admin
-               </h4>
-               <div className="grid grid-cols-1 gap-3">
-                  <button onClick={() => handleResetPasswordAction(selectedUser)} className="w-full bg-white text-black p-5 rounded-[2rem] font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-3 shadow-xl active:scale-95 transition-all">
-                    <Key size={18} /> RÉINITIALISER MOT DE PASSE (PROVISOIRE)
-                  </button>
-                  <button onClick={() => handleDeleteUserAction(selectedUser.id)} className="w-full bg-red-600/10 text-red-500 p-5 rounded-[2rem] font-black text-[10px] uppercase tracking-widest border border-red-500/20 flex items-center justify-center gap-3 shadow-xl active:scale-95 transition-all">
-                    <Trash2 size={18} /> SUPPRIMER LE COMPTE CLOUD DÉFINITIVEMENT
-                  </button>
-               </div>
+               <button onClick={() => handleDeleteUserAction(selectedUser.id)} className="w-full bg-red-600/10 text-red-500 p-4 rounded-xl font-black text-[9px] uppercase border border-red-500/10">SUPPRIMER COMPTE</button>
             </div>
           </div>
-        </div>
-      )}
-
-      {/* DOCUMENT VIEWER MODAL */}
-      {viewingDoc && (
-        <div className="fixed inset-0 z-[200] bg-black/98 flex flex-col animate-fade-in overflow-hidden pt-safe-top">
-           <header className="p-6 flex justify-between items-center border-b border-white/10 bg-black/50 backdrop-blur-md">
-              <button onClick={() => setViewingDoc(null)} className="p-3 bg-nsp-input rounded-xl text-white"><X size={24}/></button>
-              <div className="text-center">
-                 <h3 className="text-white font-black text-xs uppercase tracking-widest">{viewingDoc.title}</h3>
-                 <p className="text-[9px] text-nsp-primary font-black uppercase mt-1">Inspection Expert</p>
-              </div>
-              <button 
-                onClick={() => window.open(base64ToRealBlobUrl(viewingDoc.url, isPDF(viewingDoc.url) ? 'application/pdf' : 'image/jpeg'), '_blank')}
-                className="p-3 bg-nsp-input rounded-xl text-white"
-              >
-                <Maximize2 size={24}/>
-              </button>
-           </header>
-           
-           <div className="flex-1 flex items-center justify-center p-4">
-              <div className="w-full h-full max-w-4xl bg-nsp-card rounded-[2.5rem] overflow-hidden border border-white/10 shadow-2xl relative">
-                {isPDF(viewingDoc.url) ? (
-                  <iframe 
-                    src={base64ToRealBlobUrl(viewingDoc.url, 'application/pdf') + '#toolbar=0'} 
-                    className="w-full h-full border-0"
-                    title="Document PDF"
-                  />
-                ) : (
-                  <img src={safeBase64ToBlobUrl(viewingDoc.url)} className="w-full h-full object-contain" alt="Document" />
-                )}
-              </div>
-           </div>
         </div>
       )}
     </div>

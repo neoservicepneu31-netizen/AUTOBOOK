@@ -36,11 +36,15 @@ const App: React.FC = () => {
   const loadAllData = useCallback(async (targetUser: User) => {
     setIsSyncing(true);
     try {
+      // 1. Chargement LOCAL immédiat (Source de vérité de secours)
+      const localUsers = db.users.getAll();
+      const localCars = db.cars.getAll();
+      const localInvoices = db.invoices.getAll();
+
       if (targetUser.role === 'admin') {
-        // Chargement local en premier par sécurité
-        setAllUsers(db.users.getAll());
-        setAllCars(db.cars.getAll());
-        setAllInvoices(db.invoices.getAll());
+        setAllUsers(localUsers);
+        setAllCars(localCars);
+        setAllInvoices(localInvoices);
 
         if (cloud.isConnected()) {
           const [remoteUsers, remoteCars, remoteInvoices] = await Promise.all([
@@ -49,20 +53,27 @@ const App: React.FC = () => {
             cloud.fetchAllInvoices()
           ]);
           
-          // Mise à jour uniquement si on a récupéré des données pour éviter d'effacer le local
+          // FUSION INTELLIGENTE : On garde le local ET on ajoute le distant
+          // En utilisant Map pour éviter les doublons par ID
           if (remoteUsers.length > 0) {
-            setAllUsers(remoteUsers);
-            db.users.saveAll(remoteUsers);
+            const mergedUsersMap = new Map();
+            localUsers.forEach(u => mergedUsersMap.set(u.id, u));
+            remoteUsers.forEach(u => mergedUsersMap.set(u.id, u));
+            const merged = Array.from(mergedUsersMap.values());
+            setAllUsers(merged);
+            db.users.saveAll(merged);
           }
+          
           if (remoteCars.length > 0) setAllCars(remoteCars);
           if (remoteInvoices.length > 0) setAllInvoices(remoteInvoices);
         }
       } else {
-        const localCars = db.cars.getAll().filter(c => c.ownerId === targetUser.id);
-        const localInvoices = db.invoices.getAll().filter(inv => localCars.some(c => c.id === inv.carId));
+        // Mode Utilisateur : On filtre pour lui
+        const myLocalCars = localCars.filter(c => c.ownerId === targetUser.id);
+        const myLocalInvoices = localInvoices.filter(inv => myLocalCars.some(c => c.id === inv.carId));
         
-        setAllCars(localCars);
-        setAllInvoices(localInvoices);
+        setAllCars(myLocalCars);
+        setAllInvoices(myLocalInvoices);
 
         if (cloud.isConnected()) {
           const remoteCars = await cloud.fetchUserCars(targetUser.id);
@@ -74,28 +85,22 @@ const App: React.FC = () => {
 
           if (remoteCars.length > 0) {
             setAllCars(remoteCars);
-            db.cars.saveAll(db.cars.getAll().filter(c => c.ownerId !== targetUser.id).concat(remoteCars));
+            db.cars.saveAll([...localCars.filter(c => c.ownerId !== targetUser.id), ...remoteCars]);
           }
           
           if (remoteInvoices.length > 0) {
             setAllInvoices(remoteInvoices);
-            db.invoices.saveAll(db.invoices.getAll().filter(inv => !remoteInvoices.some(ri => ri.id === inv.id)).concat(remoteInvoices));
+            db.invoices.saveAll([...localInvoices.filter(inv => !remoteInvoices.some(ri => ri.id === inv.id)), ...remoteInvoices]);
           }
-          
-          performHealthChecks(remoteCars.length > 0 ? remoteCars : localCars, 
-                             remoteInvoices.length > 0 ? remoteInvoices : localInvoices, 
-                             targetUser.email);
-        } else {
-          performHealthChecks(localCars, localInvoices, targetUser.email);
         }
       }
     } catch (e) {
-      console.error("Sync error", e);
+      console.error("Critical Sync Error", e);
     } finally {
       setIsSyncing(false);
       setIsDatabaseReady(true);
     }
-  }, [performHealthChecks]);
+  }, []);
 
   useEffect(() => {
     const initApp = async () => {
@@ -136,11 +141,7 @@ const App: React.FC = () => {
     setUser(loggedInUser);
     db.session.set(loggedInUser.id);
     db.users.addOne(loggedInUser);
-    
-    if (loggedInUser.role !== 'admin') {
-      db.session.setLastEmail(loggedInUser.email);
-    }
-
+    if (loggedInUser.role !== 'admin') db.session.setLastEmail(loggedInUser.email);
     if (cloud.isConnected()) await cloud.syncUser(loggedInUser);
     await loadAllData(loggedInUser);
     setScreen(loggedInUser.role === 'admin' ? Screen.ADMIN_DASHBOARD : Screen.GARAGE);
@@ -166,11 +167,11 @@ const App: React.FC = () => {
         }
         await cloud.deleteUser(userId);
       }
-      setAllUsers(prev => prev.filter(u => u.id !== userId));
-      db.users.saveAll(db.users.getAll().filter(u => u.id !== userId));
-      setAllCars(prev => prev.filter(c => c.ownerId !== userId));
+      const updatedLocalUsers = db.users.getAll().filter(u => u.id !== userId);
+      db.users.saveAll(updatedLocalUsers);
+      setAllUsers(updatedLocalUsers);
     } catch (e) {
-      console.error("Erreur lors de la suppression globale", e);
+      console.error("Suppression error", e);
     } finally {
       setIsSyncing(false);
     }
@@ -205,33 +206,61 @@ const App: React.FC = () => {
     setAllInvoices(updated);
     db.invoices.saveAll(updated);
     if (cloud.isConnected()) {
-      cloud.deleteInvoice(invoiceId).catch(err => {
-        console.error("Background Cloud delete failed", err);
-      });
+      cloud.deleteInvoice(invoiceId).catch(err => console.error(err));
     }
   };
 
+  // Fix for error in file App.tsx on line 234: Cannot find name 'handleTransferComplete'.
   const handleTransferComplete = async (buyerEmail: string) => {
     if (!activeCarId) return;
-    const updatedCars = allCars.filter(c => c.id !== activeCarId);
-    setAllCars(updatedCars);
-    db.cars.saveAll(updatedCars);
-    setActiveCarId(null);
-    setScreen(Screen.GARAGE);
+    setIsSyncing(true);
+    try {
+      const updatedCars = allCars.filter(c => c.id !== activeCarId);
+      setAllCars(updatedCars);
+      db.cars.saveAll(updatedCars);
+
+      const updatedInvoices = allInvoices.filter(inv => inv.carId !== activeCarId);
+      setAllInvoices(updatedInvoices);
+      db.invoices.saveAll(updatedInvoices);
+
+      if (cloud.isConnected()) {
+        await cloud.deleteCar(activeCarId);
+      }
+    } catch (e) {
+      console.error("Transfer error", e);
+    } finally {
+      setIsSyncing(false);
+      setActiveCarId(null);
+      setScreen(Screen.GARAGE);
+    }
   };
 
+  // Fix for error in file App.tsx on line 235: Cannot find name 'handleImportSuccess'.
   const handleImportSuccess = async (newCar: Car, newInvoices: Invoice[]) => {
     if (!user) return;
-    const carToImport = { ...newCar, ownerId: user.id };
-    const updatedCars = [...allCars, carToImport];
-    const updatedInvoices = [...allInvoices, ...newInvoices];
-    setAllCars(updatedCars);
-    setAllInvoices(updatedInvoices);
-    db.cars.saveAll(updatedCars);
-    db.invoices.saveAll(updatedInvoices);
-    if (cloud.isConnected()) await cloud.syncCar(carToImport);
-    performHealthChecks(updatedCars, updatedInvoices, user.email);
-    setScreen(Screen.GARAGE);
+    setIsSyncing(true);
+    try {
+      const carToImport = { ...newCar, ownerId: user.id };
+      const updatedCars = [...allCars, carToImport];
+      setAllCars(updatedCars);
+      db.cars.saveAll(updatedCars);
+
+      const updatedInvoices = [...newInvoices, ...allInvoices];
+      setAllInvoices(updatedInvoices);
+      db.invoices.saveAll(updatedInvoices);
+
+      if (cloud.isConnected()) {
+        await cloud.syncCar(carToImport);
+        for (const inv of newInvoices) {
+          await cloud.syncInvoice(inv);
+        }
+      }
+    } catch (e) {
+      console.error("Import error", e);
+    } finally {
+      setIsSyncing(false);
+      setScreen(Screen.GARAGE);
+    }
   };
 
   return (
@@ -248,7 +277,7 @@ const App: React.FC = () => {
         </div>
       ) : (
         <div className="flex-1 flex flex-col w-full h-full min-h-full">
-         {screen === Screen.AUTH && <AuthScreen onLogin={handleLogin} onForgotPasswordRequest={() => true} existingUsers={db.users.getAll()} />}
+         {screen === Screen.AUTH && <AuthScreen onLogin={handleLogin} onForgotPasswordRequest={() => true} existingUsers={allUsers} />}
          {screen === Screen.GARAGE && <GarageScreen user={user!} cars={allCars} invoices={allInvoices} onSelectCar={(id) => { setActiveCarId(id); setScreen(Screen.DASHBOARD); }} onViewInvoices={(id) => { setActiveCarId(id); setScreen(Screen.INVOICES_LIST); }} onAddCar={() => setScreen(Screen.ONBOARDING)} onLogout={() => { setUser(null); db.session.clear(); setScreen(Screen.AUTH); }} onBuyCar={() => setScreen(Screen.BUY_CAR)} />}
          {screen === Screen.ADMIN_DASHBOARD && <AdminDashboardScreen currentUser={user!} allUsers={allUsers} allCars={allCars} allInvoices={allInvoices} onLogout={() => { setUser(null); db.session.clear(); setScreen(Screen.AUTH); }} onUpdateUser={handleUpdateUser} onDeleteUser={handleDeleteUser} onRefresh={() => loadAllData(user!)} />}
          {screen === Screen.DASHBOARD && activeCarId && <DashboardScreen user={user!} car={allCars.find(c => c.id === activeCarId)!} invoices={allInvoices.filter(i => i.carId === activeCarId)} aiStatus={{status:'neutral', message:''}} onBackToGarage={() => setScreen(Screen.GARAGE)} onAddInvoice={() => setScreen(Screen.ADD_INVOICE)} onSellCar={() => setScreen(Screen.SELL_CAR)} onBuyCar={() => {}} onAssistance={() => setScreen(Screen.ASSISTANCE)} onDeleteCar={() => {}} onUpdateSpecs={() => {}} onUpdateCar={() => {}} onDeleteInvoice={handleDeleteInvoice} />}

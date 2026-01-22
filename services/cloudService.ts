@@ -12,7 +12,8 @@ import {
   deleteDoc,
   Timestamp,
   limit,
-  orderBy
+  orderBy,
+  getDoc
 } from 'firebase/firestore';
 import { User, Car, Invoice } from '../types';
 
@@ -82,7 +83,25 @@ class CloudConnector {
 
   public resetActivationFlag(): void {
     localStorage.removeItem(API_DISABLED_KEY);
-    console.log("☁️ Cloud Liaison Réinitialisée.");
+  }
+
+  /**
+   * TEST DE CONNEXION : Tente de lire un document pour voir l'erreur exacte
+   */
+  async testConnectionDiagnostic(): Promise<{success: boolean, message: string, code?: string}> {
+    if (!isRealFirebase) return { success: false, message: "Firebase n'est pas configuré (Clé API manquante)." };
+    try {
+      const q = query(collection(db, "users"), limit(1));
+      await getDocs(q);
+      return { success: true, message: "Connexion établie avec succès. Le Cloud est accessible." };
+    } catch (e: any) {
+      console.error("Diagnostic Error:", e);
+      return { 
+        success: false, 
+        message: e.message || "Erreur inconnue", 
+        code: e.code || "unknown" 
+      };
+    }
   }
 
   async syncUser(user: User): Promise<void> {
@@ -95,20 +114,33 @@ class CloudConnector {
           platform: 'web-mobile'
         }, { merge: true });
     } catch (e: any) { 
-        console.error("Sync User Error", e);
         if(e.code === 'permission-denied') {
-          console.warn("⚠️ Firebase a bloqué l'accès (Permission Denied). Mode protection activé.");
           localStorage.setItem(API_DISABLED_KEY, 'true');
         }
     }
   }
 
-  async deleteUser(userId: string): Promise<void> {
-    if (!this.isConnected()) return;
+  async fetchUserByEmail(email: string): Promise<User | null> {
+    if (!this.isConnected()) return null;
     try {
-      await deleteDoc(doc(db, "users", userId));
+      const q = query(collection(db, "users"), where("email", "==", email.toLowerCase()), limit(1));
+      const snap = await getDocs(q);
+      if (!snap.empty) {
+        return { ...snap.docs[0].data(), id: snap.docs[0].id } as User;
+      }
+      return null;
     } catch (e) {
-      console.error("❌ Erreur suppression utilisateur Cloud", e);
+      return null;
+    }
+  }
+
+  async fetchAllUsersRaw(): Promise<User[]> {
+    if (!this.isConnected()) return [];
+    try {
+        const querySnapshot = await getDocs(collection(db, "users"));
+        return querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as User));
+    } catch (e: any) { 
+      throw e;
     }
   }
 
@@ -119,7 +151,6 @@ class CloudConnector {
         const querySnapshot = await getDocs(q);
         return querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as User));
     } catch (e: any) { 
-      console.error("Fetch Users Error", e);
       return []; 
     }
   }
@@ -128,29 +159,45 @@ class CloudConnector {
     if (!this.isConnected()) return;
     try {
       const cleaned = cleanData(car);
-      await setDoc(doc(db, "cars", car.id), { 
-        ...cleaned, 
-        lastSync: Timestamp.now(),
-        searchPlate: car.plate.replace(/-/g, '').toUpperCase()
-      }, { merge: true });
-    } catch (e) { console.error("Sync Car Error", e); }
+      await setDoc(doc(db, "cars", car.id), { ...cleaned, lastSync: Timestamp.now() }, { merge: true });
+    } catch (e) { console.error(e); }
   }
 
   async deleteCar(carId: string): Promise<void> {
     if (!this.isConnected()) return;
     try {
       await deleteDoc(doc(db, "cars", carId));
-    } catch (e) {
-      console.error("❌ Erreur suppression voiture Cloud", e);
-    }
+    } catch (e) { console.error(e); }
   }
 
   async fetchAllCars(): Promise<Car[]> {
     if (!this.isConnected()) return [];
     try {
-      const q = query(collection(db, "cars"), limit(2000));
-      const snap = await getDocs(q);
+      const snap = await getDocs(collection(db, "cars"));
       return snap.docs.map(d => d.data() as Car);
+    } catch (e) { return []; }
+  }
+
+  async syncInvoice(invoice: Invoice): Promise<void> {
+    if (!this.isConnected()) return;
+    try {
+      const cleaned = cleanData(invoice);
+      await setDoc(doc(db, "invoices", invoice.id), { ...cleaned, lastSync: Timestamp.now() }, { merge: true });
+    } catch (e) { console.error(e); }
+  }
+
+  async deleteInvoice(invoiceId: string): Promise<void> {
+    if (!this.isConnected()) return;
+    try {
+      await deleteDoc(doc(db, "invoices", invoiceId));
+    } catch (e) { console.error(e); }
+  }
+
+  async fetchAllInvoices(): Promise<Invoice[]> {
+    if (!this.isConnected()) return [];
+    try {
+      const snap = await getDocs(collection(db, "invoices"));
+      return snap.docs.map(d => d.data() as Invoice);
     } catch (e) { return []; }
   }
 
@@ -163,59 +210,20 @@ class CloudConnector {
     } catch (e) { return []; }
   }
 
-  async syncInvoice(invoice: Invoice): Promise<void> {
-    if (!this.isConnected()) return;
-    try {
-      const cleaned = cleanData(invoice);
-      const encoded = new TextEncoder().encode(JSON.stringify(cleaned));
-      if (encoded.length > 1040000) {
-        const { imageUrl, ...metadataOnly } = cleaned;
-        await setDoc(doc(db, "invoices", invoice.id), { 
-          ...metadataOnly, 
-          imageTooLargeForCloud: true,
-          lastSync: Timestamp.now() 
-        }, { merge: true });
-        return;
-      }
-      await setDoc(doc(db, "invoices", invoice.id), { 
-        ...cleaned, 
-        lastSync: Timestamp.now() 
-      }, { merge: true });
-    } catch (e) { console.error("❌ Sync Invoice Error", e); }
-  }
-
-  async deleteInvoice(invoiceId: string): Promise<void> {
-    if (!this.isConnected()) return;
-    try {
-      const docRef = doc(db, "invoices", invoiceId);
-      await deleteDoc(docRef);
-    } catch (e) {
-      console.error("❌ Delete Invoice Cloud Error", e);
-    }
-  }
-
-  async fetchAllInvoices(): Promise<Invoice[]> {
-    if (!this.isConnected()) return [];
-    try {
-      const q = query(collection(db, "invoices"), orderBy("date", "desc"), limit(5000));
-      const snap = await getDocs(q);
-      return snap.docs.map(d => d.data() as Invoice);
-    } catch (e) { 
-      const snap = await getDocs(collection(db, "invoices"));
-      return snap.docs.map(d => d.data() as Invoice);
-    }
-  }
-
   async fetchUserInvoices(carId: string): Promise<Invoice[]> {
     if (!this.isConnected()) return [];
     try {
-      const q = query(collection(db, "invoices"), where("carId", "==", carId), orderBy("date", "desc"));
+      const q = query(collection(db, "invoices"), where("carId", "==", carId));
       const snap = await getDocs(q);
       return snap.docs.map(d => d.data() as Invoice);
-    } catch (e) { 
-      const snap = await getDocs(query(collection(db, "invoices"), where("carId", "==", carId)));
-      return snap.docs.map(d => d.data() as Invoice);
-    }
+    } catch (e) { return []; }
+  }
+
+  async deleteUser(userId: string): Promise<void> {
+    if (!this.isConnected()) return;
+    try {
+      await deleteDoc(doc(db, "users", userId));
+    } catch (e) { console.error(e); }
   }
 
   listenToAllUsers(callback: (users: User[]) => void) {
