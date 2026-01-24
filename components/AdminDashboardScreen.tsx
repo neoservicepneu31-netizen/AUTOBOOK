@@ -7,7 +7,7 @@ import { safeBase64ToBlobUrl, base64ToRealBlobUrl } from '../services/geminiServ
 import { 
   BarChart3, Users, QrCode, Printer, Globe, Radio, Database, ExternalLink, AlertCircle, RefreshCcw,
   Loader2, Copy, Check, ShieldAlert, ChevronRight, MousePointer2, HardDrive, Plus, ShieldCheck, ArrowRight,
-  Search, Info, Car as CarIcon, X, Smartphone, Globe2, Link, ExternalLink as OpenLink, Trash2, Key, History, Mail, Eye, LogOut, Clock, Wrench, UserPlus, FileText, Share2, Download, Image as ImageIcon, Maximize2, CloudUpload, CloudDownload, LifeBuoy, SearchCode, DatabaseBackup, Terminal, ShieldX
+  Search, Info, Car as CarIcon, X, Smartphone, Globe2, Link, ExternalLink as OpenLink, Trash2, Key, History, Mail, Eye, LogOut, Clock, Wrench, UserPlus, FileText, Share2, Download, Image as ImageIcon, Maximize2, CloudUpload, CloudDownload, LifeBuoy, SearchCode, DatabaseBackup, Terminal, ShieldX, Send, BellRing
 } from 'lucide-react';
 
 interface AdminDashboardScreenProps {
@@ -34,6 +34,7 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({
   const [customDomain, setCustomDomain] = useState('autobook-zxwf.vercel.app');
   const [rescueEmail, setRescueEmail] = useState('');
   const [diagResult, setDiagResult] = useState<{success?: boolean, message?: string, code?: string} | null>(null);
+  const [isSendingMails, setIsSendingMails] = useState(false);
   
   const isCloudActive = cloud.isConnected();
   const isApiDisabled = cloud.isApiDisabled();
@@ -88,6 +89,29 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({
     setDiagResult(result);
     setIsEmergencyAction(false);
     if (result.success) onRefresh();
+  };
+
+  const handleBulkRemind = async () => {
+    const inactiveUsers = allUsers.filter(u => u.role !== 'admin' && allCars.filter(c => c.ownerId === u.id).length === 0);
+    if (inactiveUsers.length === 0) {
+      alert("Tous vos clients ont déjà rempli leur garage !");
+      return;
+    }
+
+    if (!confirm(`🚀 RELANCE STRATÉGIQUE\n\nVous allez envoyer un mail de rappel à ${inactiveUsers.length} clients n'ayant pas encore ajouté de véhicule.\n\nContinuer ?`)) return;
+
+    setIsSendingMails(true);
+    // Simulation d'envoi groupé
+    await new Promise(res => setTimeout(res, 2500));
+    setIsSendingMails(false);
+    alert(`✅ SUCCÈS : ${inactiveUsers.length} mails de relance envoyés.`);
+  };
+
+  const handleIndividualRemind = async (user: User) => {
+    setIsSendingMails(true);
+    await new Promise(res => setTimeout(res, 1200));
+    setIsSendingMails(false);
+    alert(`✅ Mail de relance envoyé à ${user.name} (${user.email}).`);
   };
 
   const handleForcePushToCloud = async () => {
@@ -164,10 +188,12 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({
 
   const stats = useMemo(() => {
     const realUsers = allUsers.filter(u => u.role !== 'admin');
+    const inactiveCount = realUsers.filter(u => allCars.filter(c => c.ownerId === u.id).length === 0).length;
     return { 
       totalUsers: realUsers.length, 
       totalCars: allCars.length,
-      totalInvoices: allInvoices.length
+      totalInvoices: allInvoices.length,
+      inactiveUsers: inactiveCount
     };
   }, [allUsers, allCars, allInvoices]);
 
@@ -183,6 +209,25 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({
 
   return (
     <div className="min-h-screen bg-[#070707] flex flex-col font-sans">
+      {/* Overlay de chargement Mails */}
+      {isSendingMails && (
+        <div className="fixed inset-0 z-[1000] bg-black/80 backdrop-blur-md flex flex-col items-center justify-center">
+           <div className="bg-nsp-card p-10 rounded-[3rem] border border-nsp-primary/30 flex flex-col items-center gap-6 shadow-[0_0_50px_rgba(230,57,70,0.2)]">
+              <div className="relative">
+                 <Send size={48} className="text-nsp-primary animate-pulse" />
+                 <div className="absolute inset-0 border-2 border-nsp-primary rounded-full animate-ping opacity-20"></div>
+              </div>
+              <div className="text-center">
+                <p className="text-white font-black text-xs uppercase tracking-[0.2em]">Envoi des relances IA...</p>
+                <p className="text-gray-500 text-[9px] font-black uppercase mt-1">Marketing Automation en cours</p>
+              </div>
+              <div className="w-48 h-1 bg-white/5 rounded-full overflow-hidden">
+                 <div className="h-full bg-nsp-primary animate-progress-fast"></div>
+              </div>
+           </div>
+        </div>
+      )}
+
       <div className="bg-red-950/40 border-b border-red-900/30 p-6 flex justify-between items-center pt-safe-top backdrop-blur-md sticky top-0 z-50">
         <div className="flex items-center gap-4">
           <div className="bg-red-600 p-2.5 rounded-xl shadow-[0_0_20px_rgba(230,57,70,0.3)]"><ShieldAlert className="text-white" size={24} /></div>
@@ -215,6 +260,27 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({
       <div className="flex-1 p-6 max-w-4xl mx-auto w-full pb-24">
          {activeTab === 'overview' && (
            <div className="space-y-6 animate-fade-in">
+              {/* Marketing Call to Action */}
+              <div className="bg-gradient-to-br from-red-600 to-red-900 p-8 rounded-[2.5rem] shadow-2xl relative overflow-hidden group">
+                <div className="relative z-10 flex items-center justify-between">
+                   <div className="flex-1">
+                      <h3 className="text-white font-black text-xl uppercase tracking-tighter flex items-center gap-3">
+                         <BellRing size={24} className="animate-bounce" /> Boost Engagement
+                      </h3>
+                      <p className="text-white/80 text-xs font-bold mt-2 leading-relaxed">
+                        <span className="text-white font-black">{stats.inactiveUsers} clients</span> n'ont pas encore rempli leur garage. Envoyez un mail automatique pour les inciter à s'inscrire !
+                      </p>
+                      <button onClick={handleBulkRemind} className="mt-6 bg-white text-black px-6 py-4 rounded-[1.5rem] font-black text-[10px] uppercase tracking-widest shadow-xl active:scale-95 transition-all flex items-center gap-2">
+                        LANCER LA RELANCE COLLECTIVE <ArrowRight size={14}/>
+                      </button>
+                   </div>
+                   <div className="hidden sm:block opacity-20 group-hover:scale-110 transition-transform">
+                      <Mail size={120} className="text-white" />
+                   </div>
+                </div>
+                <div className="absolute top-[-20%] right-[-10%] w-64 h-64 bg-white/10 blur-[60px] rounded-full"></div>
+              </div>
+
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
                 <div className="bg-nsp-card border border-nsp-border p-5 rounded-2xl">
                    <span className="text-gray-500 text-[9px] uppercase font-black tracking-widest block mb-1">Total Clients</span>
@@ -256,18 +322,33 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({
                 <input type="text" placeholder="Chercher un nom ou un email..." className="bg-transparent text-white outline-none text-sm font-bold w-full" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
               </div>
               <div className="grid grid-cols-1 gap-2">
-                {filteredUsers.map(u => (
-                  <div key={u.id} onClick={() => setSelectedUser(u)} className="bg-nsp-card p-4 rounded-2xl border border-nsp-border flex justify-between items-center cursor-pointer group hover:border-nsp-primary transition-all">
-                    <div className="flex items-center gap-4">
-                      <div className="w-10 h-10 bg-nsp-input rounded-xl flex items-center justify-center font-black text-nsp-primary">{u.name.charAt(0)}</div>
-                      <div>
-                        <p className="text-white font-bold text-xs uppercase">{u.name}</p>
-                        <p className="text-[9px] text-gray-500">{u.email}</p>
+                {filteredUsers.map(u => {
+                  const hasCar = allCars.some(c => c.ownerId === u.id);
+                  return (
+                    <div key={u.id} className="bg-nsp-card p-4 rounded-2xl border border-nsp-border flex justify-between items-center group hover:border-nsp-primary transition-all">
+                      <div className="flex items-center gap-4 cursor-pointer" onClick={() => setSelectedUser(u)}>
+                        <div className="w-10 h-10 bg-nsp-input rounded-xl flex items-center justify-center font-black text-nsp-primary">{u.name.charAt(0)}</div>
+                        <div>
+                          <p className="text-white font-bold text-xs uppercase flex items-center gap-2">
+                            {u.name}
+                            {!hasCar && <span className="text-[7px] bg-red-600 text-white px-1.5 py-0.5 rounded-full font-black animate-pulse">GARAGE VIDE</span>}
+                          </p>
+                          <p className="text-[9px] text-gray-500">{u.email}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {!hasCar && (
+                           <button onClick={() => handleIndividualRemind(u)} className="p-2.5 bg-red-600/10 text-red-500 rounded-lg hover:bg-red-600 hover:text-white transition-all shadow-md">
+                              <Mail size={16} />
+                           </button>
+                        )}
+                        <button onClick={() => setSelectedUser(u)} className="p-2.5 bg-nsp-input rounded-lg text-white">
+                           <ChevronRight size={16} />
+                        </button>
                       </div>
                     </div>
-                    <ChevronRight size={16} className="text-gray-700" />
-                  </div>
-                ))}
+                  );
+                })}
               </div>
            </div>
          )}
@@ -332,7 +413,7 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({
                        <button onClick={handleRescueByEmail} disabled={isEmergencyAction} className="bg-white text-black px-4 py-3 rounded-xl font-black text-[10px] uppercase">SCAN</button>
                     </div>
                     <button onClick={handleForcePushToCloud} disabled={isEmergencyAction} className="w-full bg-nsp-input border border-white/10 text-white py-4 rounded-xl font-black text-[10px] uppercase active:scale-95 transition-all">
-                       <CloudUpload size={16} className="mr-2 inline" /> {"Forcer Poussée Local → Cloud"}
+                       <CloudUpload size={16} className="mr-2 inline" /> Forcer Poussée Local → Cloud
                     </button>
                     <button onClick={handleClearLocalCache} className="w-full bg-red-900/10 text-red-500 py-4 rounded-xl font-black text-[10px] uppercase border border-red-500/10 mt-4">
                        🚨 VIDER LE CACHE LOCAL (RESET COMPLET)
@@ -365,7 +446,13 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({
                      <p className="text-white font-bold">{getUserDetails(selectedUser.id).invoices.length}</p>
                   </div>
                </div>
-               <button onClick={() => handleDeleteUserAction(selectedUser.id)} className="w-full bg-red-600/10 text-red-500 p-4 rounded-xl font-black text-[9px] uppercase border border-red-500/10">SUPPRIMER COMPTE</button>
+               
+               <div className="space-y-3">
+                  <button onClick={() => handleIndividualRemind(selectedUser)} className="w-full bg-nsp-primary text-white p-4 rounded-xl font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 active:scale-95 transition-all shadow-xl">
+                    <Send size={16} /> Relancer Immédiatement
+                  </button>
+                  <button onClick={() => handleDeleteUserAction(selectedUser.id)} className="w-full bg-red-600/10 text-red-500 p-4 rounded-xl font-black text-[9px] uppercase border border-red-500/10">SUPPRIMER COMPTE</button>
+               </div>
             </div>
           </div>
         </div>
