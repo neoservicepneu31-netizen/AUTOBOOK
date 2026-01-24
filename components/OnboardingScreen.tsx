@@ -134,24 +134,41 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onSave, onCa
         <div className="space-y-6 animate-slide-up pb-20">
           <h3 className="text-sm font-black text-nsp-sub uppercase tracking-widest">3. Photos Certifiées</h3>
           
-          <label htmlFor="grayCardInput" className={`w-full h-16 rounded-xl border-2 border-dashed flex items-center justify-center gap-3 transition-all relative overflow-hidden cursor-pointer ${grayCard ? 'border-green-500 bg-nsp-input' : 'border-nsp-primary bg-nsp-input'}`}>
+          <div className="relative w-full h-16 rounded-xl border-2 border-dashed flex items-center justify-center gap-3 transition-all overflow-hidden bg-nsp-input">
              {grayCard ? <><img src={grayCard} className="absolute inset-0 w-full h-full object-cover opacity-30" /><span className="text-white font-black text-[10px] relative z-10">Carte Grise OK</span></> : <><ScanLine size={20} className="text-white"/><span className="text-white text-xs font-bold">Scanner Carte Grise</span></>}
-             <input id="grayCardInput" type="file" accept="image/*" onChange={e => handleFileChange(e, 'grayCard')} style={{ opacity: 0, position: 'absolute', zIndex: -1, width: '1px', height: '1px' }} />
-          </label>
+             <input 
+              type="file" 
+              accept="image/*" 
+              onChange={e => handleFileChange(e, 'grayCard')} 
+              className="absolute inset-0 w-full h-full opacity-0 z-10 cursor-pointer" 
+             />
+          </div>
 
           <div className="grid grid-cols-2 gap-3">
             {(['front', 'back', 'left', 'right'] as const).map(angle => (
-              <label key={angle} htmlFor={`photo-${angle}`} className={`aspect-square rounded-xl border border-dashed flex flex-col items-center justify-center relative overflow-hidden cursor-pointer ${photos[angle] ? 'border-green-500 bg-nsp-input' : 'border-nsp-border bg-nsp-input'}`}>
+              <div key={angle} className={`relative aspect-square rounded-xl border border-dashed flex flex-col items-center justify-center overflow-hidden bg-nsp-input ${photos[angle] ? 'border-green-500' : 'border-nsp-border'}`}>
                 {photos[angle] ? <img src={photos[angle]!} className="absolute inset-0 w-full h-full object-cover" /> : <><Camera size={20} className="text-nsp-sub"/><span className="text-[10px] text-nsp-sub uppercase font-black">{angle}</span></>}
-                <input id={`photo-${angle}`} type="file" accept="image/*" capture="environment" onChange={e => handleFileChange(e, angle)} style={{ opacity: 0, position: 'absolute', zIndex: -1, width: '1px', height: '1px' }} />
-              </label>
+                <input 
+                  type="file" 
+                  accept="image/*" 
+                  capture="environment" 
+                  onChange={e => handleFileChange(e, angle)} 
+                  className="absolute inset-0 w-full h-full opacity-0 z-10 cursor-pointer" 
+                />
+              </div>
             ))}
           </div>
 
-          <label htmlFor="engineInput" className={`w-full aspect-video rounded-xl border border-dashed flex flex-col items-center justify-center relative overflow-hidden cursor-pointer ${photos.engine ? 'border-green-500 bg-nsp-input' : 'border-nsp-border bg-nsp-input'}`}>
+          <div className={`relative w-full aspect-video rounded-xl border border-dashed flex flex-col items-center justify-center overflow-hidden bg-nsp-input ${photos.engine ? 'border-green-500' : 'border-nsp-border'}`}>
              {photos.engine ? <img src={photos.engine} className="absolute inset-0 w-full h-full object-cover" /> : <><Activity size={24} className="text-nsp-primary"/><span className="text-xs text-nsp-sub font-bold mt-2">Photo Compartiment Moteur</span></>}
-             <input id="engineInput" type="file" accept="image/*" capture="environment" onChange={e => handleFileChange(e, 'engine')} style={{ opacity: 0, position: 'absolute', zIndex: -1, width: '1px', height: '1px' }} />
-          </label>
+             <input 
+              type="file" 
+              accept="image/*" 
+              capture="environment" 
+              onChange={e => handleFileChange(e, 'engine')} 
+              className="absolute inset-0 w-full h-full opacity-0 z-10 cursor-pointer" 
+             />
+          </div>
 
           <button onClick={() => onSave({ id: Date.now().toString(), ownerId: '', name: carName, type: vehicleType, plate, firstRegistrationDate: firstRegDate, fuelType, initialKm: parseInt(initialKm), grayCardUrl: grayCard, photos, initialState: { tires: tiresState, brakes: brakesState, body: bodyState, interior: interiorState, engine: engineState } })} disabled={!isStep3Valid} className="w-full py-5 bg-nsp-primary text-white rounded-2xl font-black text-xs uppercase shadow-xl mt-6">ENTRER AU GARAGE</button>
         </div>
