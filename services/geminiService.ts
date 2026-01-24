@@ -11,15 +11,17 @@ export const processFile = (file: File): Promise<string> => {
     reader.onload = (e) => {
       const result = e.target?.result as string;
       
+      // Si c'est un PDF, on renvoie le base64 tel quel
       if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
         resolve(result);
         return;
       }
 
+      // Si c'est une image, on la redimensionne pour alléger le transfert Cloud/IA
       const img = new Image();
       img.onload = () => {
         const canvas = document.createElement('canvas');
-        const MAX_SIZE = 800; 
+        const MAX_SIZE = 1200; // Augmenté pour une meilleure lecture IA sur mobile
         let width = img.width;
         let height = img.height;
         
@@ -36,18 +38,25 @@ export const processFile = (file: File): Promise<string> => {
         const ctx = canvas.getContext('2d');
         if (ctx) {
           ctx.imageSmoothingEnabled = true;
-          ctx.imageSmoothingQuality = 'medium';
+          ctx.imageSmoothingQuality = 'high';
           ctx.drawImage(img, 0, 0, width, height);
-          resolve(canvas.toDataURL('image/jpeg', 0.2));
+          // On réduit la qualité JPEG pour optimiser la bande passante sans perdre de lisibilité
+          resolve(canvas.toDataURL('image/jpeg', 0.7));
         } else {
           resolve(result);
         }
       };
-      img.onerror = () => resolve(result);
+      img.onerror = () => {
+        console.error("Image loading failed");
+        resolve(result);
+      };
       img.src = result;
     };
     
-    reader.onerror = reject;
+    reader.onerror = (err) => {
+      console.error("FileReader error:", err);
+      reject(err);
+    };
     reader.readAsDataURL(file);
   });
 };
@@ -113,8 +122,8 @@ export const analyzeInvoiceImage = async (base64Data: string, mimeType: string =
               "oilViscosity": "ex: 5W30",
               "oilQuantity": "ex: 4.5L", 
               "batteryRef": "ex: L3 70Ah 720A",
-              "filterRefs": ["liste des refs filtres trouvées ex: Purflux LS932, Filtre habitacle Bosch"],
-              "mechanicalParts": ["liste des pièces ex: Disques freins Brembo, Courroie Gates"]
+              "filterRefs": ["liste des refs filtres trouvées ex: Purflux LS932"],
+              "mechanicalParts": ["liste des pièces ex: Disques freins Brembo"]
             } 
           }` }
         ]
@@ -134,17 +143,16 @@ export const analyzeInvoiceImage = async (base64Data: string, mimeType: string =
 export const getPersonalizedMaintenance = async (car: Car, currentKm: number): Promise<ManufacturerSpecs> => {
   try {
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-    const prompt = `Tu es un ingénieur expert pour la marque ${car.name.split(' ')[0]}. 
-    Identifie précisément ce véhicule : ${car.name} (${car.fuelType}). 
+    const prompt = `Tu es un ingénieur expert pour ${car.name}. 
     Donne les spécifications techniques officielles en JSON strict :
     {
       "tirePressureFront": "valeur en bar",
       "tirePressureRear": "valeur en bar",
-      "oilType": "viscosité exacte ex: 5W30 Norme RN17",
+      "oilType": "viscosité exacte",
       "maintenanceIntervalKm": intervalle en km (entier),
-      "timingBeltIntervalKm": intervalle courroie en km (si applicable, sinon 0),
+      "timingBeltIntervalKm": intervalle courroie en km (si applicable),
       "coolantType": "type de liquide",
-      "checkPoints": ["point 1", "point 2", "point 3"]
+      "checkPoints": ["point 1", "point 2"]
     }`;
 
     const response = await ai.models.generateContent({
@@ -159,7 +167,7 @@ export const getPersonalizedMaintenance = async (car: Car, currentKm: number): P
       tirePressureRear: "2.1 bar", 
       oilType: "5W30", 
       maintenanceIntervalKm: 20000, 
-      coolantType: "Universel Rose",
+      coolantType: "Universel",
       checkPoints: ["Niveaux", "Freins", "Pneus"] 
     };
   }

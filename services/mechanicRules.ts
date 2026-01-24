@@ -16,6 +16,7 @@ interface MaintenanceStatus {
   nextDeadline: string;
   alerts: string[];
   pendingTasks: {id: string, label: string, severity: 'low' | 'high', basis?: string} [];
+  upcomingDeadlines: {id: string, label: string, date: string, type: 'CT' | 'REVISION'} [];
 }
 
 export const calculateMaintenanceStatus = (car: Car, invoices: Invoice[]): MaintenanceStatus => {
@@ -23,6 +24,7 @@ export const calculateMaintenanceStatus = (car: Car, invoices: Invoice[]): Maint
   const today = new Date();
   const alerts: string[] = [];
   const pendingTasks: {id: string, label: string, severity: 'low' | 'high', basis?: string}[] = [];
+  const upcomingDeadlines: MaintenanceStatus['upcomingDeadlines'] = [];
 
   const lastDocDate = invoices.length > 0 
     ? new Date(Math.max(...invoices.map(i => new Date(i.date).getTime())))
@@ -38,7 +40,7 @@ export const calculateMaintenanceStatus = (car: Car, invoices: Invoice[]): Maint
   if (['BMW', 'AUDI', 'MERCEDES', 'PORSCHE'].includes(make)) maintenanceIntervalKm = 30000;
   if (car.fuelType === 'electrique') maintenanceIntervalKm = 30000;
 
-  // 1. ANALYSE RÉVISION BASÉE SUR LES FACTURES SCANNÉES
+  // 1. ANALYSE RÉVISION
   const lastRevision = invoices
     .filter(i => /révision|vidange|entretien|revision/i.test(i.title.toLowerCase()))
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
@@ -46,13 +48,13 @@ export const calculateMaintenanceStatus = (car: Car, invoices: Invoice[]): Maint
   if (lastRevision) {
     const revDate = new Date(lastRevision.date);
     const nextRevisionDate = new Date(revDate);
-    nextRevisionDate.setFullYear(nextRevisionDate.getFullYear() + 1); // 1 an d'intervalle par défaut
+    nextRevisionDate.setFullYear(nextRevisionDate.getFullYear() + 1); 
     
     const kmSinceRevision = currentKm - lastRevision.km;
-    const isOverdueByTime = today > nextRevisionDate;
-    const isOverdueByKm = kmSinceRevision >= maintenanceIntervalKm;
+    const timeToNextRev = nextRevisionDate.getTime() - today.getTime();
+    const daysToNextRev = Math.ceil(timeToNextRev / (1000 * 60 * 60 * 24));
 
-    if (isOverdueByTime || isOverdueByKm) {
+    if (daysToNextRev <= 0 || kmSinceRevision >= maintenanceIntervalKm) {
       alerts.push("REVISION_DUE");
       pendingTasks.push({
         id: 'rev_due', 
@@ -60,17 +62,17 @@ export const calculateMaintenanceStatus = (car: Car, invoices: Invoice[]): Maint
         severity: 'high',
         basis: `Dernière faite le ${revDate.toLocaleDateString()} (${kmSinceRevision.toLocaleString()} km parcourus)`
       });
-    }
-  } else {
-    // Si aucune facture de révision n'est scannée, on base sur la date d'achat ou 1ère immat
-    const firstReg = new Date(car.firstRegistrationDate);
-    const monthsSinceReg = (today.getFullYear() - firstReg.getFullYear()) * 12 + (today.getMonth() - firstReg.getMonth());
-    if (monthsSinceReg > 12 && invoices.length === 0) {
-      pendingTasks.push({id: 'rev_unknown', label: 'Historique Révision Inconnu', severity: 'high', basis: 'Aucune facture de vidange scannée'});
+    } else if (daysToNextRev <= 30) {
+      upcomingDeadlines.push({
+        id: 'rev_soon',
+        label: `Révision prévue dans ${daysToNextRev} jours`,
+        date: nextRevisionDate.toLocaleDateString(),
+        type: 'REVISION'
+      });
     }
   }
 
-  // 2. CONTRÔLE TECHNIQUE BASÉ SUR LES FACTURES
+  // 2. CONTRÔLE TECHNIQUE
   const nextCTDate = calculateNextCT(car.firstRegistrationDate, invoices);
   const diffTimeCT = nextCTDate.getTime() - today.getTime();
   const diffDaysCT = Math.ceil(diffTimeCT / (1000 * 60 * 60 * 24));
@@ -78,30 +80,37 @@ export const calculateMaintenanceStatus = (car: Car, invoices: Invoice[]): Maint
   if (diffDaysCT < 0) {
     alerts.push("CT_EXPIRED");
     pendingTasks.push({id: 'ct_crit', label: 'Contrôle Technique PÉRIMÉ', severity: 'high', basis: `Date limite : ${nextCTDate.toLocaleDateString()}`});
-  } else if (diffDaysCT < 45) {
-    alerts.push("CT_SOON");
-    pendingTasks.push({id: 'ct_warn', label: 'Réserver Contrôle Technique', severity: 'high', basis: `Échéance dans ${diffDaysCT} jours`});
+  } else if (diffDaysCT <= 30) {
+    upcomingDeadlines.push({
+      id: 'ct_soon',
+      label: `Contrôle technique dans ${diffDaysCT} jours`,
+      date: nextCTDate.toLocaleDateString(),
+      type: 'CT'
+    });
+    if (diffDaysCT < 45) {
+      pendingTasks.push({id: 'ct_warn', label: 'Réserver Contrôle Technique', severity: 'high', basis: `Échéance proche : ${nextCTDate.toLocaleDateString()}`});
+    }
   }
 
-  // 3. ENTRETIENS COURANTS (PNEUS / HUILE)
+  // 3. ENTRETIENS COURANTS
   if (daysSinceLastCheck >= BASE_RULES.CHECK_TIRES_DAYS) {
     pendingTasks.push({id: 'tires', label: 'Vérifier Pression Pneus', severity: 'low', basis: `${daysSinceLastCheck} jours sans contrôle`});
   }
   
   if (daysSinceLastCheck >= BASE_RULES.CHECK_OIL_DAYS) {
-    pendingTasks.push({id: 'oil_check', label: 'Vérifier Niveau Huile', severity: 'high', basis: 'Contrôle visuel trimestriel requis'});
+    pendingTasks.push({id: 'oil_check', label: 'Vérifier Niveau Huile', severity: 'high', basis: 'Contrôle visuel requis'});
   }
 
   // Détermination du statut global
   let status: MaintenanceStatus['status'] = 'success';
-  let message = `Toutes les échéances de votre ${car.name} sont à jour selon vos factures.`;
+  let message = `Toutes les échéances de votre ${car.name} sont à jour.`;
 
   if (pendingTasks.some(t => t.severity === 'high')) {
     status = 'critical';
-    message = `ALERTE : Votre historique de factures indique que des entretiens sont en retard sur votre ${car.name}.`;
-  } else if (pendingTasks.length > 0) {
+    message = `ALERTE : Votre historique indique des entretiens en retard ou imminents.`;
+  } else if (pendingTasks.length > 0 || upcomingDeadlines.length > 0) {
     status = 'warning';
-    message = `VIGILANCE : Quelques vérifications de routine sont nécessaires pour votre ${car.name}.`;
+    message = `VIGILANCE : Des vérifications ou échéances approchent pour votre ${car.name}.`;
   }
 
   return { 
@@ -109,7 +118,8 @@ export const calculateMaintenanceStatus = (car: Car, invoices: Invoice[]): Maint
     message, 
     nextDeadline: nextCTDate.toLocaleDateString(), 
     alerts,
-    pendingTasks
+    pendingTasks,
+    upcomingDeadlines
   };
 };
 
@@ -125,18 +135,16 @@ const calculateNextCT = (firstRegDateStr: string, invoices: Invoice[]): Date => 
     return next;
   }
 
-  // Si pas de CT scanné, on calcule selon l'âge du véhicule (4 ans après 1ere immat)
   const firstCT = new Date(firstReg);
   firstCT.setFullYear(firstCT.getFullYear() + 4);
   
-  // Si le véhicule a plus de 4 ans, le CT est requis tous les 2 ans
   const today = new Date();
   if (today > firstCT) {
-      // On simule une échéance glissante si on n'a pas la facture
       let estimatedNext = new Date(firstCT);
       while(estimatedNext < today) {
           estimatedNext.setFullYear(estimatedNext.getFullYear() + 2);
       }
+      // On recule d'un cycle si l'estimé est trop loin dans le futur sans preuve
       return estimatedNext;
   }
 
