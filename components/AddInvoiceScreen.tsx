@@ -1,7 +1,7 @@
 
-import React, { useState, useRef } from 'react';
+import React, { useState } from 'react';
 import { Invoice, TechnicalSpecs } from '../types';
-import { Loader2, X, Check, Camera, Zap, AlertTriangle, Fuel, Wrench, RefreshCw, FileText, Info, Upload, ImagePlus } from 'lucide-react';
+import { Loader2, X, Camera, AlertTriangle, Fuel, Wrench, FileText, Info, Upload } from 'lucide-react';
 import { analyzeInvoiceImage, processFile } from '../services/geminiService';
 
 interface AddInvoiceScreenProps {
@@ -16,11 +16,7 @@ export const AddInvoiceScreen: React.FC<AddInvoiceScreenProps> = ({ carId, onSav
   const [isSuccess, setIsSuccess] = useState(false);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
   const [persistentImage, setPersistentImage] = useState<string | null>(null);
-  const [currentMimeType, setCurrentMimeType] = useState<string>('image/jpeg');
   const [detectedSpecs, setDetectedSpecs] = useState<TechnicalSpecs | undefined>(undefined);
-  
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const cameraInputRef = useRef<HTMLInputElement>(null);
 
   const [formData, setFormData] = useState({
     title: '',
@@ -53,7 +49,7 @@ export const AddInvoiceScreen: React.FC<AddInvoiceScreenProps> = ({ carId, onSav
       }
     } catch (error: any) {
       console.error("AI Analysis Failed:", error);
-      setAnalysisError("Lecture impossible. Vérifiez la netteté ou le format du fichier.");
+      setAnalysisError("Lecture impossible. Vérifiez la netteté.");
     } finally {
       setIsAnalyzing(false);
     }
@@ -64,7 +60,6 @@ export const AddInvoiceScreen: React.FC<AddInvoiceScreenProps> = ({ carId, onSav
     if (!file) return;
 
     const mime = file.type || 'image/jpeg';
-    setCurrentMimeType(mime);
     setIsAnalyzing(true);
     setAnalysisError(null);
 
@@ -73,11 +68,9 @@ export const AddInvoiceScreen: React.FC<AddInvoiceScreenProps> = ({ carId, onSav
       setPersistentImage(base64DataUrl);
       await performAnalysis(base64DataUrl, mime);
     } catch (error: any) {
-      console.error("Process error:", error);
       setIsAnalyzing(false);
-      setAnalysisError("Erreur lors du traitement de l'image.");
+      setAnalysisError("Erreur de traitement.");
     } finally {
-      // On vide l'input pour permettre de re-sélectionner le même fichier si besoin
       e.target.value = '';
     }
   };
@@ -111,64 +104,49 @@ export const AddInvoiceScreen: React.FC<AddInvoiceScreenProps> = ({ carId, onSav
 
       <div className="flex-1 overflow-y-auto p-4 space-y-6 pb-40">
         <div className="flex bg-nsp-input p-1 rounded-2xl">
-          <button 
-            onClick={() => setActiveTab('maintenance')}
-            className={`flex-1 py-4 rounded-xl flex items-center justify-center gap-2 font-black text-[10px] uppercase tracking-widest transition-all ${activeTab === 'maintenance' ? 'bg-nsp-primary text-white' : 'text-gray-500'}`}
-          >
-            <Wrench size={16} /> Maintenance
-          </button>
-          <button 
-            onClick={() => setActiveTab('fuel')}
-            className={`flex-1 py-4 rounded-xl flex items-center justify-center gap-2 font-black text-[10px] uppercase tracking-widest transition-all ${activeTab === 'fuel' ? 'bg-nsp-primary text-white' : 'text-gray-500'}`}
-          >
-            <Fuel size={16} /> Carburant
-          </button>
+          <button onClick={() => setActiveTab('maintenance')} className={`flex-1 py-4 rounded-xl flex items-center justify-center gap-2 font-black text-[10px] uppercase tracking-widest transition-all ${activeTab === 'maintenance' ? 'bg-nsp-primary text-white' : 'text-gray-500'}`}><Wrench size={16} /> Maintenance</button>
+          <button onClick={() => setActiveTab('fuel')} className={`flex-1 py-4 rounded-xl flex items-center justify-center gap-2 font-black text-[10px] uppercase tracking-widest transition-all ${activeTab === 'fuel' ? 'bg-nsp-primary text-white' : 'text-gray-500'}`}><Fuel size={16} /> Carburant</button>
         </div>
 
         <div className="space-y-4">
-          <div 
-            onClick={() => !persistentImage && cameraInputRef.current?.click()}
+          <label 
+            htmlFor="cameraInput"
             className={`relative aspect-[3/4] max-h-[350px] rounded-[2.5rem] border-2 border-dashed flex flex-col items-center justify-center overflow-hidden transition-all mx-auto w-full max-w-[300px] cursor-pointer ${isSuccess ? 'border-nsp-success bg-nsp-success/5' : analysisError ? 'border-red-500/30 bg-red-950/10' : 'border-gray-700 bg-nsp-input'}`}
           >
             {persistentImage ? (
                isPDF ? (
-                 <div className="flex flex-col items-center gap-4 text-center p-10">
-                    <FileText size={48} className="text-red-500" />
-                    <p className="text-white font-bold text-[10px] uppercase">PDF prêt pour analyse</p>
-                 </div>
+                 <div className="flex flex-col items-center gap-4 text-center p-10"><FileText size={48} className="text-red-500" /><p className="text-white font-bold text-[10px] uppercase">PDF prêt</p></div>
                ) : (
                  <img src={persistentImage} className="absolute inset-0 w-full h-full object-cover" alt="Scan" />
                )
             ) : (
-               <div className="flex flex-col items-center gap-3 text-gray-500">
-                  <Camera size={48} className="opacity-20" />
-                  <p className="text-[10px] font-black uppercase tracking-widest">Appuyez pour scanner</p>
-               </div>
+               <div className="flex flex-col items-center gap-3 text-gray-500"><Camera size={48} className="opacity-20" /><p className="text-[10px] font-black uppercase tracking-widest">Appuyez pour scanner</p></div>
             )}
             
             <div className={`z-10 flex flex-col items-center gap-3 ${persistentImage ? 'bg-black/60 p-4 rounded-2xl backdrop-blur-sm' : ''}`}>
-              {isAnalyzing ? (
+              {isAnalyzing && (
                 <div className="flex flex-col items-center gap-2">
                   <Loader2 className="animate-spin text-nsp-primary" size={32} />
-                  <span className="text-[9px] font-black text-white uppercase tracking-[0.2em]">IA en action...</span>
+                  <span className="text-[9px] font-black text-white uppercase tracking-[0.2em]">Analyse...</span>
                 </div>
-              ) : persistentImage ? (
-                <button onClick={(e) => { e.stopPropagation(); setPersistentImage(null); }} className="text-white font-black text-[9px] uppercase underline decoration-nsp-primary underline-offset-4">Remplacer le scan</button>
-              ) : null}
+              )}
             </div>
-          </div>
+          </label>
 
           {!persistentImage && (
              <div className="grid grid-cols-2 gap-3 max-w-[300px] mx-auto">
-                <button onClick={() => cameraInputRef.current?.click()} className="bg-nsp-primary text-white py-4 rounded-2xl flex flex-col items-center gap-2 shadow-xl active:scale-95 transition-all">
+                <label htmlFor="cameraInput" className="bg-nsp-primary text-white py-4 rounded-2xl flex flex-col items-center gap-2 shadow-xl active:scale-95 transition-all cursor-pointer">
                    <Camera size={20} />
                    <span className="text-[8px] font-black uppercase tracking-widest">Prendre Photo</span>
-                </button>
-                <button onClick={() => fileInputRef.current?.click()} className="bg-nsp-input border border-white/5 text-white py-4 rounded-2xl flex flex-col items-center gap-2 shadow-xl active:scale-95 transition-all">
+                </label>
+                <label htmlFor="fileInput" className="bg-nsp-input border border-white/5 text-white py-4 rounded-2xl flex flex-col items-center gap-2 shadow-xl active:scale-95 transition-all cursor-pointer">
                    <Upload size={20} />
                    <span className="text-[8px] font-black uppercase tracking-widest">Choisir PDF</span>
-                </button>
+                </label>
              </div>
+          )}
+          {persistentImage && (
+            <button onClick={() => setPersistentImage(null)} className="block mx-auto text-white font-black text-[9px] uppercase underline decoration-nsp-primary underline-offset-4">Remplacer le scan</button>
           )}
         </div>
 
@@ -179,39 +157,20 @@ export const AddInvoiceScreen: React.FC<AddInvoiceScreenProps> = ({ carId, onSav
         )}
 
         <div className="bg-nsp-card p-6 rounded-[2.5rem] border border-nsp-border space-y-5 shadow-xl">
-          <h3 className="text-white font-black text-[10px] uppercase tracking-widest mb-2 flex items-center gap-2">
-             <Info size={14} className="text-nsp-primary" /> Détails extraits
-          </h3>
+          <h3 className="text-white font-black text-[10px] uppercase tracking-widest mb-2 flex items-center gap-2"><Info size={14} className="text-nsp-primary" /> Détails extraits</h3>
           <div className="space-y-4">
             <div>
-              <label className="text-[9px] text-gray-500 font-black uppercase mb-1.5 ml-1 block tracking-widest">Établissement / Titre</label>
-              <input 
-                type="text" 
-                className="w-full bg-nsp-input border border-transparent rounded-xl px-4 py-3.5 text-white font-bold text-sm focus:border-nsp-primary outline-none" 
-                value={formData.title} 
-                onChange={e => setFormData({...formData, title: e.target.value})} 
-                placeholder="Ex: Centre Auto..." 
-              />
+              <label className="text-[9px] text-gray-500 font-black uppercase mb-1.5 ml-1 block tracking-widest">Établissement</label>
+              <input type="text" className="w-full bg-nsp-input border border-transparent rounded-xl px-4 py-3.5 text-white font-bold text-sm focus:border-nsp-primary outline-none" value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} placeholder="Garage..." />
             </div>
-
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="text-[9px] text-gray-500 font-black uppercase mb-1.5 ml-1 block tracking-widest">Kilométrage</label>
-                <input 
-                  type="number" 
-                  className="w-full bg-nsp-input border border-transparent rounded-xl px-4 py-3.5 text-white font-bold text-sm focus:border-nsp-primary outline-none" 
-                  value={formData.km} 
-                  onChange={e => setFormData({...formData, km: e.target.value})} 
-                />
+                <label className="text-[9px] text-gray-500 font-black uppercase mb-1.5 ml-1 block tracking-widest">KM</label>
+                <input type="number" className="w-full bg-nsp-input border border-transparent rounded-xl px-4 py-3.5 text-white font-bold text-sm focus:border-nsp-primary outline-none" value={formData.km} onChange={e => setFormData({...formData, km: e.target.value})} />
               </div>
               <div>
-                <label className="text-[9px] text-gray-500 font-black uppercase mb-1.5 ml-1 block tracking-widest">Montant (€)</label>
-                <input 
-                  type="number" 
-                  className="w-full bg-nsp-input border border-transparent rounded-xl px-4 py-3.5 text-white font-bold text-sm focus:border-nsp-primary outline-none" 
-                  value={formData.price} 
-                  onChange={e => setFormData({...formData, price: e.target.value})} 
-                />
+                <label className="text-[9px] text-gray-500 font-black uppercase mb-1.5 ml-1 block tracking-widest">Total (€)</label>
+                <input type="number" className="w-full bg-nsp-input border border-transparent rounded-xl px-4 py-3.5 text-white font-bold text-sm focus:border-nsp-primary outline-none" value={formData.price} onChange={e => setFormData({...formData, price: e.target.value})} />
               </div>
             </div>
           </div>
@@ -219,31 +178,12 @@ export const AddInvoiceScreen: React.FC<AddInvoiceScreenProps> = ({ carId, onSav
       </div>
 
       <div className="p-6 bg-nsp-card border-t border-nsp-border fixed bottom-0 w-full pb-safe-bottom z-[110]">
-        <button 
-          onClick={handleSubmit} 
-          disabled={isAnalyzing || !persistentImage}
-          className="w-full bg-nsp-primary text-white font-black py-5 rounded-[2rem] text-[11px] uppercase tracking-[0.2em] shadow-xl disabled:opacity-50 active:scale-95 transition-all"
-        >
-           {isAnalyzing ? 'Analyse par IA...' : 'VALIDER ET ARCHIVER'}
-        </button>
+        <button onClick={handleSubmit} disabled={isAnalyzing || !persistentImage} className="w-full bg-nsp-primary text-white font-black py-5 rounded-[2rem] text-[11px] uppercase tracking-[0.2em] shadow-xl disabled:opacity-50 active:scale-95 transition-all">{isAnalyzing ? 'Analyse...' : 'ARCHIVER'}</button>
       </div>
 
-      {/* Inputs de fichiers améliorés pour Mobile : Positionnés mais invisibles pour éviter les bugs de clic */}
-      <input 
-        type="file" 
-        ref={cameraInputRef} 
-        style={{ position: 'absolute', width: '1px', height: '1px', opacity: 0, overflow: 'hidden' }}
-        accept="image/*" 
-        capture="environment" 
-        onChange={handleFileChange} 
-      />
-      <input 
-        type="file" 
-        ref={fileInputRef} 
-        style={{ position: 'absolute', width: '1px', height: '1px', opacity: 0, overflow: 'hidden' }}
-        accept="image/*,application/pdf" 
-        onChange={handleFileChange} 
-      />
+      {/* INPUTS CACHÉS - MAIS ACCESSIBLES PAR LABEL */}
+      <input id="cameraInput" type="file" accept="image/*" capture="environment" onChange={handleFileChange} className="hidden" />
+      <input id="fileInput" type="file" accept="image/*,application/pdf" onChange={handleFileChange} className="hidden" />
     </div>
   );
 };
