@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { Car } from '../types';
-import { Camera, CheckCircle2, Gauge, Car as CarIcon, Activity, Bike, AlertCircle, Search, Loader2, Trash2, Edit2, ScanLine, Lock, ImagePlus, X } from 'lucide-react';
+import { Camera, Car as CarIcon, Activity, Bike, Search, Loader2, ScanLine, X } from 'lucide-react';
 import { searchVehicleByPlate } from '../services/sivService';
 import { processFile } from '../services/geminiService';
 
@@ -88,7 +88,6 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onSave, onCa
       )}
 
       <div className="flex items-center gap-4 mb-6 sticky top-0 z-20 bg-nsp-bg/95 py-4 border-b border-nsp-border">
-        {/* Fix: Added X import to lucide-react above */}
         {onCancel && <button onClick={onCancel} className="text-white"><X size={24}/></button>}
         <h1 className="text-xl font-bold text-white">Ajouter Véhicule</h1>
       </div>
@@ -137,21 +136,21 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onSave, onCa
           
           <label htmlFor="grayCardInput" className={`w-full h-16 rounded-xl border-2 border-dashed flex items-center justify-center gap-3 transition-all relative overflow-hidden cursor-pointer ${grayCard ? 'border-green-500 bg-nsp-input' : 'border-nsp-primary bg-nsp-input'}`}>
              {grayCard ? <><img src={grayCard} className="absolute inset-0 w-full h-full object-cover opacity-30" /><span className="text-white font-black text-[10px] relative z-10">Carte Grise OK</span></> : <><ScanLine size={20} className="text-white"/><span className="text-white text-xs font-bold">Scanner Carte Grise</span></>}
-             <input id="grayCardInput" type="file" accept="image/*" onChange={e => handleFileChange(e, 'grayCard')} className="hidden" />
+             <input id="grayCardInput" type="file" accept="image/*" onChange={e => handleFileChange(e, 'grayCard')} style={{ opacity: 0, position: 'absolute', zIndex: -1, width: '1px', height: '1px' }} />
           </label>
 
           <div className="grid grid-cols-2 gap-3">
             {(['front', 'back', 'left', 'right'] as const).map(angle => (
               <label key={angle} htmlFor={`photo-${angle}`} className={`aspect-square rounded-xl border border-dashed flex flex-col items-center justify-center relative overflow-hidden cursor-pointer ${photos[angle] ? 'border-green-500 bg-nsp-input' : 'border-nsp-border bg-nsp-input'}`}>
                 {photos[angle] ? <img src={photos[angle]!} className="absolute inset-0 w-full h-full object-cover" /> : <><Camera size={20} className="text-nsp-sub"/><span className="text-[10px] text-nsp-sub uppercase font-black">{angle}</span></>}
-                <input id={`photo-${angle}`} type="file" accept="image/*" capture="environment" onChange={e => handleFileChange(e, angle)} className="hidden" />
+                <input id={`photo-${angle}`} type="file" accept="image/*" capture="environment" onChange={e => handleFileChange(e, angle)} style={{ opacity: 0, position: 'absolute', zIndex: -1, width: '1px', height: '1px' }} />
               </label>
             ))}
           </div>
 
           <label htmlFor="engineInput" className={`w-full aspect-video rounded-xl border border-dashed flex flex-col items-center justify-center relative overflow-hidden cursor-pointer ${photos.engine ? 'border-green-500 bg-nsp-input' : 'border-nsp-border bg-nsp-input'}`}>
              {photos.engine ? <img src={photos.engine} className="absolute inset-0 w-full h-full object-cover" /> : <><Activity size={24} className="text-nsp-primary"/><span className="text-xs text-nsp-sub font-bold mt-2">Photo Compartiment Moteur</span></>}
-             <input id="engineInput" type="file" accept="image/*" capture="environment" onChange={e => handleFileChange(e, 'engine')} className="hidden" />
+             <input id="engineInput" type="file" accept="image/*" capture="environment" onChange={e => handleFileChange(e, 'engine')} style={{ opacity: 0, position: 'absolute', zIndex: -1, width: '1px', height: '1px' }} />
           </label>
 
           <button onClick={() => onSave({ id: Date.now().toString(), ownerId: '', name: carName, type: vehicleType, plate, firstRegistrationDate: firstRegDate, fuelType, initialKm: parseInt(initialKm), grayCardUrl: grayCard, photos, initialState: { tires: tiresState, brakes: brakesState, body: bodyState, interior: interiorState, engine: engineState } })} disabled={!isStep3Valid} className="w-full py-5 bg-nsp-primary text-white rounded-2xl font-black text-xs uppercase shadow-xl mt-6">ENTRER AU GARAGE</button>

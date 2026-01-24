@@ -181,9 +181,9 @@ export const AddInvoiceScreen: React.FC<AddInvoiceScreenProps> = ({ carId, onSav
         <button onClick={handleSubmit} disabled={isAnalyzing || !persistentImage} className="w-full bg-nsp-primary text-white font-black py-5 rounded-[2rem] text-[11px] uppercase tracking-[0.2em] shadow-xl disabled:opacity-50 active:scale-95 transition-all">{isAnalyzing ? 'Analyse...' : 'ARCHIVER'}</button>
       </div>
 
-      {/* INPUTS CACHÉS - MAIS ACCESSIBLES PAR LABEL */}
-      <input id="cameraInput" type="file" accept="image/*" capture="environment" onChange={handleFileChange} className="hidden" />
-      <input id="fileInput" type="file" accept="image/*,application/pdf" onChange={handleFileChange} className="hidden" />
+      {/* INPUTS RÉELLEMENT PRÉSENTS MAIS VISUELLEMENT CACHÉS POUR UNE COMPATIBILITÉ MOBILE MAXIMALE */}
+      <input id="cameraInput" type="file" accept="image/*" capture="environment" onChange={handleFileChange} style={{ opacity: 0, position: 'absolute', zIndex: -1, width: '1px', height: '1px' }} />
+      <input id="fileInput" type="file" accept="image/*,application/pdf" onChange={handleFileChange} style={{ opacity: 0, position: 'absolute', zIndex: -1, width: '1px', height: '1px' }} />
     </div>
   );
 };
