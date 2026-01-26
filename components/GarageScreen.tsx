@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { Car, User, NewsArticle, Invoice } from '../types';
 import { Plus, Car as CarIcon, Bike, ChevronRight, LogOut, Newspaper, X, ArrowRight, FolderOpen, DownloadCloud, ShieldCheck, Zap, Bell, BellRing, ShieldAlert } from 'lucide-react';
 import { requestNotificationPermission, checkVehicleHealthAndNotify } from '../services/notificationService';
+import { calculateMaintenanceStatus } from '../services/mechanicRules';
 
 const NEWS_DATA: NewsArticle[] = [
   {
@@ -67,9 +68,6 @@ const NEWS_DATA: NewsArticle[] = [
   }
 ];
 
-/**
- * Definition of props for the GarageScreen component.
- */
 interface GarageScreenProps {
   user: User;
   cars: Car[];
@@ -86,12 +84,9 @@ export const GarageScreen: React.FC<GarageScreenProps> = ({ user, cars, invoices
   const [showNotifyPrompt, setShowNotifyPrompt] = useState(false);
 
   useEffect(() => {
-    // Vérifier si les notifications sont activées
     if ("Notification" in window && Notification.permission === "default") {
       setShowNotifyPrompt(true);
     }
-
-    // Effectuer un check de santé global pour tous les véhicules au chargement
     cars.forEach(car => {
       const carInvoices = invoices.filter(i => i.carId === car.id);
       checkVehicleHealthAndNotify(car, carInvoices, user.email);
@@ -102,7 +97,6 @@ export const GarageScreen: React.FC<GarageScreenProps> = ({ user, cars, invoices
     const granted = await requestNotificationPermission();
     if (granted) {
       setShowNotifyPrompt(false);
-      // Petite confirmation visuelle
       alert("✅ Alertes activées ! Vous recevrez désormais vos rappels de révision et contrôle technique.");
     }
   };
@@ -133,7 +127,6 @@ export const GarageScreen: React.FC<GarageScreenProps> = ({ user, cars, invoices
       </div>
 
       <div className="flex-1 p-6 space-y-10 overflow-y-auto">
-        {/* BANNIERE NOTIFICATION */}
         {showNotifyPrompt && (
           <div className="bg-nsp-primary/10 border border-nsp-primary/30 p-5 rounded-[2.5rem] flex items-center gap-4 animate-bounce-subtle">
              <div className="p-3 bg-nsp-primary rounded-2xl text-white">
@@ -199,40 +192,54 @@ export const GarageScreen: React.FC<GarageScreenProps> = ({ user, cars, invoices
             </div>
           ) : (
             <div className="grid grid-cols-1 gap-8">
-              {cars.map((car) => (
-                <div key={car.id} className="bg-nsp-card rounded-[3rem] border border-nsp-border overflow-hidden shadow-2xl relative group active:scale-[0.98] transition-all" onClick={() => onSelectCar(car.id)}>
-                  <div className="h-52 w-full bg-nsp-input relative">
-                    {car.photos.front ? (
-                      <img src={car.photos.front} alt={car.name} className="w-full h-full object-cover" />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center bg-gray-900">
-                        {car.type === 'motorcycle' ? <Bike size={48} className="text-gray-800"/> : <CarIcon size={48} className="text-gray-800"/>}
-                      </div>
-                    )}
-                    <div className="absolute inset-0 bg-gradient-to-t from-nsp-card via-transparent to-transparent"></div>
-                    <div className="absolute top-5 left-5 bg-[#003399] text-white px-4 py-2 rounded-xl text-xs font-black tracking-widest shadow-2xl border border-white/10">
-                      {car.plate}
-                    </div>
-                    <div className="absolute top-5 right-5 bg-nsp-success text-white px-3.5 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest flex items-center gap-1.5 shadow-2xl backdrop-blur-md">
-                       <ShieldCheck size={12} /> Certifié IA
-                    </div>
-                  </div>
+              {cars.map((car) => {
+                const carInvoices = invoices.filter(i => i.carId === car.id);
+                const health = calculateMaintenanceStatus(car, carInvoices);
+                const alertCount = health.pendingTasks.length + health.upcomingDeadlines.length;
 
-                  <div className="p-7 pt-2 flex items-center justify-between">
-                    <div>
-                      <h3 className="text-2xl font-black text-white uppercase tracking-tighter">{car.name}</h3>
-                      <div className="flex items-center gap-3 mt-1.5">
-                        <span className="text-[10px] text-nsp-primary font-black uppercase tracking-widest">{car.fuelType}</span>
-                        <span className="w-1.5 h-1.5 rounded-full bg-gray-800"></span>
-                        <span className="text-[10px] text-gray-500 font-black uppercase tracking-widest">{car.initialKm.toLocaleString()} KM</span>
+                return (
+                  <div key={car.id} className="bg-nsp-card rounded-[3rem] border border-nsp-border overflow-hidden shadow-2xl relative group active:scale-[0.98] transition-all" onClick={() => onSelectCar(car.id)}>
+                    <div className="h-52 w-full bg-nsp-input relative">
+                      {car.photos.front ? (
+                        <img src={car.photos.front} alt={car.name} className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center bg-gray-900">
+                          {car.type === 'motorcycle' ? <Bike size={48} className="text-gray-800"/> : <CarIcon size={48} className="text-gray-800"/>}
+                        </div>
+                      )}
+                      <div className="absolute inset-0 bg-gradient-to-t from-nsp-card via-transparent to-transparent"></div>
+                      <div className="absolute top-5 left-5 bg-[#003399] text-white px-4 py-2 rounded-xl text-xs font-black tracking-widest shadow-2xl border border-white/10">
+                        {car.plate}
+                      </div>
+                      
+                      {/* BADGE DE NOTIFICATION GARAGE */}
+                      {alertCount > 0 && (
+                        <div className="absolute top-5 right-5 z-20 bg-red-600 text-white w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-black border-2 border-nsp-card shadow-lg animate-pulse">
+                          {alertCount}
+                        </div>
+                      )}
+
+                      <div className={`absolute top-5 ${alertCount > 0 ? 'right-14' : 'right-5'} bg-nsp-success text-white px-3.5 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest flex items-center gap-1.5 shadow-2xl backdrop-blur-md`}>
+                         <ShieldCheck size={12} /> Certifié IA
                       </div>
                     </div>
-                    <div className="w-14 h-14 bg-nsp-primary rounded-[1.5rem] flex items-center justify-center text-white shadow-xl group-hover:scale-110 transition-transform">
-                      <ChevronRight size={28} />
+
+                    <div className="p-7 pt-2 flex items-center justify-between">
+                      <div>
+                        <h3 className="text-2xl font-black text-white uppercase tracking-tighter">{car.name}</h3>
+                        <div className="flex items-center gap-3 mt-1.5">
+                          <span className="text-[10px] text-nsp-primary font-black uppercase tracking-widest">{car.fuelType}</span>
+                          <span className="w-1.5 h-1.5 rounded-full bg-gray-800"></span>
+                          <span className="text-[10px] text-gray-500 font-black uppercase tracking-widest">{car.initialKm.toLocaleString()} KM</span>
+                        </div>
+                      </div>
+                      <div className="w-14 h-14 bg-nsp-primary rounded-[1.5rem] flex items-center justify-center text-white shadow-xl group-hover:scale-110 transition-transform">
+                        <ChevronRight size={28} />
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>

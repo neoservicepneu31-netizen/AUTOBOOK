@@ -27,6 +27,8 @@ interface MaintenanceStatus {
   };
   lastCTInvoice?: Invoice;
   allDetectedParts: {name: string, date: string, km: number, ref?: string}[];
+  healthScore: number; // Nouveau: Coefficient de santé (0-100)
+  estimatedValue: number; // Nouveau: Estimation de la cote
 }
 
 export const calculateMaintenanceStatus = (car: Car, invoices: Invoice[]): MaintenanceStatus => {
@@ -49,7 +51,18 @@ export const calculateMaintenanceStatus = (car: Car, invoices: Invoice[]): Maint
   if (['BMW', 'AUDI', 'MERCEDES', 'PORSCHE'].includes(make)) maintenanceIntervalKm = 30000;
   if (car.fuelType === 'electrique') maintenanceIntervalKm = 30000;
 
-  // 1. ANALYSE RÉVISION
+  // --- 1. CALCUL DU SCORE DE SANTÉ (COEFFICIENT IA) ---
+  let healthScore = 100;
+
+  // Impact de l'âge (pénalité de base 2% par an)
+  const carAgeYears = (today.getTime() - new Date(car.firstRegistrationDate).getTime()) / (1000 * 60 * 60 * 24 * 365);
+  healthScore -= Math.min(20, carAgeYears * 2);
+
+  // Impact du kilométrage élevé
+  if (currentKm > 100000) healthScore -= 5;
+  if (currentKm > 200000) healthScore -= 10;
+
+  // Impact entretien (Révision)
   const lastRevision = invoices
     .filter(i => /révision|vidange|entretien|revision/i.test(i.title.toLowerCase()))
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
@@ -64,6 +77,7 @@ export const calculateMaintenanceStatus = (car: Car, invoices: Invoice[]): Maint
     const daysToNextRev = Math.ceil(timeToNextRev / (1000 * 60 * 60 * 24));
 
     if (daysToNextRev <= 0 || kmSinceRevision >= maintenanceIntervalKm) {
+      healthScore -= 15;
       alerts.push("REVISION_DUE");
       pendingTasks.push({
         id: 'rev_due', 
@@ -71,17 +85,26 @@ export const calculateMaintenanceStatus = (car: Car, invoices: Invoice[]): Maint
         severity: 'high',
         basis: `Dernière faite le ${revDate.toLocaleDateString()} (${kmSinceRevision.toLocaleString()} km parcourus)`
       });
-    } else if (daysToNextRev <= 30) {
-      upcomingDeadlines.push({
-        id: 'rev_soon',
-        label: `Révision prévue dans ${daysToNextRev} jours`,
-        date: nextRevisionDate.toLocaleDateString(),
-        type: 'REVISION'
-      });
+    } else {
+      // Bonus pour entretien à jour
+      healthScore += 5;
     }
+  } else {
+    healthScore -= 20; // Aucune révision trouvée = gros risque
   }
 
-  // 2. CONTRÔLE TECHNIQUE
+  // Impact Pneus
+  const lastTireChange = invoices
+    .filter(i => /pneu|pneumatique|tire|montage/i.test(i.title.toLowerCase()) && i.price > 100)
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
+
+  let wearPercentage = 0;
+  let mileageSinceChange = lastTireChange ? currentKm - lastTireChange.km : currentKm;
+  wearPercentage = Math.min(100, Math.round((mileageSinceChange / BASE_RULES.TIRE_LIFESPAN_KM) * 100));
+
+  if (wearPercentage > 80) healthScore -= 10;
+
+  // Impact Contrôle Technique
   const lastCT = invoices
     .filter(i => /contr[oô]le technique|ct\b|visite technique/i.test(i.title.toLowerCase()))
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
@@ -91,18 +114,34 @@ export const calculateMaintenanceStatus = (car: Car, invoices: Invoice[]): Maint
   const diffDaysCT = Math.ceil(diffTimeCT / (1000 * 60 * 60 * 24));
 
   if (diffDaysCT < 0) {
+    healthScore -= 30;
     alerts.push("CT_EXPIRED");
     pendingTasks.push({id: 'ct_crit', label: 'Contrôle Technique PÉRIMÉ', severity: 'high', basis: `Date limite : ${nextCTDate.toLocaleDateString()}`});
-  } else if (diffDaysCT <= 30) {
-    upcomingDeadlines.push({
-      id: 'ct_soon',
-      label: `Contrôle technique dans ${diffDaysCT} jours`,
-      date: nextCTDate.toLocaleDateString(),
-      type: 'CT'
-    });
   }
 
-  // 3. AGRÉGATION DES PIÈCES IA
+  // Plafonnement du score
+  healthScore = Math.max(0, Math.min(100, Math.round(healthScore)));
+
+  // --- 2. ESTIMATION DE LA COTE ARGUS (SIMULÉE) ---
+  // Algorithme simplifié : Base 25000€ - 15% par an - 0.10€ par km
+  let estimatedValue = 25000;
+  if (['BMW', 'AUDI', 'MERCEDES', 'PORSCHE'].includes(make)) estimatedValue = 45000;
+  if (['RENAULT', 'PEUGEOT', 'CITROEN', 'DACIA'].includes(make)) estimatedValue = 18000;
+
+  // Dépréciation annuelle
+  const depreciationFactor = Math.pow(0.85, carAgeYears);
+  estimatedValue = estimatedValue * depreciationFactor;
+
+  // Dépréciation kilométrique
+  estimatedValue -= currentKm * 0.05;
+
+  // Bonus Santé IA
+  const healthBonus = (healthScore - 50) * 100; // Un score de 100 donne +5000€, un score de 0 donne -5000€
+  estimatedValue += healthBonus;
+
+  estimatedValue = Math.max(500, Math.round(estimatedValue / 100) * 100);
+
+  // --- 3. AGRÉGATION DES PIÈCES IA ---
   const allDetectedParts: {name: string, date: string, km: number, ref?: string}[] = [];
   invoices.forEach(inv => {
     if (inv.detectedSpecs) {
@@ -120,24 +159,6 @@ export const calculateMaintenanceStatus = (car: Car, invoices: Invoice[]): Maint
       }
     }
   });
-
-  // 4. ANALYSE PNEUS
-  const lastTireChange = invoices
-    .filter(i => /pneu|pneumatique|tire|montage/i.test(i.title.toLowerCase()) && i.price > 100)
-    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
-
-  let tireHealth = {
-    mileageSinceChange: lastTireChange ? currentKm - lastTireChange.km : currentKm,
-    wearPercentage: 0,
-    lastChangeDate: lastTireChange?.date,
-    recommendation: "Pneus en bon état apparent."
-  };
-
-  tireHealth.wearPercentage = Math.min(100, Math.round((tireHealth.mileageSinceChange / BASE_RULES.TIRE_LIFESPAN_KM) * 100));
-
-  if (tireHealth.wearPercentage > 85) {
-    tireHealth.recommendation = "Remplacement recommandé immédiatement.";
-  }
 
   let status: MaintenanceStatus['status'] = 'success';
   let message = `Toutes les échéances de votre ${car.name} sont à jour.`;
@@ -157,9 +178,16 @@ export const calculateMaintenanceStatus = (car: Car, invoices: Invoice[]): Maint
     alerts,
     pendingTasks,
     upcomingDeadlines,
-    tireHealth,
+    tireHealth: {
+      mileageSinceChange,
+      wearPercentage,
+      lastChangeDate: lastTireChange?.date,
+      recommendation: wearPercentage > 85 ? "Remplacement recommandé immédiatement." : "Pneus en bon état apparent."
+    },
     lastCTInvoice: lastCT,
-    allDetectedParts
+    allDetectedParts,
+    healthScore,
+    estimatedValue
   };
 };
 

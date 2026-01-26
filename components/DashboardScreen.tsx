@@ -3,7 +3,7 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { User, Car, Invoice, AIStatus, ManufacturerSpecs, TechnicalSpecs } from '../types';
 import { 
   Plus, FileText, ArrowLeft, Sparkles, Gauge, Droplet, PhoneCall, X, 
-  Wrench, AlertCircle, Share2, ShieldCheck, ChevronRight, Activity, Info, Eye, Download, Maximize2, Loader2, Trash2, Layers, Search, History, CheckCircle2, AlertTriangle, ListChecks, Calendar, Scale, Image as ImageIcon, BellRing, Clock, ShieldAlert, CircleAlert, Shield, SearchCode, PackageSearch
+  Wrench, AlertCircle, Share2, ShieldCheck, ChevronRight, Activity, Info, Eye, Download, Maximize2, Loader2, Trash2, Layers, Search, History, CheckCircle2, AlertTriangle, ListChecks, Calendar, Scale, Image as ImageIcon, BellRing, Clock, ShieldAlert, CircleAlert, Shield, SearchCode, PackageSearch, TrendingUp, TrendingDown, Wallet
 } from 'lucide-react';
 import { getPersonalizedMaintenance, safeBase64ToBlobUrl, base64ToRealBlobUrl } from '../services/geminiService';
 import { calculateMaintenanceStatus } from '../services/mechanicRules';
@@ -35,6 +35,8 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
 
   const proactiveStatus = calculateMaintenanceStatus(car, invoices);
   const lastMileage = invoices.length > 0 ? Math.max(...invoices.map(i => i.km)) : car.initialKm;
+  
+  const alertCount = proactiveStatus.pendingTasks.length + proactiveStatus.upcomingDeadlines.length;
 
   useEffect(() => {
     const loadSpecs = async () => {
@@ -77,17 +79,95 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
       </header>
 
       <main className="p-6 space-y-8 animate-fade-in flex-1">
+        
+        {/* COMMAND CENTER : SCORE DE SANTÉ & COTE */}
+        <div className="bg-nsp-card border border-nsp-border rounded-[3rem] p-8 shadow-2xl relative overflow-hidden group">
+           <div className="absolute top-0 right-0 w-32 h-32 bg-nsp-primary/5 blur-[50px] rounded-full group-hover:bg-nsp-primary/10 transition-all"></div>
+           
+           <div className="flex items-center justify-between relative z-10">
+              <div className="space-y-4">
+                 <div className="flex items-center gap-2">
+                    <Sparkles size={16} className="text-nsp-primary animate-pulse" />
+                    <span className="text-[9px] text-gray-400 font-black uppercase tracking-[0.2em]">Diagnostic IA Pro</span>
+                 </div>
+                 
+                 <div>
+                    <div className="flex items-end gap-1">
+                       <span className={`text-6xl font-black tracking-tighter ${proactiveStatus.healthScore > 80 ? 'text-nsp-success' : proactiveStatus.healthScore > 50 ? 'text-orange-500' : 'text-nsp-primary'}`}>
+                          {proactiveStatus.healthScore}
+                       </span>
+                       <span className="text-2xl font-black text-gray-700 mb-2">%</span>
+                    </div>
+                    <p className="text-[11px] font-black text-white uppercase mt-1 tracking-widest">Coefficient de santé</p>
+                 </div>
+
+                 <div className="flex items-center gap-3 pt-2">
+                    <div className="bg-nsp-input/50 px-3 py-1.5 rounded-xl border border-white/5 flex items-center gap-2">
+                       <TrendingUp size={12} className="text-nsp-success" />
+                       <span className="text-[8px] text-white font-black uppercase tracking-widest">Moteur Opti</span>
+                    </div>
+                    <div className="bg-nsp-input/50 px-3 py-1.5 rounded-xl border border-white/5 flex items-center gap-2">
+                       <History size={12} className="text-nsp-primary" />
+                       <span className="text-[8px] text-white font-black uppercase tracking-widest">Historique OK</span>
+                    </div>
+                 </div>
+              </div>
+
+              <div className="text-right flex flex-col items-end">
+                 <div className="w-20 h-20 rounded-full border-4 border-nsp-input flex items-center justify-center relative">
+                    <svg className="w-full h-full transform -rotate-90">
+                       <circle
+                          cx="40"
+                          cy="40"
+                          r="34"
+                          stroke="currentColor"
+                          strokeWidth="8"
+                          fill="transparent"
+                          className="text-white/5"
+                       />
+                       <circle
+                          cx="40"
+                          cy="40"
+                          r="34"
+                          stroke="currentColor"
+                          strokeWidth="8"
+                          fill="transparent"
+                          strokeDasharray={2 * Math.PI * 34}
+                          strokeDashoffset={2 * Math.PI * 34 * (1 - proactiveStatus.healthScore / 100)}
+                          className={proactiveStatus.healthScore > 80 ? 'text-nsp-success' : proactiveStatus.healthScore > 50 ? 'text-orange-500' : 'text-nsp-primary'}
+                       />
+                    </svg>
+                    <div className="absolute inset-0 flex items-center justify-center">
+                       <ShieldCheck size={28} className={proactiveStatus.healthScore > 80 ? 'text-nsp-success' : 'text-gray-700'} />
+                    </div>
+                 </div>
+                 <div className="mt-6 bg-nsp-input/80 backdrop-blur-md p-4 rounded-2xl border border-white/10 shadow-xl w-36">
+                    <div className="flex items-center gap-2 mb-1">
+                       <Wallet size={12} className="text-nsp-primary" />
+                       <span className="text-[8px] text-gray-500 font-black uppercase tracking-widest">Valeur Argus</span>
+                    </div>
+                    <p className="text-xl font-black text-white tracking-tighter">{proactiveStatus.estimatedValue.toLocaleString()} €</p>
+                 </div>
+              </div>
+           </div>
+        </div>
+
         {/* Grille de Navigation Quick-Access 2x3 */}
         <div className="grid grid-cols-3 gap-3">
             {[
-              { id: 'health', icon: <Wrench size={20}/>, label: 'Santé', color: 'text-green-500 bg-green-500/10' },
+              { id: 'health', icon: <Wrench size={20}/>, label: 'Santé', color: 'text-green-500 bg-green-500/10', badge: alertCount },
               { id: 'tires', icon: <Gauge size={20}/>, label: 'Pneus', color: 'text-blue-400 bg-blue-400/10' },
               { id: 'fluids', icon: <Droplet size={20}/>, label: 'Fluides', color: 'text-yellow-400 bg-yellow-400/10' },
               { id: 'ct', icon: <ShieldCheck size={20}/>, label: 'C.T', color: 'text-orange-400 bg-orange-400/10' },
               { id: 'insurance', icon: <Shield size={20}/>, label: 'Assurance', color: 'text-purple-400 bg-purple-400/10' },
               { id: 'parts', icon: <PackageSearch size={20}/>, label: 'Pièces', color: 'text-gray-200 bg-gray-200/10' },
             ].map(item => (
-              <button key={item.id} onClick={() => setActiveReport(item.id as any)} className="bg-nsp-card border border-nsp-border rounded-2xl p-4 flex flex-col items-center text-center shadow-lg active:scale-95 transition-all">
+              <button key={item.id} onClick={() => setActiveReport(item.id as any)} className="bg-nsp-card border border-nsp-border rounded-2xl p-4 flex flex-col items-center text-center shadow-lg active:scale-95 transition-all relative">
+                {item.badge ? (
+                   <div className="absolute top-2 right-2 bg-red-600 text-white w-5 h-5 rounded-full flex items-center justify-center text-[8px] font-black border border-nsp-card animate-pulse z-10">
+                     {item.badge}
+                   </div>
+                ) : null}
                 <div className={`w-10 h-10 rounded-xl flex items-center justify-center mb-2 ${item.color}`}>{item.icon}</div>
                 <span className="text-[8px] text-gray-400 font-black uppercase tracking-widest">{item.label}</span>
               </button>
@@ -194,13 +274,54 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
                     <h2 className="text-white font-black text-xl uppercase tracking-tighter">
                         {activeReport === 'ct' ? 'Contrôle Technique' : activeReport === 'insurance' ? 'Assurance' : activeReport === 'parts' ? 'Catalogue Pièces' : 'Rapport IA'}
                     </h2>
-                    <p className="text-nsp-primary text-[8px] font-black uppercase tracking-[0.2em]">Analyses Automatiques</p>
+                    <p className="text-nsp-primary text-[8px] font-black uppercase tracking-[0.2em]">Analyses Automatiques {alertCount > 0 && `(${alertCount} ALERTES)`}</p>
                  </div>
                </div>
                <button onClick={() => setActiveReport(null)} className="p-3 bg-white/5 rounded-full text-white"><X size={24}/></button>
             </div>
 
             <div className="space-y-10">
+               {/* SECTION SANTE DETAILLEE */}
+               {activeReport === 'health' && (
+                 <div className="space-y-6">
+                    <div className="flex items-center gap-2 px-2">
+                       <AlertCircle size={16} className="text-nsp-primary" />
+                       <h4 className="text-[10px] text-gray-500 font-black uppercase tracking-widest">Détail des vérifications IA</h4>
+                    </div>
+                    {proactiveStatus.pendingTasks.length === 0 && proactiveStatus.upcomingDeadlines.length === 0 ? (
+                      <div className="p-6 bg-nsp-success/10 border border-nsp-success/20 rounded-2xl flex items-center gap-4">
+                        <CheckCircle2 className="text-nsp-success" size={24} />
+                        <p className="text-white font-bold text-xs">Aucune action immédiate requise. Votre véhicule est en parfaite santé.</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-4">
+                        {proactiveStatus.pendingTasks.map(task => (
+                           <div key={task.id} className={`p-5 rounded-2xl border flex items-start gap-4 ${task.severity === 'high' ? 'bg-red-900/10 border-red-500/20' : 'bg-nsp-input border-white/5'}`}>
+                              <div className={`p-2 rounded-xl ${task.severity === 'high' ? 'bg-red-500 text-white' : 'bg-nsp-primary text-white'}`}>
+                                 <AlertTriangle size={16} />
+                              </div>
+                              <div className="flex-1">
+                                 <p className="text-white font-black text-xs uppercase">{task.label}</p>
+                                 <p className="text-[10px] text-gray-500 font-medium mt-1">{task.basis}</p>
+                              </div>
+                           </div>
+                        ))}
+                        {proactiveStatus.upcomingDeadlines.map(deadline => (
+                           <div key={deadline.id} className="p-5 rounded-2xl border border-white/5 bg-nsp-input flex items-start gap-4">
+                              <div className="p-2 rounded-xl bg-nsp-primary text-white">
+                                 <Clock size={16} />
+                              </div>
+                              <div className="flex-1">
+                                 <p className="text-white font-black text-xs uppercase">{deadline.label}</p>
+                                 <p className="text-[10px] text-gray-500 font-medium mt-1">Échéance : {deadline.date}</p>
+                              </div>
+                           </div>
+                        ))}
+                      </div>
+                    )}
+                 </div>
+               )}
+
                {/* SECTION CONTROLE TECHNIQUE */}
                {activeReport === 'ct' && (
                  <div className="space-y-6">
