@@ -3,7 +3,7 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { User, Car, Invoice, AIStatus, ManufacturerSpecs, TechnicalSpecs } from '../types';
 import { 
   Plus, FileText, ArrowLeft, Sparkles, Gauge, Droplet, PhoneCall, X, 
-  Wrench, AlertCircle, Share2, ShieldCheck, ChevronRight, Activity, Info, Eye, Download, Maximize2, Loader2, Trash2, Layers, Search, History, CheckCircle2, AlertTriangle, ListChecks, Calendar, Scale, Image as ImageIcon, BellRing, Clock
+  Wrench, AlertCircle, Share2, ShieldCheck, ChevronRight, Activity, Info, Eye, Download, Maximize2, Loader2, Trash2, Layers, Search, History, CheckCircle2, AlertTriangle, ListChecks, Calendar, Scale, Image as ImageIcon, BellRing, Clock, ShieldAlert, CircleAlert, Shield, SearchCode, PackageSearch
 } from 'lucide-react';
 import { getPersonalizedMaintenance, safeBase64ToBlobUrl, base64ToRealBlobUrl } from '../services/geminiService';
 import { calculateMaintenanceStatus } from '../services/mechanicRules';
@@ -29,7 +29,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
 }) => {
   const [specs, setSpecs] = useState<ManufacturerSpecs | null>(null);
   const [isLoadingSpecs, setIsLoadingSpecs] = useState(false);
-  const [activeReport, setActiveReport] = useState<'health' | 'tires' | 'fluids' | null>(null);
+  const [activeReport, setActiveReport] = useState<'health' | 'tires' | 'fluids' | 'ct' | 'insurance' | 'parts' | null>(null);
   const [viewingInvoice, setViewingInvoice] = useState<Invoice | null>(null);
   const [viewingDoc, setViewingDoc] = useState<{title: string, url: string} | null>(null);
 
@@ -54,21 +54,9 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
     return url.includes('application/pdf') || url.substring(0, 30).includes('JVBER');
   };
 
-  const technicalHistory = useMemo(() => {
-    return invoices
-      .filter(inv => inv.detectedSpecs)
-      .map(inv => ({
-        date: inv.date,
-        km: inv.km,
-        title: inv.title,
-        specs: inv.detectedSpecs!
-      }))
-      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  }, [invoices]);
-
   const handleDelete = async () => {
     if (!viewingInvoice) return;
-    if (confirm('Voulez-vous supprimer ce document de votre coffre-fort ?')) {
+    if (confirm('Voulez-vous supprimer ce document ?')) {
       const idToDelete = viewingInvoice.id;
       setViewingInvoice(null);
       onDeleteInvoice(idToDelete);
@@ -89,101 +77,67 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
       </header>
 
       <main className="p-6 space-y-8 animate-fade-in flex-1">
-        {/* Quick Stats Grid */}
+        {/* Grille de Navigation Quick-Access 2x3 */}
         <div className="grid grid-cols-3 gap-3">
             {[
-              { id: 'health', icon: <Wrench size={22}/>, label: 'Santé', color: proactiveStatus.status === 'critical' ? 'text-red-500 bg-red-500/10' : 'text-green-500 bg-green-500/10' },
-              { id: 'tires', icon: <Gauge size={22}/>, label: 'Pneus', color: 'text-blue-400 bg-blue-400/10' },
-              { id: 'fluids', icon: <Droplet size={22}/>, label: 'Fluides', color: 'text-yellow-400 bg-yellow-400/10' }
+              { id: 'health', icon: <Wrench size={20}/>, label: 'Santé', color: 'text-green-500 bg-green-500/10' },
+              { id: 'tires', icon: <Gauge size={20}/>, label: 'Pneus', color: 'text-blue-400 bg-blue-400/10' },
+              { id: 'fluids', icon: <Droplet size={20}/>, label: 'Fluides', color: 'text-yellow-400 bg-yellow-400/10' },
+              { id: 'ct', icon: <ShieldCheck size={20}/>, label: 'C.T', color: 'text-orange-400 bg-orange-400/10' },
+              { id: 'insurance', icon: <Shield size={20}/>, label: 'Assurance', color: 'text-purple-400 bg-purple-400/10' },
+              { id: 'parts', icon: <PackageSearch size={20}/>, label: 'Pièces', color: 'text-gray-200 bg-gray-200/10' },
             ].map(item => (
-              <button key={item.id} onClick={() => setActiveReport(item.id as any)} className="bg-nsp-card border border-nsp-border rounded-[2rem] p-5 flex flex-col items-center text-center shadow-xl active:scale-95 transition-all relative z-10">
-                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center mb-2 ${item.color}`}>{item.icon}</div>
-                <span className="text-[9px] text-gray-400 font-black uppercase tracking-widest">{item.label}</span>
+              <button key={item.id} onClick={() => setActiveReport(item.id as any)} className="bg-nsp-card border border-nsp-border rounded-2xl p-4 flex flex-col items-center text-center shadow-lg active:scale-95 transition-all">
+                <div className={`w-10 h-10 rounded-xl flex items-center justify-center mb-2 ${item.color}`}>{item.icon}</div>
+                <span className="text-[8px] text-gray-400 font-black uppercase tracking-widest">{item.label}</span>
               </button>
             ))}
         </div>
 
-        {/* AI Diagnostic Banner + Timeline Logic */}
+        {/* Diagnostic Banner */}
         <div className={`relative overflow-hidden rounded-[2.5rem] border p-8 shadow-2xl ${proactiveStatus.status === 'critical' ? 'border-red-600 bg-red-900/10' : 'border-nsp-success/30 bg-green-900/10'}`}>
           <div className="flex items-start gap-4">
-            <div className={`p-3 rounded-2xl bg-nsp-input ${proactiveStatus.status === 'critical' ? 'text-red-500' : 'text-nsp-primary'}`}><BellRing size={24} className={proactiveStatus.status === 'critical' ? 'animate-pulse' : ''} /></div>
+            <div className={`p-3 rounded-2xl bg-nsp-input ${proactiveStatus.status === 'critical' ? 'text-red-500' : 'text-nsp-primary'}`}><BellRing size={24} /></div>
             <div className="flex-1">
-              <h3 className="font-black text-white text-[10px] uppercase tracking-[0.2em] mb-2">État de Conformité IA</h3>
+              <h3 className="font-black text-white text-[10px] uppercase tracking-[0.2em] mb-2">Conformité IA</h3>
               <p className="text-gray-200 text-sm font-bold leading-relaxed">{proactiveStatus.message}</p>
-              
-              {/* Timeline Detail from Invoices */}
-              <div className="mt-6 space-y-3">
-                 {proactiveStatus.pendingTasks.map(task => (
-                   <div key={task.id} className="bg-black/20 p-4 rounded-2xl border border-white/5">
-                      <div className="flex items-center justify-between mb-1">
-                        <p className={`text-[9px] font-black uppercase ${task.severity === 'high' ? 'text-red-500' : 'text-nsp-primary'}`}>{task.label}</p>
-                        <AlertCircle size={10} className={task.severity === 'high' ? 'text-red-500' : 'text-gray-600'} />
-                      </div>
-                      <p className="text-[10px] text-gray-400 font-medium italic">{task.basis}</p>
-                   </div>
-                 ))}
-              </div>
             </div>
           </div>
         </div>
 
-        {/* --- SECTION DOSSIER OFFICIEL & PHOTOS --- */}
+        {/* SECTION DOSSIER OFFICIEL */}
         <div className="bg-nsp-card border border-nsp-border rounded-[2.5rem] p-6 space-y-5 shadow-xl">
-           <div className="flex justify-between items-center px-2">
-             <h3 className="text-white font-black text-[10px] uppercase tracking-[0.2em] flex items-center gap-2">
-                <ShieldCheck size={14} className="text-green-500" /> Dossier Officiel & Photos
-             </h3>
-             <span className="text-[8px] text-gray-500 font-black uppercase tracking-widest">Certifié Cloud</span>
-           </div>
+           <h3 className="text-white font-black text-[10px] uppercase tracking-[0.2em] flex items-center gap-2">
+              <ShieldCheck size={14} className="text-green-500" /> Dossier Certifié & Photos
+           </h3>
 
            <div className="grid grid-cols-4 gap-2">
               <button 
                 onClick={() => car.grayCardUrl && setViewingDoc({ title: 'Carte Grise', url: car.grayCardUrl })}
-                className={`aspect-square rounded-2xl border flex flex-col items-center justify-center gap-1 transition-all overflow-hidden relative group ${car.grayCardUrl ? 'border-nsp-primary/30 bg-nsp-input/50' : 'border-dashed border-white/5 opacity-30 grayscale'}`}
+                className={`aspect-square rounded-xl border flex flex-col items-center justify-center gap-1 overflow-hidden relative ${car.grayCardUrl ? 'border-nsp-primary/30' : 'border-dashed border-white/5 opacity-30'}`}
               >
-                {car.grayCardUrl ? (
-                  <>
-                    <img src={safeBase64ToBlobUrl(car.grayCardUrl)} className="absolute inset-0 w-full h-full object-cover opacity-50 group-hover:opacity-80 transition-opacity" />
-                    <FileText size={18} className="text-white relative z-10" />
-                    <span className="text-[7px] text-white font-black uppercase relative z-10">C. Grise</span>
-                  </>
-                ) : (
-                  <FileText size={18} className="text-gray-700" />
-                )}
+                {car.grayCardUrl ? <img src={safeBase64ToBlobUrl(car.grayCardUrl)} className="absolute inset-0 w-full h-full object-cover opacity-50" /> : <FileText size={18} className="text-gray-700" />}
+                <span className="text-[7px] text-white font-black uppercase relative z-10">C. Grise</span>
               </button>
-
-              {(['front', 'back', 'left', 'right'] as const).map(angle => (
-                <button 
-                  key={angle}
-                  onClick={() => car.photos[angle] && setViewingDoc({ title: angle.toUpperCase(), url: car.photos[angle]! })}
-                  className={`aspect-square rounded-2xl border flex flex-col items-center justify-center gap-1 transition-all overflow-hidden relative group ${car.photos[angle] ? 'border-nsp-primary/30 bg-nsp-input/50' : 'border-dashed border-white/5 opacity-30 grayscale'}`}
-                >
-                  {car.photos[angle] ? (
-                    <>
-                      <img src={safeBase64ToBlobUrl(car.photos[angle]!)} className="absolute inset-0 w-full h-full object-cover opacity-50 group-hover:opacity-80 transition-opacity" />
-                      <ImageIcon size={18} className="text-white relative z-10" />
-                      <span className="text-[7px] text-white font-black uppercase relative z-10">{angle}</span>
-                    </>
-                  ) : (
-                    <ImageIcon size={18} className="text-gray-700" />
-                  )}
-                </button>
-              ))}
 
               <button 
-                onClick={() => car.photos.engine && setViewingDoc({ title: 'Compartiment Moteur', url: car.photos.engine! })}
-                className={`aspect-square rounded-2xl border flex flex-col items-center justify-center gap-1 transition-all overflow-hidden relative group ${car.photos.engine ? 'border-nsp-primary/30 bg-nsp-input/50' : 'border-dashed border-white/5 opacity-30 grayscale'}`}
+                onClick={() => car.insurance?.greenCardUrl && setViewingDoc({ title: 'Carte Verte', url: car.insurance.greenCardUrl })}
+                className={`aspect-square rounded-xl border flex flex-col items-center justify-center gap-1 overflow-hidden relative ${car.insurance?.greenCardUrl ? 'border-nsp-primary/30' : 'border-dashed border-white/5 opacity-30'}`}
               >
-                {car.photos.engine ? (
-                  <>
-                    <img src={safeBase64ToBlobUrl(car.photos.engine!)} className="absolute inset-0 w-full h-full object-cover opacity-50 group-hover:opacity-80 transition-opacity" />
-                    <Activity size={18} className="text-white relative z-10" />
-                    <span className="text-[7px] text-white font-black uppercase relative z-10">Moteur</span>
-                  </>
-                ) : (
-                  <Activity size={18} className="text-gray-700" />
-                )}
+                {car.insurance?.greenCardUrl ? <img src={safeBase64ToBlobUrl(car.insurance.greenCardUrl)} className="absolute inset-0 w-full h-full object-cover opacity-50" /> : <Shield size={18} className="text-gray-700" />}
+                <span className="text-[7px] text-white font-black uppercase relative z-10">Assurance</span>
               </button>
+
+              {['front', 'back'].map(angle => (
+                <button 
+                  key={angle}
+                  onClick={() => car.photos[angle as keyof typeof car.photos] && setViewingDoc({ title: angle.toUpperCase(), url: car.photos[angle as keyof typeof car.photos] as string })}
+                  className={`aspect-square rounded-xl border flex flex-col items-center justify-center gap-1 overflow-hidden relative ${car.photos[angle as keyof typeof car.photos] ? 'border-nsp-primary/30' : 'border-dashed border-white/5 opacity-30'}`}
+                >
+                  {car.photos[angle as keyof typeof car.photos] ? <img src={safeBase64ToBlobUrl(car.photos[angle as keyof typeof car.photos] as string)} className="absolute inset-0 w-full h-full object-cover opacity-50" /> : <ImageIcon size={18} className="text-gray-700" />}
+                  <span className="text-[7px] text-white font-black uppercase relative z-10">{angle}</span>
+                </button>
+              ))}
            </div>
         </div>
 
@@ -222,266 +176,167 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
         </div>
       </main>
 
-      {/* --- VISIONNEUSE DE DOCUMENTS (USER) --- */}
-      {viewingDoc && (
-        <div className="fixed inset-0 z-[2000] bg-black/98 flex flex-col animate-fade-in overflow-hidden pt-safe-top">
-           <header className="p-6 flex justify-between items-center border-b border-white/10 bg-black/50 backdrop-blur-md">
-              <button onClick={() => setViewingDoc(null)} className="p-3 bg-nsp-input rounded-xl text-white"><X size={24}/></button>
-              <div className="text-center">
-                 <h3 className="text-white font-black text-xs uppercase tracking-widest">{viewingDoc.title}</h3>
-                 <p className="text-[9px] text-nsp-primary font-black uppercase mt-1">VUE DÉTAILLÉE</p>
-              </div>
-              <button 
-                onClick={() => window.open(base64ToRealBlobUrl(viewingDoc.url, isPDF(viewingDoc.url) ? 'application/pdf' : 'image/jpeg'), '_blank')}
-                className="p-3 bg-nsp-input rounded-xl text-white"
-              >
-                <Maximize2 size={24}/>
-              </button>
-           </header>
-           
-           <div className="flex-1 flex items-center justify-center p-4">
-              <div className="w-full h-full max-w-4xl bg-nsp-card rounded-[2.5rem] overflow-hidden border border-white/10 shadow-2xl relative">
-                {isPDF(viewingDoc.url) ? (
-                  <iframe 
-                    src={base64ToRealBlobUrl(viewingDoc.url, 'application/pdf') + '#toolbar=0'} 
-                    className="w-full h-full border-0"
-                    title="Document PDF"
-                  />
-                ) : (
-                  <img src={safeBase64ToBlobUrl(viewingDoc.url)} className="w-full h-full object-contain" alt="Document" />
-                )}
-              </div>
-           </div>
-        </div>
-      )}
-
-      {/* RAPPORT TECHNIQUE ENRICHI */}
+      {/* RAPPORT TECHNIQUE ENRICHI AVEC CT & PIÈCES */}
       {activeReport && (
         <div className="fixed inset-0 z-[1000] bg-black/80 backdrop-blur-xl flex items-end animate-fade-in p-4">
           <div className="w-full bg-nsp-card rounded-[3rem] border border-white/10 p-8 pb-12 animate-slide-up max-h-[90vh] overflow-y-auto shadow-2xl no-scrollbar">
             <div className="flex justify-between items-center mb-8 sticky top-0 bg-nsp-card/95 backdrop-blur-md z-10 py-2">
                <div className="flex items-center gap-4">
                  <div className="p-4 bg-nsp-input rounded-[1.5rem] text-nsp-primary shadow-inner">
-                    {activeReport === 'health' ? <Wrench size={28}/> : activeReport === 'tires' ? <Gauge size={28}/> : <Droplet size={28}/>}
+                    {activeReport === 'health' && <Wrench size={28}/>}
+                    {activeReport === 'tires' && <Gauge size={28}/>}
+                    {activeReport === 'fluids' && <Droplet size={28}/>}
+                    {activeReport === 'ct' && <ShieldCheck size={28}/>}
+                    {activeReport === 'insurance' && <Shield size={28}/>}
+                    {activeReport === 'parts' && <PackageSearch size={28}/>}
                  </div>
                  <div>
                     <h2 className="text-white font-black text-xl uppercase tracking-tighter">
-                        Rapport {activeReport === 'health' ? 'Santé' : activeReport === 'tires' ? 'Pneus' : 'Fluides'}
+                        {activeReport === 'ct' ? 'Contrôle Technique' : activeReport === 'insurance' ? 'Assurance' : activeReport === 'parts' ? 'Catalogue Pièces' : 'Rapport IA'}
                     </h2>
-                    <p className="text-nsp-primary text-[8px] font-black uppercase tracking-[0.2em]">Analyses Factures & Constructeur</p>
+                    <p className="text-nsp-primary text-[8px] font-black uppercase tracking-[0.2em]">Analyses Automatiques</p>
                  </div>
                </div>
-               <button onClick={() => setActiveReport(null)} className="p-3 bg-white/5 rounded-full text-white hover:bg-nsp-primary transition-colors"><X size={24}/></button>
+               <button onClick={() => setActiveReport(null)} className="p-3 bg-white/5 rounded-full text-white"><X size={24}/></button>
             </div>
 
             <div className="space-y-10">
-               {/* 1. SECTION PRECONISATIONS CONSTRUCTEUR */}
-               <section className="space-y-4">
-                  <div className="flex items-center justify-between px-2">
-                     <h3 className="text-[10px] text-gray-500 font-black uppercase tracking-[0.2em] flex items-center gap-2">
-                        <ShieldCheck size={14} className="text-nsp-primary" /> Données Constructeur
-                     </h3>
-                  </div>
-                  
-                  {isLoadingSpecs ? (
-                    <div className="flex items-center gap-3 bg-nsp-input p-6 rounded-3xl animate-pulse">
-                       <Loader2 className="animate-spin text-nsp-primary" size={20} />
-                       <span className="text-xs text-gray-500 font-bold uppercase">Récupération des specs...</span>
+               {/* SECTION CONTROLE TECHNIQUE */}
+               {activeReport === 'ct' && (
+                 <div className="space-y-6">
+                    <div className="bg-nsp-input/50 p-6 rounded-[2rem] border border-white/5">
+                       <p className="text-[9px] text-gray-500 font-black uppercase mb-1">Dernière visite</p>
+                       <p className="text-white font-black text-xl">{proactiveStatus.lastCTInvoice?.date || 'Non trouvée'}</p>
+                       <div className="mt-4 p-4 bg-nsp-primary/10 rounded-xl border border-nsp-primary/20">
+                          <p className="text-nsp-primary font-black text-[9px] uppercase mb-1">Prochaine Échéance</p>
+                          <p className="text-white font-black text-lg">{proactiveStatus.nextDeadline}</p>
+                       </div>
                     </div>
-                  ) : (
-                    <div className="grid grid-cols-2 gap-4">
-                        {activeReport === 'tires' && (
-                          <>
-                            <div className="bg-nsp-input p-5 rounded-3xl border border-white/5 text-center">
-                               <p className="text-[8px] text-gray-500 font-black uppercase mb-1">Pression AV</p>
-                               <p className="text-white font-black text-xl">{specs?.tirePressureFront || '2.3 bar'}</p>
-                            </div>
-                            <div className="bg-nsp-input p-5 rounded-3xl border border-white/5 text-center">
-                               <p className="text-[8px] text-gray-500 font-black uppercase mb-1">Pression AR</p>
-                               <p className="text-white font-black text-xl">{specs?.tirePressureRear || '2.1 bar'}</p>
-                            </div>
-                          </>
-                        )}
-                        {activeReport === 'fluids' && (
-                          <div className="col-span-2 bg-nsp-input p-5 rounded-3xl border border-white/5 flex items-center gap-4">
-                             <Droplet size={24} className="text-yellow-500" />
+                    {proactiveStatus.lastCTInvoice && (
+                      <button 
+                        onClick={() => setViewingInvoice(proactiveStatus.lastCTInvoice!)}
+                        className="w-full bg-nsp-primary text-white py-5 rounded-2xl font-black text-xs uppercase flex items-center justify-center gap-3 shadow-xl"
+                      >
+                        <FileText size={18} /> Voir le dernier rapport
+                      </button>
+                    )}
+                 </div>
+               )}
+
+               {/* SECTION ASSURANCE */}
+               {activeReport === 'insurance' && (
+                 <div className="space-y-6">
+                    <div className="bg-nsp-input/50 p-6 rounded-[2rem] border border-white/5 space-y-4">
+                       <div>
+                          <p className="text-[9px] text-gray-500 font-black uppercase mb-1">Contrat N°</p>
+                          <p className="text-white font-black text-lg">{car.insurance?.contractNumber || 'Non renseigné'}</p>
+                       </div>
+                       <div>
+                          <p className="text-[9px] text-gray-500 font-black uppercase mb-1">Assistance</p>
+                          <p className="text-white font-black text-lg">{car.insurance?.assistancePhone || '0800...'}</p>
+                       </div>
+                    </div>
+                    {car.insurance?.greenCardUrl && (
+                      <button 
+                        onClick={() => setViewingDoc({title: 'Carte Verte', url: car.insurance!.greenCardUrl!})}
+                        className="w-full bg-nsp-success text-white py-5 rounded-2xl font-black text-xs uppercase flex items-center justify-center gap-3 shadow-xl"
+                      >
+                        <Shield size={18} /> Voir Carte Verte
+                      </button>
+                    )}
+                 </div>
+               )}
+
+               {/* SECTION CATALOGUE PIÈCES IA */}
+               {activeReport === 'parts' && (
+                 <div className="space-y-6">
+                    <div className="flex items-center gap-2 px-2">
+                       <SearchCode size={16} className="text-nsp-primary" />
+                       <h4 className="text-[10px] text-gray-500 font-black uppercase tracking-widest">Composants Identifiés</h4>
+                    </div>
+                    {proactiveStatus.allDetectedParts.length === 0 ? (
+                       <div className="p-10 text-center border-2 border-dashed border-nsp-border rounded-3xl">
+                          <p className="text-gray-600 font-black text-[10px] uppercase">Aucune pièce détectée par l'IA dans vos factures.</p>
+                       </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {proactiveStatus.allDetectedParts.map((part, idx) => (
+                          <div key={idx} className="bg-nsp-input p-5 rounded-2xl border border-white/5 flex items-center justify-between">
                              <div>
-                                <p className="text-white font-black text-sm uppercase">{specs?.oilType || '5W30 C3'}</p>
-                                <p className="text-[8px] text-gray-500 font-black uppercase tracking-widest">Spécification Huile Recommandée</p>
+                                <p className="text-white font-black text-sm uppercase">{part.name}</p>
+                                {part.ref && <p className="text-nsp-primary font-black text-[10px] mt-1">REF: {part.ref}</p>}
+                                <p className="text-[8px] text-gray-500 font-bold uppercase mt-1">Dernière pose : {part.date} ({part.km.toLocaleString()} KM)</p>
+                             </div>
+                             <div className="w-8 h-8 rounded-full bg-nsp-success/10 flex items-center justify-center text-nsp-success">
+                                <CheckCircle2 size={16} />
                              </div>
                           </div>
-                        )}
-                        {activeReport === 'health' && (
-                          <>
-                            <div className="bg-nsp-input p-5 rounded-3xl border border-white/5 text-center">
-                               <p className="text-[8px] text-gray-500 font-black uppercase mb-1">Entretien</p>
-                               <p className="text-white font-black text-lg">{specs?.maintenanceIntervalKm?.toLocaleString() || '20 000'} KM</p>
-                            </div>
-                            <div className="bg-nsp-input p-5 rounded-3xl border border-white/5 text-center">
-                               <p className="text-[8px] text-gray-500 font-black uppercase mb-1">Distribution</p>
-                               <p className="text-white font-black text-lg">{specs?.timingBeltIntervalKm ? `${specs.timingBeltIntervalKm.toLocaleString()} KM` : 'N/A'}</p>
-                            </div>
-                          </>
-                        )}
-                    </div>
-                  )}
-               </section>
-
-               {/* 2. HISTORIQUE IA DÉTAILLÉ */}
-               <section className="space-y-5">
-                  <div className="flex items-center justify-between px-2">
-                     <h3 className="text-[10px] text-gray-500 font-black uppercase tracking-[0.2em] flex items-center gap-2">
-                        <History size={14} className="text-nsp-primary" /> Analyse des Interventions
-                     </h3>
-                  </div>
-
-                  <div className="space-y-4">
-                    {technicalHistory.filter(item => {
-                       if (activeReport === 'tires') return !!item.specs.tireDimensions;
-                       if (activeReport === 'fluids') return !!item.specs.oilViscosity || (item.specs.filterRefs && item.specs.filterRefs.some(f => f.toLowerCase().includes('huile')));
-                       if (activeReport === 'health') return (item.specs.mechanicalParts && item.specs.mechanicalParts.length > 0) || (item.specs.filterRefs && item.specs.filterRefs.length > 0) || !!item.specs.batteryRef;
-                       return false;
-                    }).length === 0 ? (
-                      <div className="bg-white/5 border border-dashed border-white/10 p-12 rounded-[2.5rem] text-center">
-                         <Search size={32} className="text-gray-800 mx-auto mb-4" />
-                         <p className="text-gray-600 font-black text-[10px] uppercase tracking-widest leading-relaxed">
-                            Aucune donnée technique détectée.<br/>Scannez vos factures pour extraire les pièces.
-                         </p>
+                        ))}
                       </div>
-                    ) : (
-                      technicalHistory.filter(item => {
-                         if (activeReport === 'tires') return !!item.specs.tireDimensions;
-                         if (activeReport === 'fluids') return !!item.specs.oilViscosity || (item.specs.filterRefs && item.specs.filterRefs.some(f => f.toLowerCase().includes('huile')));
-                         if (activeReport === 'health') return (item.specs.mechanicalParts && item.specs.mechanicalParts.length > 0) || (item.specs.filterRefs && item.specs.filterRefs.length > 0) || !!item.specs.batteryRef;
-                         return false;
-                      }).map((item, idx) => (
-                        <div key={idx} className="bg-nsp-card border border-nsp-border rounded-[2.5rem] overflow-hidden shadow-xl animate-fade-in" style={{animationDelay: `${idx * 0.1}s`}}>
-                           <div className="bg-nsp-input px-6 py-4 flex justify-between items-center border-b border-white/5">
-                              <div className="flex items-center gap-2 overflow-hidden">
-                                 <Calendar size={12} className="text-nsp-primary" />
-                                 <span className="text-white font-black text-[9px] uppercase tracking-tight truncate">{item.title}</span>
-                              </div>
-                              <span className="text-gray-500 font-bold text-[8px] whitespace-nowrap">{item.date} • {item.km.toLocaleString()} KM</span>
-                           </div>
-                           <div className="p-6 space-y-5">
-                              {activeReport === 'tires' && item.specs.tireDimensions && (
-                                <div className="flex items-start gap-4 bg-blue-500/5 p-4 rounded-2xl border border-blue-500/10">
-                                   <div className="w-10 h-10 bg-blue-500/10 rounded-xl flex items-center justify-center text-blue-400 shrink-0"><Layers size={20}/></div>
-                                   <div>
-                                      <p className="text-[8px] text-blue-400 uppercase font-black tracking-widest mb-1">Dimensions Identifiées :</p>
-                                      <p className="text-white font-black text-base">{item.specs.tireDimensions}</p>
-                                   </div>
-                                </div>
-                              )}
-
-                              {activeReport === 'fluids' && (
-                                <div className="space-y-4">
-                                   {item.specs.oilViscosity && (
-                                      <div className="flex items-start gap-4 bg-yellow-500/5 p-4 rounded-2xl border border-yellow-500/10">
-                                         <div className="w-10 h-10 bg-yellow-500/10 rounded-xl flex items-center justify-center text-yellow-500 shrink-0"><Droplet size={20}/></div>
-                                         <div className="flex-1">
-                                            <div className="flex justify-between items-start">
-                                               <p className="text-[8px] text-yellow-500 uppercase font-black tracking-widest mb-1">Huile Relevée :</p>
-                                               {item.specs.oilQuantity && <span className="text-[10px] text-white font-black bg-yellow-500/20 px-2 py-0.5 rounded-md">{item.specs.oilQuantity}</span>}
-                                            </div>
-                                            <p className="text-white font-black text-base">{item.specs.oilViscosity}</p>
-                                         </div>
-                                      </div>
-                                   )}
-                                </div>
-                              )}
-
-                              {activeReport === 'health' && (
-                                <div className="space-y-5">
-                                   {item.specs.mechanicalParts && item.specs.mechanicalParts.length > 0 && (
-                                      <div className="space-y-3">
-                                         <p className="text-[8px] text-nsp-primary font-black uppercase tracking-widest ml-1 flex items-center gap-2">
-                                            <Wrench size={10} /> Organes Mécaniques :
-                                         </p>
-                                         <div className="flex flex-wrap gap-2">
-                                            {item.specs.mechanicalParts.map((part, i) => (
-                                              <span key={i} className="bg-white/5 px-3 py-1.5 rounded-xl text-white font-bold text-[10px] border border-white/10 shadow-sm">{part}</span>
-                                            ))}
-                                         </div>
-                                      </div>
-                                   )}
-                                </div>
-                              )}
-                              
-                              <div className="flex items-center justify-between pt-4 border-t border-white/5">
-                                 <div className="flex items-center gap-2">
-                                    <div className="w-1.5 h-1.5 rounded-full bg-nsp-success"></div>
-                                    <span className="text-[8px] text-gray-600 font-black uppercase tracking-widest">Origine Certifiée IA</span>
-                                 </div>
-                                 <button className="text-nsp-primary font-black text-[8px] uppercase tracking-widest flex items-center gap-1 hover:translate-x-1 transition-transform">
-                                    Recommander ces pièces <ChevronRight size={10}/>
-                                 </button>
-                              </div>
-                           </div>
-                        </div>
-                      ))
                     )}
-                  </div>
-               </section>
+                 </div>
+               )}
+
+               {/* ANCIENS RAPPORTS (CONSTRUCTEUR) */}
+               {['health', 'tires', 'fluids'].includes(activeReport!) && (
+                 <section className="space-y-4">
+                    <div className="flex items-center justify-between px-2">
+                       <h3 className="text-[10px] text-gray-500 font-black uppercase tracking-[0.2em] flex items-center gap-2">
+                          <ShieldCheck size={14} className="text-nsp-primary" /> Données Techniques
+                       </h3>
+                    </div>
+                    {isLoadingSpecs ? <Loader2 className="animate-spin text-nsp-primary mx-auto" /> : (
+                      <div className="grid grid-cols-2 gap-4">
+                          {activeReport === 'fluids' && (
+                            <div className="col-span-2 bg-nsp-input p-5 rounded-3xl border border-white/5 flex items-center gap-4">
+                               <Droplet size={24} className="text-yellow-500" />
+                               <div>
+                                  <p className="text-white font-black text-sm uppercase">{specs?.oilType || '5W30'}</p>
+                                  <p className="text-[8px] text-gray-500 font-black uppercase tracking-widest">Spécification Recommandée</p>
+                               </div>
+                            </div>
+                          )}
+                          {activeReport === 'tires' && (
+                             <>
+                               <div className="bg-nsp-input p-5 rounded-3xl border border-white/5 text-center">
+                                  <p className="text-[8px] text-gray-500 font-black uppercase mb-1">Usure Estimée</p>
+                                  <p className="text-white font-black text-xl">{proactiveStatus.tireHealth?.wearPercentage}%</p>
+                               </div>
+                               <div className="bg-nsp-input p-5 rounded-3xl border border-white/5 text-center">
+                                  <p className="text-[8px] text-gray-500 font-black uppercase mb-1">Pression AV/AR</p>
+                                  <p className="text-white font-black text-lg">{specs?.tirePressureFront} / {specs?.tirePressureRear}</p>
+                               </div>
+                             </>
+                          )}
+                      </div>
+                    )}
+                 </section>
+               )}
             </div>
 
-            <button 
-              onClick={() => setActiveReport(null)}
-              className="w-full bg-nsp-primary text-white py-6 rounded-[2rem] font-black text-xs uppercase tracking-widest mt-12 shadow-xl active:scale-95 transition-all"
-            >
-               Fermer l'Analyse Technique
-            </button>
+            <button onClick={() => setActiveReport(null)} className="w-full bg-nsp-primary text-white py-6 rounded-[2rem] font-black text-xs uppercase tracking-widest mt-12">Fermer</button>
           </div>
         </div>
       )}
 
       {/* VISIONNEUSE DE DOCUMENTS */}
-      {viewingInvoice && (
-        <div className="fixed inset-0 z-[2000] bg-black/98 flex flex-col pt-safe-top animate-fade-in overflow-hidden">
-          <header className="p-6 flex justify-between items-center bg-black/50 border-b border-white/10 z-[2001]">
-             <button onClick={() => setViewingInvoice(null)} className="p-3 bg-nsp-input rounded-xl text-white hover:bg-nsp-primary transition-colors"><X size={24}/></button>
+      {(viewingInvoice || viewingDoc) && (
+        <div className="fixed inset-0 z-[2000] bg-black/98 flex flex-col pt-safe-top animate-fade-in">
+          <header className="p-6 flex justify-between items-center bg-black/50 border-b border-white/10">
+             <button onClick={() => {setViewingInvoice(null); setViewingDoc(null);}} className="p-3 bg-nsp-input rounded-xl text-white"><X size={24}/></button>
              <div className="text-center">
-                <h3 className="text-white font-black text-xs uppercase tracking-[0.2em] truncate max-w-[150px]">{viewingInvoice.title}</h3>
-                <p className="text-[9px] text-nsp-primary font-black uppercase mt-1 tracking-widest">Coffre-fort Numérique</p>
+                <h3 className="text-white font-black text-xs uppercase tracking-[0.2em]">{viewingInvoice?.title || viewingDoc?.title}</h3>
+                <p className="text-[9px] text-nsp-primary font-black uppercase mt-1">Coffre-fort Numérique</p>
              </div>
-             <div className="flex gap-2">
-               <button onClick={() => window.open(base64ToRealBlobUrl(viewingInvoice.imageUrl || '', isPDF(viewingInvoice.imageUrl) ? 'application/pdf' : 'image/jpeg'), '_blank')} className="p-3 bg-nsp-input rounded-xl text-white"><Maximize2 size={24}/></button>
-             </div>
+             <button onClick={() => window.open(base64ToRealBlobUrl((viewingInvoice?.imageUrl || viewingDoc?.url || ''), isPDF(viewingInvoice?.imageUrl || viewingDoc?.url) ? 'application/pdf' : 'image/jpeg'), '_blank')} className="p-3 bg-nsp-input rounded-xl text-white"><Maximize2 size={24}/></button>
           </header>
           
-          <div className="flex-1 flex flex-col items-center justify-center p-4">
-            <div className="w-full h-full max-w-4xl bg-nsp-card rounded-[2.5rem] overflow-hidden border border-white/10 shadow-2xl relative">
-              {isPDF(viewingInvoice.imageUrl) ? (
-                <div className="w-full h-full bg-black overflow-hidden relative">
-                   <iframe 
-                      src={base64ToRealBlobUrl(viewingInvoice.imageUrl || '', 'application/pdf') + '#toolbar=0&navpanes=0'} 
-                      className="w-full h-full border-0"
-                      title="PDF Viewer"
-                   />
-                </div>
+          <div className="flex-1 flex items-center justify-center p-4">
+              {isPDF(viewingInvoice?.imageUrl || viewingDoc?.url) ? (
+                <iframe src={base64ToRealBlobUrl((viewingInvoice?.imageUrl || viewingDoc?.url || ''), 'application/pdf')} className="w-full h-full rounded-2xl" />
               ) : (
-                <img src={safeBase64ToBlobUrl(viewingInvoice.imageUrl || '')} className="w-full h-full object-contain bg-[#050505]" alt="Facture" />
+                <img src={safeBase64ToBlobUrl(viewingInvoice?.imageUrl || viewingDoc?.url || '')} className="max-w-full max-h-full object-contain rounded-2xl" alt="Document" />
               )}
-            </div>
-          </div>
-
-          <div className="p-8 bg-nsp-card/80 backdrop-blur-xl border-t border-white/10 space-y-6">
-             <div className="grid grid-cols-2 gap-4">
-                <div className="bg-nsp-input p-5 rounded-2xl border border-white/5">
-                   <p className="text-[9px] text-gray-500 font-black uppercase mb-1">Montant Payé</p>
-                   <p className="text-white font-black text-2xl tracking-tighter">{viewingInvoice.price} €</p>
-                </div>
-                <div className="bg-nsp-input p-5 rounded-2xl border border-white/5">
-                   <p className="text-[9px] text-gray-500 font-black uppercase mb-1">Relevé KM</p>
-                   <p className="text-white font-black text-2xl tracking-tighter">{viewingInvoice.km.toLocaleString()}</p>
-                </div>
-             </div>
-             <div className="flex gap-4">
-                <button onClick={handleDelete} className="flex-1 bg-red-600/10 text-red-500 font-black py-5 rounded-[2rem] text-[10px] uppercase border border-red-500/20 active:scale-95 transition-all flex items-center justify-center gap-2">
-                  <Trash2 size={18} /> Supprimer
-                </button>
-                <button onClick={() => setViewingInvoice(null)} className="flex-1 bg-white/10 text-white font-black py-5 rounded-[2rem] text-[10px] uppercase border border-white/10 active:scale-95 transition-all"> Fermer </button>
-             </div>
           </div>
         </div>
       )}

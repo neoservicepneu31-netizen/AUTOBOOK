@@ -8,6 +8,8 @@ const BASE_RULES = {
   CHECK_TIRES_DAYS: 30,
   CHECK_OIL_DAYS: 90,
   CT_INTERVAL_YEARS: 2,
+  TIRE_LIFESPAN_KM: 45000, 
+  TIRE_AGE_YEARS: 5,
 };
 
 interface MaintenanceStatus {
@@ -17,6 +19,14 @@ interface MaintenanceStatus {
   alerts: string[];
   pendingTasks: {id: string, label: string, severity: 'low' | 'high', basis?: string} [];
   upcomingDeadlines: {id: string, label: string, date: string, type: 'CT' | 'REVISION'} [];
+  tireHealth?: {
+    mileageSinceChange: number;
+    wearPercentage: number;
+    lastChangeDate?: string;
+    recommendation: string;
+  };
+  lastCTInvoice?: Invoice;
+  allDetectedParts: {name: string, date: string, km: number, ref?: string}[];
 }
 
 export const calculateMaintenanceStatus = (car: Car, invoices: Invoice[]): MaintenanceStatus => {
@@ -32,7 +42,6 @@ export const calculateMaintenanceStatus = (car: Car, invoices: Invoice[]): Maint
 
   const daysSinceLastCheck = Math.floor((today.getTime() - lastDocDate.getTime()) / (1000 * 60 * 60 * 24));
 
-  // --- ANALYSE MARQUE & MODÈLE ---
   const make = car.name.split(' ')[0].toUpperCase();
   let maintenanceIntervalKm = BASE_RULES.REVISION_KM;
   
@@ -73,6 +82,10 @@ export const calculateMaintenanceStatus = (car: Car, invoices: Invoice[]): Maint
   }
 
   // 2. CONTRÔLE TECHNIQUE
+  const lastCT = invoices
+    .filter(i => /contr[oô]le technique|ct\b|visite technique/i.test(i.title.toLowerCase()))
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
+
   const nextCTDate = calculateNextCT(car.firstRegistrationDate, invoices);
   const diffTimeCT = nextCTDate.getTime() - today.getTime();
   const diffDaysCT = Math.ceil(diffTimeCT / (1000 * 60 * 60 * 24));
@@ -87,30 +100,54 @@ export const calculateMaintenanceStatus = (car: Car, invoices: Invoice[]): Maint
       date: nextCTDate.toLocaleDateString(),
       type: 'CT'
     });
-    if (diffDaysCT < 45) {
-      pendingTasks.push({id: 'ct_warn', label: 'Réserver Contrôle Technique', severity: 'high', basis: `Échéance proche : ${nextCTDate.toLocaleDateString()}`});
+  }
+
+  // 3. AGRÉGATION DES PIÈCES IA
+  const allDetectedParts: {name: string, date: string, km: number, ref?: string}[] = [];
+  invoices.forEach(inv => {
+    if (inv.detectedSpecs) {
+      if (inv.detectedSpecs.mechanicalParts) {
+        inv.detectedSpecs.mechanicalParts.forEach(p => allDetectedParts.push({ name: p, date: inv.date, km: inv.km }));
+      }
+      if (inv.detectedSpecs.filterRefs) {
+        inv.detectedSpecs.filterRefs.forEach(f => allDetectedParts.push({ name: 'Filtre', ref: f, date: inv.date, km: inv.km }));
+      }
+      if (inv.detectedSpecs.oilViscosity) {
+        allDetectedParts.push({ name: 'Huile Moteur', ref: inv.detectedSpecs.oilViscosity, date: inv.date, km: inv.km });
+      }
+      if (inv.detectedSpecs.batteryRef) {
+        allDetectedParts.push({ name: 'Batterie', ref: inv.detectedSpecs.batteryRef, date: inv.date, km: inv.km });
+      }
     }
+  });
+
+  // 4. ANALYSE PNEUS
+  const lastTireChange = invoices
+    .filter(i => /pneu|pneumatique|tire|montage/i.test(i.title.toLowerCase()) && i.price > 100)
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
+
+  let tireHealth = {
+    mileageSinceChange: lastTireChange ? currentKm - lastTireChange.km : currentKm,
+    wearPercentage: 0,
+    lastChangeDate: lastTireChange?.date,
+    recommendation: "Pneus en bon état apparent."
+  };
+
+  tireHealth.wearPercentage = Math.min(100, Math.round((tireHealth.mileageSinceChange / BASE_RULES.TIRE_LIFESPAN_KM) * 100));
+
+  if (tireHealth.wearPercentage > 85) {
+    tireHealth.recommendation = "Remplacement recommandé immédiatement.";
   }
 
-  // 3. ENTRETIENS COURANTS
-  if (daysSinceLastCheck >= BASE_RULES.CHECK_TIRES_DAYS) {
-    pendingTasks.push({id: 'tires', label: 'Vérifier Pression Pneus', severity: 'low', basis: `${daysSinceLastCheck} jours sans contrôle`});
-  }
-  
-  if (daysSinceLastCheck >= BASE_RULES.CHECK_OIL_DAYS) {
-    pendingTasks.push({id: 'oil_check', label: 'Vérifier Niveau Huile', severity: 'high', basis: 'Contrôle visuel requis'});
-  }
-
-  // Détermination du statut global
   let status: MaintenanceStatus['status'] = 'success';
   let message = `Toutes les échéances de votre ${car.name} sont à jour.`;
 
   if (pendingTasks.some(t => t.severity === 'high')) {
     status = 'critical';
-    message = `ALERTE : Votre historique indique des entretiens en retard ou imminents.`;
+    message = `ALERTE : Des entretiens critiques sont en retard.`;
   } else if (pendingTasks.length > 0 || upcomingDeadlines.length > 0) {
     status = 'warning';
-    message = `VIGILANCE : Des vérifications ou échéances approchent pour votre ${car.name}.`;
+    message = `VIGILANCE : Des échéances approchent.`;
   }
 
   return { 
@@ -119,7 +156,10 @@ export const calculateMaintenanceStatus = (car: Car, invoices: Invoice[]): Maint
     nextDeadline: nextCTDate.toLocaleDateString(), 
     alerts,
     pendingTasks,
-    upcomingDeadlines
+    upcomingDeadlines,
+    tireHealth,
+    lastCTInvoice: lastCT,
+    allDetectedParts
   };
 };
 
@@ -137,16 +177,13 @@ const calculateNextCT = (firstRegDateStr: string, invoices: Invoice[]): Date => 
 
   const firstCT = new Date(firstReg);
   firstCT.setFullYear(firstCT.getFullYear() + 4);
-  
   const today = new Date();
   if (today > firstCT) {
       let estimatedNext = new Date(firstCT);
       while(estimatedNext < today) {
           estimatedNext.setFullYear(estimatedNext.getFullYear() + 2);
       }
-      // On recule d'un cycle si l'estimé est trop loin dans le futur sans preuve
       return estimatedNext;
   }
-
   return firstCT;
 };
