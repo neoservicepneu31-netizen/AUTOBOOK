@@ -3,7 +3,7 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { User, Car, Invoice, AIStatus, ManufacturerSpecs, TechnicalSpecs } from '../types';
 import { 
   Plus, FileText, ArrowLeft, Sparkles, Gauge, Droplet, PhoneCall, X, 
-  Wrench, AlertCircle, Share2, ShieldCheck, ChevronRight, Activity, Info, Eye, Download, Maximize2, Loader2, Trash2, Layers, Search, History, CheckCircle2, AlertTriangle, ListChecks, Calendar, Scale, Image as ImageIcon, BellRing, Clock, ShieldAlert, CircleAlert, Shield, SearchCode, PackageSearch, TrendingUp, TrendingDown, Wallet
+  Wrench, AlertCircle, Share2, ShieldCheck, ChevronRight, Activity, Info, Eye, Download, Maximize2, Loader2, Trash2, Layers, Search, History, CheckCircle2, AlertTriangle, ListChecks, Calendar, Scale, Image as ImageIcon, BellRing, Clock, ShieldAlert, CircleAlert, Shield, SearchCode, PackageSearch, TrendingUp, TrendingDown, Wallet, Medal, Target
 } from 'lucide-react';
 import { getPersonalizedMaintenance, safeBase64ToBlobUrl, base64ToRealBlobUrl } from '../services/geminiService';
 import { calculateMaintenanceStatus } from '../services/mechanicRules';
@@ -80,73 +80,104 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
 
       <main className="p-6 space-y-8 animate-fade-in flex-1">
         
-        {/* COMMAND CENTER : SCORE DE SANTÉ & COTE */}
-        <div className="bg-nsp-card border border-nsp-border rounded-[3rem] p-8 shadow-2xl relative overflow-hidden group">
-           <div className="absolute top-0 right-0 w-32 h-32 bg-nsp-primary/5 blur-[50px] rounded-full group-hover:bg-nsp-primary/10 transition-all"></div>
+        {/* COMMAND CENTER OPTIMISÉ VISUELLEMENT */}
+        <div className="bg-nsp-card border border-nsp-border rounded-[3.5rem] p-6 shadow-2xl relative overflow-hidden">
+           <div className="absolute top-0 right-0 w-48 h-48 bg-nsp-primary/5 blur-[60px] rounded-full"></div>
            
-           <div className="flex items-center justify-between relative z-10">
-              <div className="space-y-4">
-                 <div className="flex items-center gap-2">
-                    <Sparkles size={16} className="text-nsp-primary animate-pulse" />
-                    <span className="text-[9px] text-gray-400 font-black uppercase tracking-[0.2em]">Diagnostic IA Pro</span>
-                 </div>
-                 
-                 <div>
-                    <div className="flex items-end gap-1">
-                       <span className={`text-6xl font-black tracking-tighter ${proactiveStatus.healthScore > 80 ? 'text-nsp-success' : proactiveStatus.healthScore > 50 ? 'text-orange-500' : 'text-nsp-primary'}`}>
-                          {proactiveStatus.healthScore}
-                       </span>
-                       <span className="text-2xl font-black text-gray-700 mb-2">%</span>
-                    </div>
-                    <p className="text-[11px] font-black text-white uppercase mt-1 tracking-widest">Coefficient de santé</p>
-                 </div>
-
-                 <div className="flex items-center gap-3 pt-2">
-                    <div className="bg-nsp-input/50 px-3 py-1.5 rounded-xl border border-white/5 flex items-center gap-2">
-                       <TrendingUp size={12} className="text-nsp-success" />
-                       <span className="text-[8px] text-white font-black uppercase tracking-widest">Moteur Opti</span>
-                    </div>
-                    <div className="bg-nsp-input/50 px-3 py-1.5 rounded-xl border border-white/5 flex items-center gap-2">
-                       <History size={12} className="text-nsp-primary" />
-                       <span className="text-[8px] text-white font-black uppercase tracking-widest">Historique OK</span>
-                    </div>
-                 </div>
+           <div className="flex flex-col gap-8 relative z-10">
+              {/* Header du bloc */}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="p-2 bg-nsp-primary/20 rounded-lg">
+                    <Sparkles size={14} className="text-nsp-primary animate-pulse" />
+                  </div>
+                  <span className="text-[10px] text-gray-400 font-black uppercase tracking-[0.2em]">Diagnostic IA Pro</span>
+                </div>
+                <div className="bg-nsp-success/10 px-3 py-1 rounded-full border border-nsp-success/20 flex items-center gap-2">
+                   <ShieldCheck size={12} className="text-nsp-success" />
+                   <span className="text-[8px] text-nsp-success font-black uppercase tracking-widest">Certifié Cloud</span>
+                </div>
               </div>
 
-              <div className="text-right flex flex-col items-end">
-                 <div className="w-20 h-20 rounded-full border-4 border-nsp-input flex items-center justify-center relative">
+              {/* Jauge Centrale & Score */}
+              <div className="flex items-center gap-8">
+                 <div className="relative w-32 h-32 flex items-center justify-center">
                     <svg className="w-full h-full transform -rotate-90">
                        <circle
-                          cx="40"
-                          cy="40"
-                          r="34"
+                          cx="64"
+                          cy="64"
+                          r="54"
                           stroke="currentColor"
-                          strokeWidth="8"
+                          strokeWidth="10"
                           fill="transparent"
                           className="text-white/5"
                        />
                        <circle
-                          cx="40"
-                          cy="40"
-                          r="34"
+                          cx="64"
+                          cy="64"
+                          r="54"
                           stroke="currentColor"
-                          strokeWidth="8"
+                          strokeWidth="10"
                           fill="transparent"
-                          strokeDasharray={2 * Math.PI * 34}
-                          strokeDashoffset={2 * Math.PI * 34 * (1 - proactiveStatus.healthScore / 100)}
-                          className={proactiveStatus.healthScore > 80 ? 'text-nsp-success' : proactiveStatus.healthScore > 50 ? 'text-orange-500' : 'text-nsp-primary'}
+                          strokeDasharray={2 * Math.PI * 54}
+                          strokeDashoffset={2 * Math.PI * 54 * (1 - proactiveStatus.healthScore / 100)}
+                          strokeLinecap="round"
+                          className={`transition-all duration-1000 ${proactiveStatus.healthScore > 80 ? 'text-nsp-success' : proactiveStatus.healthScore > 50 ? 'text-orange-500' : 'text-nsp-primary'}`}
                        />
                     </svg>
-                    <div className="absolute inset-0 flex items-center justify-center">
-                       <ShieldCheck size={28} className={proactiveStatus.healthScore > 80 ? 'text-nsp-success' : 'text-gray-700'} />
+                    <div className="absolute inset-0 flex flex-col items-center justify-center">
+                       <span className={`text-4xl font-black tracking-tighter leading-none ${proactiveStatus.healthScore > 80 ? 'text-nsp-success' : proactiveStatus.healthScore > 50 ? 'text-orange-500' : 'text-nsp-primary'}`}>
+                          {proactiveStatus.healthScore}
+                       </span>
+                       <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest mt-1">%</span>
                     </div>
                  </div>
-                 <div className="mt-6 bg-nsp-input/80 backdrop-blur-md p-4 rounded-2xl border border-white/10 shadow-xl w-36">
-                    <div className="flex items-center gap-2 mb-1">
-                       <Wallet size={12} className="text-nsp-primary" />
-                       <span className="text-[8px] text-gray-500 font-black uppercase tracking-widest">Valeur Argus</span>
+
+                 <div className="flex-1 space-y-4">
+                    <div>
+                      <h4 className="text-white font-black text-base uppercase tracking-tight leading-none mb-2">Etat du Véhicule</h4>
+                      <div className="flex flex-wrap gap-2">
+                        <div className="bg-white/5 px-2 py-1 rounded-md flex items-center gap-2 border border-white/5">
+                           <TrendingUp size={10} className="text-nsp-success" />
+                           <span className="text-[7px] text-white font-black uppercase">Moteur Opti</span>
+                        </div>
+                        <div className="bg-white/5 px-2 py-1 rounded-md flex items-center gap-2 border border-white/5">
+                           <Target size={10} className="text-nsp-primary" />
+                           <span className="text-[7px] text-white font-black uppercase">Révision OK</span>
+                        </div>
+                      </div>
                     </div>
-                    <p className="text-xl font-black text-white tracking-tighter">{proactiveStatus.estimatedValue.toLocaleString()} €</p>
+                    <div className="h-px bg-white/5 w-full"></div>
+                    <p className="text-[9px] text-gray-500 font-bold uppercase tracking-widest leading-relaxed">
+                      Basé sur {invoices.length} factures et {car.initialKm.toLocaleString()} km initiaux.
+                    </p>
+                 </div>
+              </div>
+
+              {/* Stats Grid - Cartes du bas */}
+              <div className="grid grid-cols-2 gap-3">
+                 <div className="bg-nsp-input/40 backdrop-blur-md p-5 rounded-[2rem] border border-white/10 shadow-lg group hover:border-nsp-primary/30 transition-all">
+                    <div className="flex items-center gap-2 mb-2">
+                       <Wallet size={14} className="text-nsp-primary" />
+                       <span className="text-[9px] text-gray-500 font-black uppercase tracking-widest">Valeur Argus</span>
+                    </div>
+                    <div className="flex items-baseline gap-1">
+                      <span className="text-2xl font-black text-white tracking-tighter">{proactiveStatus.estimatedValue.toLocaleString()}</span>
+                      <span className="text-xs font-black text-nsp-primary">€</span>
+                    </div>
+                 </div>
+
+                 <div className="bg-nsp-input/40 backdrop-blur-md p-5 rounded-[2rem] border border-white/10 shadow-lg group hover:border-nsp-primary/30 transition-all">
+                    <div className="flex items-center gap-2 mb-2">
+                       <Calendar size={14} className="text-nsp-primary" />
+                       <span className="text-[9px] text-gray-500 font-black uppercase tracking-widest">Age du Parc</span>
+                    </div>
+                    <div className="flex items-baseline gap-1">
+                      <span className="text-2xl font-black text-white tracking-tighter">
+                        {Math.floor((new Date().getTime() - new Date(car.firstRegistrationDate).getTime()) / (1000 * 60 * 60 * 24 * 365))}
+                      </span>
+                      <span className="text-xs font-black text-nsp-primary uppercase">Ans</span>
+                    </div>
                  </div>
               </div>
            </div>
