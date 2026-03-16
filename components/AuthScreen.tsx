@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { User } from '../types';
-import { ArrowRight, UserPlus, ShieldCheck, CheckCircle2, Wrench, Car, Lock, AlertCircle, ShieldAlert, LayoutDashboard, CheckSquare, Square, UserCircle2, KeyRound, Check, RefreshCw } from 'lucide-react';
+import { ArrowRight, UserPlus, ShieldCheck, CheckCircle2, Wrench, Car, Lock, AlertCircle, ShieldAlert, LayoutDashboard, CheckSquare, Square, UserCircle2, KeyRound, Check, RefreshCw, Mail } from 'lucide-react';
 
 interface AuthScreenProps {
   onLogin: (user: User) => void;
@@ -29,6 +29,17 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLogin, onForgotPasswor
     setTimeout(() => {
       setIsLoading(false);
       const foundUser = existingUsers.find(u => u.email.toLowerCase() === email.toLowerCase());
+
+      if (mode === 'recovery') {
+        if (foundUser) {
+          onForgotPasswordRequest(email);
+          setMode('login');
+          alert("Demande envoyée à l'administrateur. Vous recevrez un nouveau mot de passe par email après validation.");
+        } else {
+          setError("Aucun compte trouvé avec cette adresse email.");
+        }
+        return;
+      }
 
       if (isAdminMode) {
         if (email === 'neoservicepneu31@gmail.com' && password === 'PAM180279') {
@@ -119,8 +130,24 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLogin, onForgotPasswor
             </div>
             <div className="relative">
               <KeyRound className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" size={18} />
-              <input type="password" placeholder="MOT DE PASSE" value={password} onChange={e => setPassword(e.target.value)} className={`w-full bg-nsp-input border border-transparent rounded-2xl pl-12 pr-4 py-4 text-white text-xs font-bold outline-none transition-all ${isAdminMode ? 'focus:border-red-500' : 'focus:border-nsp-primary'}`} required />
+              <input type="password" placeholder="MOT DE PASSE" value={password} onChange={e => setPassword(e.target.value)} className={`w-full bg-nsp-input border border-transparent rounded-2xl pl-12 pr-4 py-4 text-white text-xs font-bold outline-none transition-all ${isAdminMode ? 'focus:border-red-500' : 'focus:border-nsp-primary'}`} required={mode !== 'recovery'} disabled={mode === 'recovery'} />
             </div>
+
+            {mode === 'login' && !isAdminMode && (
+              <div className="flex justify-end">
+                <button type="button" onClick={() => setMode('recovery')} className="text-[9px] text-gray-500 font-black uppercase tracking-widest hover:text-nsp-primary transition-colors">
+                  Mot de passe oublié ?
+                </button>
+              </div>
+            )}
+
+            {mode === 'recovery' && (
+              <div className="flex justify-end">
+                <button type="button" onClick={() => setMode('login')} className="text-[9px] text-gray-500 font-black uppercase tracking-widest hover:text-nsp-primary transition-colors">
+                  Retour à la connexion
+                </button>
+              </div>
+            )}
             
             <button disabled={isLoading} className={`w-full py-5 rounded-[2rem] font-black text-xs uppercase tracking-widest shadow-2xl active:scale-95 transition-all flex items-center justify-center gap-2 ${isAdminMode ? 'bg-white text-black' : 'bg-nsp-primary text-white'}`}>
               {isLoading ? (
@@ -129,8 +156,10 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLogin, onForgotPasswor
                 <>DÉVERROUILLER LA CONSOLE <ArrowRight size={18} /></>
               ) : mode === 'login' ? (
                 <>OUVRIR MON GARAGE <ArrowRight size={18} /></>
-              ) : (
+              ) : mode === 'register' ? (
                 <>CRÉER MON COMPTE <Check size={18} /></>
+              ) : (
+                <>DEMANDER UN NOUVEAU CODE <Mail size={18} /></>
               )}
             </button>
           </form>

@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Car, User, NewsArticle, Invoice } from '../types';
-import { Plus, Car as CarIcon, Bike, ChevronRight, LogOut, Newspaper, X, ArrowRight, FolderOpen, DownloadCloud, ShieldCheck, Zap, Bell, BellRing, ShieldAlert } from 'lucide-react';
+import { Plus, Car as CarIcon, Bike, ChevronRight, LogOut, Newspaper, X, ArrowRight, FolderOpen, DownloadCloud, ShieldCheck, Zap, Bell, BellRing, ShieldAlert, RefreshCw } from 'lucide-react';
 import { requestNotificationPermission, checkVehicleHealthAndNotify } from '../services/notificationService';
 import { calculateMaintenanceStatus } from '../services/mechanicRules';
 
@@ -77,9 +77,10 @@ interface GarageScreenProps {
   onAddCar: () => void;
   onLogout: () => void;
   onBuyCar: () => void;
+  onRefresh: () => void;
 }
 
-export const GarageScreen: React.FC<GarageScreenProps> = ({ user, cars, invoices, onSelectCar, onAddCar, onLogout, onBuyCar }) => {
+export const GarageScreen: React.FC<GarageScreenProps> = ({ user, cars, invoices, onSelectCar, onAddCar, onLogout, onBuyCar, onRefresh }) => {
   const [selectedArticle, setSelectedArticle] = useState<NewsArticle | null>(null);
   const [showNotifyPrompt, setShowNotifyPrompt] = useState(false);
 
@@ -110,6 +111,9 @@ export const GarageScreen: React.FC<GarageScreenProps> = ({ user, cars, invoices
             <p className="text-nsp-sub text-[10px] font-black uppercase tracking-widest">{user.name}</p>
           </div>
           <div className="flex items-center gap-2">
+            <button onClick={onRefresh} className="p-3 bg-nsp-input rounded-2xl text-nsp-success hover:text-white border border-white/5 transition-colors" title="Synchroniser">
+              <RefreshCw size={20} />
+            </button>
             <button onClick={onLogout} className="p-3 bg-nsp-input rounded-2xl text-nsp-sub hover:text-white border border-white/5 transition-colors">
               <LogOut size={20} />
             </button>

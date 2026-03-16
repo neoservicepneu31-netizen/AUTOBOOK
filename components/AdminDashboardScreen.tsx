@@ -7,8 +7,10 @@ import { safeBase64ToBlobUrl, base64ToRealBlobUrl } from '../services/geminiServ
 import { 
   BarChart3, Users, QrCode, Globe, AlertCircle, 
   Loader2, Copy, Check, ShieldAlert, ChevronRight, HardDrive, 
-  ArrowRight, Search, Info, X, Mail, Eye, LogOut, History, 
-  CloudUpload, LifeBuoy, SearchCode, Terminal, ShieldX, Send, BellRing, ExternalLink, UserPlus, MailCheck
+  ArrowRight, Search, Info, X, Mail, Eye, LogOut, History,
+  ShieldCheck, ShieldX, SearchCode, CloudUpload, Terminal,
+  LifeBuoy, Send, BellRing, ExternalLink, UserPlus, MailCheck,
+  KeyRound
 } from 'lucide-react';
 
 interface AdminDashboardScreenProps {
@@ -29,6 +31,8 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({
   const [searchTerm, setSearchTerm] = useState('');
   const [cloudStatus, setCloudStatus] = useState<'online' | 'syncing' | 'warning' | 'error'>('online');
   const [isEmergencyAction, setIsEmergencyAction] = useState(false);
+  const [diagnosticResult, setDiagnosticResult] = useState<{success: boolean, message: string, code?: string} | null>(null);
+  const [isTestingCloud, setIsTestingCloud] = useState(false);
   const [copySuccess, setCopySuccess] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [customDomain, setCustomDomain] = useState('autobook-zxwf.vercel.app');
@@ -78,9 +82,27 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({
     alert(`✅ Mail d'invitation envoyé à ${user.name}.\n\nContenu : Bienvenue sur AutoBook ! Scannez votre carte grise pour activer votre carnet de santé.`);
   };
 
+  const handleResetPassword = async (user: User) => {
+    const newPassword = Math.random().toString(36).slice(-8).toUpperCase();
+    setIsSendingMails(true);
+    // Simulation envoi mail avec nouveau mot de passe
+    await new Promise(res => setTimeout(res, 2000));
+    
+    const updatedUser = { 
+      ...user, 
+      password: newPassword, 
+      passwordResetRequested: false 
+    };
+    
+    onUpdateUser(updatedUser);
+    setIsSendingMails(false);
+    alert(`✅ Nouveau mot de passe généré et "envoyé" à ${user.email} : ${newPassword}`);
+  };
+
   const stats = useMemo(() => {
     const realUsers = allUsers.filter(u => u.role !== 'admin');
     const inactiveCount = realUsers.filter(u => allCars.filter(c => c.ownerId === u.id).length === 0).length;
+    const resetRequests = realUsers.filter(u => u.passwordResetRequested).length;
     
     // Détection des nouveaux (inscrits il y a moins de 48h)
     const fortyEightHoursAgo = Date.now() - (48 * 60 * 60 * 1000);
@@ -90,7 +112,8 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({
       totalUsers: realUsers.length, 
       totalCars: allCars.length,
       inactiveUsers: inactiveCount,
-      newSignups
+      newSignups,
+      resetRequests
     };
   }, [allUsers, allCars]);
 
@@ -110,6 +133,19 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({
     if (!user.createdAt) return false;
     const fortyEightHoursAgo = Date.now() - (48 * 60 * 60 * 1000);
     return new Date(user.createdAt).getTime() > fortyEightHoursAgo;
+  };
+
+  const handleRunDiagnostic = async () => {
+    setIsTestingCloud(true);
+    setDiagnosticResult(null);
+    try {
+      const result = await cloud.testConnectionDiagnostic();
+      setDiagnosticResult(result);
+    } catch (e: any) {
+      setDiagnosticResult({ success: false, message: e.message || "Erreur critique" });
+    } finally {
+      setIsTestingCloud(false);
+    }
   };
 
   return (
@@ -162,15 +198,24 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({
                    <div className="text-2xl font-black text-white">{stats.newSignups}</div>
                    <div className="absolute top-2 right-2"><UserPlus size={12} className="text-nsp-primary" /></div>
                 </div>
-                <div className="bg-nsp-card border border-nsp-border p-5 rounded-2xl">
-                   <span className="text-gray-500 text-[9px] uppercase font-black mb-1 block">Véhicules</span>
-                   <div className="text-2xl font-black text-white">{stats.totalCars}</div>
+                <div className="bg-nsp-card border border-nsp-border p-5 rounded-2xl border-orange-500/30">
+                   <span className="text-orange-500 text-[9px] uppercase font-black mb-1 block">Mots de passe</span>
+                   <div className="text-2xl font-black text-white">{stats.resetRequests}</div>
+                   <div className="absolute top-2 right-2"><KeyRound size={12} className="text-orange-500" /></div>
                 </div>
                 <div className="bg-nsp-card border border-nsp-border p-5 rounded-2xl border-red-500/20">
                    <span className="text-red-500 text-[9px] uppercase font-black mb-1 block">Garages Vides</span>
                    <div className="text-2xl font-black text-white">{stats.inactiveUsers}</div>
                 </div>
               </div>
+
+              {stats.resetRequests > 0 && (
+                <div className="bg-orange-500/10 border border-orange-500/30 p-4 rounded-2xl animate-pulse">
+                  <p className="text-orange-500 text-[10px] font-black uppercase tracking-widest flex items-center gap-2">
+                    <AlertCircle size={14} /> {stats.resetRequests} Demande(s) de réinitialisation en attente
+                  </p>
+                </div>
+              )}
 
               <div className="bg-nsp-card border border-nsp-border rounded-3xl p-6">
                 <h3 className="text-white font-black text-[10px] uppercase tracking-widest mb-4 flex items-center gap-2"><UserPlus size={14} className="text-nsp-primary" /> Dernières Inscriptions</h3>
@@ -186,6 +231,9 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({
                           <p className="text-[8px] text-gray-500 font-bold uppercase mt-0.5">{u.email}</p>
                        </div>
                        <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                         {u.passwordResetRequested && (
+                           <button onClick={() => handleResetPassword(u)} className="p-2 bg-orange-500/10 text-orange-500 rounded-lg" title="Réinitialiser le mot de passe"><KeyRound size={16} /></button>
+                         )}
                          <button onClick={() => handleInvitationMail(u)} className="p-2 bg-nsp-primary/10 text-nsp-primary rounded-lg" title="Inviter à remplir le garage"><Mail size={16} /></button>
                          <button onClick={() => setSelectedUser(u)} className="p-2 bg-nsp-input text-white rounded-lg"><Eye size={16}/></button>
                        </div>
@@ -269,6 +317,44 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({
                  </div>
                  <div className="space-y-3">
                    <button onClick={() => onRefresh()} className="w-full bg-nsp-input border border-white/10 text-white py-4 rounded-xl font-black text-[10px] uppercase flex items-center justify-center gap-2"><CloudUpload size={16}/> Actualiser la base</button>
+                   <button 
+                     onClick={handleRunDiagnostic} 
+                     disabled={isTestingCloud}
+                     className="w-full bg-nsp-input border border-white/10 text-white py-4 rounded-xl font-black text-[10px] uppercase flex items-center justify-center gap-2 disabled:opacity-50"
+                   >
+                     {isTestingCloud ? <Loader2 size={16} className="animate-spin" /> : <SearchCode size={16}/>} 
+                     Tester la connexion Cloud
+                   </button>
+                   {diagnosticResult && (
+                     <div className={`mt-4 p-4 rounded-xl border text-[10px] font-bold uppercase tracking-wider ${diagnosticResult.success ? 'bg-green-500/10 border-green-500/30 text-green-500' : 'bg-red-500/10 border-red-500/30 text-red-500'}`}>
+                       <div className="flex items-center gap-2 mb-2">
+                         {diagnosticResult.success ? <ShieldCheck size={14} /> : <ShieldX size={14} />}
+                         {diagnosticResult.success ? 'Diagnostic Positif' : 'Diagnostic Négatif'}
+                       </div>
+                       <p className="opacity-80">{diagnosticResult.message}</p>
+                       {diagnosticResult.code && <p className="mt-1 text-[8px] opacity-60">Code d'erreur: {diagnosticResult.code}</p>}
+                     </div>
+                   )}
+                   
+                   <button 
+                     onClick={handleRunDiagnostic} 
+                     disabled={isTestingCloud}
+                     className="w-full bg-nsp-input border border-white/10 text-white py-4 rounded-xl font-black text-[10px] uppercase flex items-center justify-center gap-2 disabled:opacity-50"
+                   >
+                     {isTestingCloud ? <Loader2 size={16} className="animate-spin" /> : <SearchCode size={16}/>} 
+                     Tester la connexion Cloud
+                   </button>
+
+                   {diagnosticResult && (
+                     <div className={`mt-4 p-4 rounded-xl border text-[10px] font-bold uppercase tracking-wider ${diagnosticResult.success ? 'bg-green-500/10 border-green-500/30 text-green-500' : 'bg-red-500/10 border-red-500/30 text-red-500'}`}>
+                       <div className="flex items-center gap-2 mb-2">
+                         {diagnosticResult.success ? <ShieldCheck size={14} /> : <ShieldX size={14} />}
+                         {diagnosticResult.success ? 'Diagnostic Positif' : 'Diagnostic Négatif'}
+                       </div>
+                       <p className="opacity-80">{diagnosticResult.message}</p>
+                       {diagnosticResult.code && <p className="mt-1 text-[8px] opacity-60">Code d'erreur: {diagnosticResult.code}</p>}
+                     </div>
+                   )}
                  </div>
               </div>
             </div>
@@ -289,6 +375,11 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({
                <p className="text-gray-500 text-xs mb-8">{selectedUser.email}</p>
                
                <div className="space-y-3">
+                  {selectedUser.passwordResetRequested && (
+                    <button onClick={() => handleResetPassword(selectedUser)} className="w-full bg-orange-500 text-white p-5 rounded-2xl font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 shadow-xl active:scale-95 transition-all">
+                      <KeyRound size={16} /> Réinitialiser le mot de passe
+                    </button>
+                  )}
                   <button onClick={() => handleInvitationMail(selectedUser)} className="w-full bg-nsp-primary text-white p-5 rounded-2xl font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 shadow-xl active:scale-95 transition-all">
                     <Mail size={16} /> Envoyer mail d'invitation
                   </button>

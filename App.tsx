@@ -56,9 +56,22 @@ const App: React.FC = () => {
           // FUSION INTELLIGENTE : On garde le local ET on ajoute le distant
           // En utilisant Map pour éviter les doublons par ID
           if (remoteUsers.length > 0) {
-            const mergedUsersMap = new Map();
+            const mergedUsersMap = new Map<string, User>();
             localUsers.forEach(u => mergedUsersMap.set(u.id, u));
-            remoteUsers.forEach(u => mergedUsersMap.set(u.id, u));
+            
+            remoteUsers.forEach(remote => {
+              const local = mergedUsersMap.get(remote.id);
+              if (local) {
+                mergedUsersMap.set(remote.id, { 
+                  ...local, 
+                  ...remote, 
+                  password: remote.password || local.password 
+                });
+              } else {
+                mergedUsersMap.set(remote.id, remote);
+              }
+            });
+            
             const merged = Array.from(mergedUsersMap.values());
             setAllUsers(merged);
             db.users.saveAll(merged);
@@ -108,6 +121,31 @@ const App: React.FC = () => {
       const lastEmail = db.session.getLastEmail();
       let currentUser: User | null = null;
       const localUsers = db.users.getAll();
+      setAllUsers(localUsers);
+      
+      // Récupération des utilisateurs du cloud pour permettre la connexion sur de nouveaux appareils
+      if (cloud.isConnected()) {
+        try {
+          const cloudUsers = await cloud.fetchAllUsers();
+          if (cloudUsers.length > 0) {
+            const mergedUsersMap = new Map<string, User>();
+            localUsers.forEach(u => mergedUsersMap.set(u.id, u));
+            cloudUsers.forEach(remote => {
+              const local = mergedUsersMap.get(remote.id);
+              if (local) {
+                mergedUsersMap.set(remote.id, { ...local, ...remote, password: remote.password || local.password });
+              } else {
+                mergedUsersMap.set(remote.id, remote);
+              }
+            });
+            const merged = Array.from(mergedUsersMap.values());
+            setAllUsers(merged);
+            db.users.saveAll(merged);
+          }
+        } catch (e) {
+          console.error("Cloud users pre-fetch failed", e);
+        }
+      }
       
       if (sessionId) { 
         currentUser = localUsers.find(u => u.id === sessionId) || null; 
@@ -141,6 +179,7 @@ const App: React.FC = () => {
     setUser(loggedInUser);
     db.session.set(loggedInUser.id);
     db.users.addOne(loggedInUser);
+    setAllUsers(db.users.getAll());
     if (loggedInUser.role !== 'admin') db.session.setLastEmail(loggedInUser.email);
     if (cloud.isConnected()) await cloud.syncUser(loggedInUser);
     await loadAllData(loggedInUser);
@@ -263,6 +302,25 @@ const App: React.FC = () => {
     }
   };
 
+  const handleLogout = () => {
+    setUser(null);
+    setAllCars([]);
+    setAllInvoices([]);
+    setAllUsers(db.users.getAll());
+    db.session.clear();
+    setScreen(Screen.AUTH);
+  };
+
+  const handleForgotPassword = async (email: string) => {
+    const targetUser = allUsers.find(u => u.email.toLowerCase() === email.toLowerCase());
+    if (targetUser) {
+      const updatedUser = { ...targetUser, passwordResetRequested: true };
+      await handleUpdateUser(updatedUser);
+      return true;
+    }
+    return false;
+  };
+
   return (
     <div className="max-w-md mx-auto bg-nsp-bg shadow-2xl min-h-[100dvh] flex flex-col overflow-x-hidden relative">
       {isSyncing && (
@@ -277,9 +335,9 @@ const App: React.FC = () => {
         </div>
       ) : (
         <div className="flex-1 flex flex-col w-full h-full min-h-full">
-         {screen === Screen.AUTH && <AuthScreen onLogin={handleLogin} onForgotPasswordRequest={() => true} existingUsers={allUsers} />}
-         {screen === Screen.GARAGE && <GarageScreen user={user!} cars={allCars} invoices={allInvoices} onSelectCar={(id) => { setActiveCarId(id); setScreen(Screen.DASHBOARD); }} onViewInvoices={(id) => { setActiveCarId(id); setScreen(Screen.INVOICES_LIST); }} onAddCar={() => setScreen(Screen.ONBOARDING)} onLogout={() => { setUser(null); db.session.clear(); setScreen(Screen.AUTH); }} onBuyCar={() => setScreen(Screen.BUY_CAR)} />}
-         {screen === Screen.ADMIN_DASHBOARD && <AdminDashboardScreen currentUser={user!} allUsers={allUsers} allCars={allCars} allInvoices={allInvoices} onLogout={() => { setUser(null); db.session.clear(); setScreen(Screen.AUTH); }} onUpdateUser={handleUpdateUser} onDeleteUser={handleDeleteUser} onRefresh={() => loadAllData(user!)} />}
+         {screen === Screen.AUTH && <AuthScreen onLogin={handleLogin} onForgotPasswordRequest={handleForgotPassword} existingUsers={allUsers} />}
+         {screen === Screen.GARAGE && <GarageScreen user={user!} cars={allCars} invoices={allInvoices} onSelectCar={(id) => { setActiveCarId(id); setScreen(Screen.DASHBOARD); }} onViewInvoices={(id) => { setActiveCarId(id); setScreen(Screen.INVOICES_LIST); }} onAddCar={() => setScreen(Screen.ONBOARDING)} onLogout={handleLogout} onBuyCar={() => setScreen(Screen.BUY_CAR)} onRefresh={() => loadAllData(user!)} />}
+         {screen === Screen.ADMIN_DASHBOARD && <AdminDashboardScreen currentUser={user!} allUsers={allUsers} allCars={allCars} allInvoices={allInvoices} onLogout={handleLogout} onUpdateUser={handleUpdateUser} onDeleteUser={handleDeleteUser} onRefresh={() => loadAllData(user!)} />}
          {screen === Screen.DASHBOARD && activeCarId && <DashboardScreen user={user!} car={allCars.find(c => c.id === activeCarId)!} invoices={allInvoices.filter(i => i.carId === activeCarId)} aiStatus={{status:'neutral', message:''}} onBackToGarage={() => setScreen(Screen.GARAGE)} onAddInvoice={() => setScreen(Screen.ADD_INVOICE)} onSellCar={() => setScreen(Screen.SELL_CAR)} onBuyCar={() => {}} onAssistance={() => setScreen(Screen.ASSISTANCE)} onDeleteCar={() => {}} onUpdateSpecs={() => {}} onUpdateCar={() => {}} onDeleteInvoice={handleDeleteInvoice} />}
          {screen === Screen.ONBOARDING && <OnboardingScreen onSave={(c) => { handleSaveCar({...c, ownerId: user!.id}); setScreen(Screen.GARAGE); }} onCancel={() => setScreen(Screen.GARAGE)} canUseSiv={true} onRequireSiv={() => {}} />}
          {screen === Screen.ADD_INVOICE && <AddInvoiceScreen carId={activeCarId!} onSave={handleSaveInvoice} onCancel={() => setScreen(Screen.DASHBOARD)} />}

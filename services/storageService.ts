@@ -56,9 +56,23 @@ export const db = {
     saveAll: (users: User[]) => saveData(KEYS.USERS, users),
     addOne: (user: User) => {
       const users = loadData<User[]>(KEYS.USERS, DEFAULT_USERS);
-      const filtered = users.filter(u => u.email !== user.email);
-      const updated = [...filtered, user];
-      saveData(KEYS.USERS, updated);
+      const existingIndex = users.findIndex(u => u.id === user.id || u.email === user.email);
+      
+      let updatedUser = { ...user };
+      if (existingIndex !== -1) {
+        const existing = users[existingIndex];
+        // Fusion intelligente : on garde le mot de passe local si le nouveau est absent
+        updatedUser = { 
+          ...existing, 
+          ...user,
+          password: user.password || existing.password 
+        };
+        users[existingIndex] = updatedUser;
+      } else {
+        users.push(updatedUser);
+      }
+      
+      saveData(KEYS.USERS, users);
     }
   },
   cars: {
