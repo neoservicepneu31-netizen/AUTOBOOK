@@ -11,6 +11,8 @@ import { AdminDashboardScreen } from './components/AdminDashboardScreen';
 import { InvoicesListScreen } from './components/InvoicesListScreen';
 import { SellCarScreen } from './components/SellCarScreen';
 import { BuyCarScreen } from './components/BuyCarScreen';
+import { ConfirmationModal } from './components/ConfirmationModal';
+import { NotificationModal, NotificationType } from './components/NotificationModal';
 import { db } from './services/storageService'; 
 import { cloud } from './services/cloudService';
 import { emailService } from './services/emailService';
@@ -26,6 +28,20 @@ const App: React.FC = () => {
   const [isDatabaseReady, setIsDatabaseReady] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [activeCarId, setActiveCarId] = useState<string | null>(null);
+  const [deleteConfirmation, setDeleteConfirmation] = useState<{ isOpen: boolean; carId: string | null }>({
+    isOpen: false,
+    carId: null
+  });
+  const [notification, setNotification] = useState<{ isOpen: boolean; type: NotificationType; title: string; message: string }>({
+    isOpen: false,
+    type: 'info',
+    title: '',
+    message: ''
+  });
+
+  const showNotification = (type: NotificationType, title: string, message: string) => {
+    setNotification({ isOpen: true, type, title, message });
+  };
 
   const performHealthChecks = useCallback((cars: Car[], invoices: Invoice[], email: string) => {
     cars.forEach(car => {
@@ -225,6 +241,46 @@ const App: React.FC = () => {
     if (user) performHealthChecks(updatedCars, allInvoices, user.email);
   };
 
+  const handleDeleteCar = async (carId: string) => {
+    setDeleteConfirmation({ isOpen: true, carId });
+  };
+
+  const confirmDeleteCar = async () => {
+    const carId = deleteConfirmation.carId;
+    if (!carId) return;
+    
+    setIsSyncing(true);
+    setDeleteConfirmation({ isOpen: false, carId: null });
+    try {
+      // 1. Supprimer les factures associées
+      const carInvoices = allInvoices.filter(i => i.carId === carId);
+      for (const inv of carInvoices) {
+        if (cloud.isConnected()) await cloud.deleteInvoice(inv.id);
+      }
+      
+      // 2. Supprimer le véhicule
+      if (cloud.isConnected()) await cloud.deleteCar(carId);
+      
+      // 3. Mise à jour locale
+      const updatedCars = allCars.filter(c => c.id !== carId);
+      const updatedInvoices = allInvoices.filter(i => i.carId !== carId);
+      
+      setAllCars(updatedCars);
+      setAllInvoices(updatedInvoices);
+      
+      db.cars.saveAll(updatedCars);
+      db.invoices.saveAll(updatedInvoices);
+      
+      setActiveCarId(null);
+      setScreen(Screen.GARAGE);
+    } catch (e) {
+      console.error("Delete car error", e);
+      // On pourrait ajouter un toast ici
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
   const handleSaveInvoice = async (inv: Invoice, specs?: TechnicalSpecs) => {
     const updatedInvoices = [inv, ...allInvoices];
     setAllInvoices(updatedInvoices);
@@ -367,18 +423,37 @@ const App: React.FC = () => {
         </div>
       ) : (
         <div className="flex-1 flex flex-col w-full h-full min-h-full">
-         {screen === Screen.AUTH && <AuthScreen onLogin={handleLogin} onForgotPasswordRequest={handleForgotPassword} existingUsers={allUsers} />}
-         {screen === Screen.GARAGE && <GarageScreen user={user!} cars={allCars} invoices={allInvoices} onSelectCar={(id) => { setActiveCarId(id); setScreen(Screen.DASHBOARD); }} onViewInvoices={(id) => { setActiveCarId(id); setScreen(Screen.INVOICES_LIST); }} onAddCar={() => setScreen(Screen.ONBOARDING)} onLogout={handleLogout} onBuyCar={() => setScreen(Screen.BUY_CAR)} onRefresh={() => loadAllData(user!)} />}
-         {screen === Screen.ADMIN_DASHBOARD && <AdminDashboardScreen currentUser={user!} allUsers={allUsers} allCars={allCars} allInvoices={allInvoices} onLogout={handleLogout} onUpdateUser={handleUpdateUser} onDeleteUser={handleDeleteUser} onRefresh={() => loadAllData(user!)} />}
-         {screen === Screen.DASHBOARD && activeCarId && <DashboardScreen user={user!} car={allCars.find(c => c.id === activeCarId)!} invoices={allInvoices.filter(i => i.carId === activeCarId)} aiStatus={{status:'neutral', message:''}} onBackToGarage={() => setScreen(Screen.GARAGE)} onAddInvoice={() => setScreen(Screen.ADD_INVOICE)} onSellCar={() => setScreen(Screen.SELL_CAR)} onBuyCar={() => {}} onAssistance={() => setScreen(Screen.ASSISTANCE)} onDeleteCar={() => {}} onUpdateSpecs={() => {}} onUpdateCar={handleSaveCar} onDeleteInvoice={handleDeleteInvoice} />}
-         {screen === Screen.ONBOARDING && <OnboardingScreen onSave={(c) => { handleSaveCar({...c, ownerId: user!.id}); setScreen(Screen.GARAGE); }} onCancel={() => setScreen(Screen.GARAGE)} canUseSiv={true} onRequireSiv={() => {}} />}
+         {screen === Screen.AUTH && <AuthScreen onLogin={handleLogin} onForgotPasswordRequest={handleForgotPassword} existingUsers={allUsers} onNotify={showNotification} />}
+         {screen === Screen.GARAGE && <GarageScreen user={user!} cars={allCars} invoices={allInvoices} onSelectCar={(id) => { setActiveCarId(id); setScreen(Screen.DASHBOARD); }} onViewInvoices={(id) => { setActiveCarId(id); setScreen(Screen.INVOICES_LIST); }} onAddCar={() => setScreen(Screen.ONBOARDING)} onLogout={handleLogout} onBuyCar={() => setScreen(Screen.BUY_CAR)} onRefresh={() => loadAllData(user!)} onDeleteCar={handleDeleteCar} onNotify={showNotification} />}
+         {screen === Screen.ADMIN_DASHBOARD && <AdminDashboardScreen currentUser={user!} allUsers={allUsers} allCars={allCars} allInvoices={allInvoices} onLogout={handleLogout} onUpdateUser={handleUpdateUser} onDeleteUser={handleDeleteUser} onRefresh={() => loadAllData(user!)} onNotify={showNotification} />}
+         {screen === Screen.DASHBOARD && activeCarId && <DashboardScreen user={user!} car={allCars.find(c => c.id === activeCarId)!} invoices={allInvoices.filter(i => i.carId === activeCarId)} aiStatus={{status:'neutral', message:''}} onBackToGarage={() => setScreen(Screen.GARAGE)} onAddInvoice={() => setScreen(Screen.ADD_INVOICE)} onSellCar={() => setScreen(Screen.SELL_CAR)} onBuyCar={() => {}} onAssistance={() => setScreen(Screen.ASSISTANCE)} onDeleteCar={() => handleDeleteCar(activeCarId)} onUpdateSpecs={() => {}} onUpdateCar={handleSaveCar} onDeleteInvoice={handleDeleteInvoice} onNotify={showNotification} />}
+         {screen === Screen.ONBOARDING && <OnboardingScreen onSave={(c) => { handleSaveCar({...c, ownerId: user!.id}); setScreen(Screen.GARAGE); }} onCancel={() => setScreen(Screen.GARAGE)} onNotify={showNotification} />}
          {screen === Screen.ADD_INVOICE && <AddInvoiceScreen carId={activeCarId!} onSave={handleSaveInvoice} onCancel={() => setScreen(Screen.DASHBOARD)} />}
          {screen === Screen.INVOICES_LIST && activeCarId && <InvoicesListScreen car={allCars.find(c => c.id === activeCarId)!} invoices={allInvoices.filter(i => i.carId === activeCarId)} onBack={() => setScreen(Screen.DASHBOARD)} onAdd={() => setScreen(Screen.ADD_INVOICE)} onDelete={handleDeleteInvoice} />}
          {screen === Screen.SELL_CAR && activeCarId && <SellCarScreen car={allCars.find(c => c.id === activeCarId)!} invoices={allInvoices.filter(i => i.carId === activeCarId)} onCancel={() => setScreen(Screen.DASHBOARD)} onConfirmTransfer={handleTransferComplete} />}
          {screen === Screen.BUY_CAR && <BuyCarScreen onCancel={() => setScreen(Screen.GARAGE)} onImportSuccess={handleImportSuccess} />}
-         {screen === Screen.ASSISTANCE && <AssistanceScreen onBack={() => setScreen(Screen.DASHBOARD)} canUseAssistance={true} onRequireAccess={() => {}} />}
+         {screen === Screen.ASSISTANCE && <AssistanceScreen onBack={() => setScreen(Screen.DASHBOARD)} canUseAssistance={true} onRequireAccess={() => {}} onNotify={showNotification} />}
         </div>
       )}
+      
+      <ConfirmationModal
+        isOpen={deleteConfirmation.isOpen}
+        title="Supprimer le véhicule ?"
+        message="Voulez-vous vraiment supprimer ce véhicule ? Cette action supprimera également toutes les factures associées et est irréversible."
+        confirmLabel="Supprimer définitivement"
+        cancelLabel="Annuler"
+        onConfirm={confirmDeleteCar}
+        onCancel={() => setDeleteConfirmation({ isOpen: false, carId: null })}
+        isDanger={true}
+      />
+
+      <NotificationModal
+        isOpen={notification.isOpen}
+        type={notification.type}
+        title={notification.title}
+        message={notification.message}
+        onClose={() => setNotification(prev => ({ ...prev, isOpen: false }))}
+      />
     </div>
   );
 };

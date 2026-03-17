@@ -19,9 +19,9 @@ if ('serviceWorker' in navigator && window.location.protocol === 'https:') {
             if (installingWorker) {
               installingWorker.onstatechange = () => {
                 if (installingWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                  if(confirm('Mise à jour disponible ! Recharger pour appliquer ?')) {
-                      window.location.reload();
-                  }
+                  // Mise à jour automatique sans confirm pour éviter les blocages iframe
+                  console.log('New update available, reloading...');
+                  window.location.reload();
                 }
               };
             }

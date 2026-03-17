@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { X, CheckCircle2, ShieldCheck, CreditCard, Star, Smartphone, Zap } from 'lucide-react';
 
-export type PurchaseType = 'siv' | 'assistance' | 'premium';
+export type PurchaseType = 'assistance' | 'premium';
 
 interface PaymentModalProps {
   feature: PurchaseType;
@@ -16,13 +16,6 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ feature, onClose, on
 
   const getDetails = () => {
     switch (feature) {
-      case 'siv':
-        return {
-          title: "Identification SIV Instantanée",
-          price: "1,00 €",
-          desc: "Remplissez automatiquement les données techniques de votre véhicule grâce à sa plaque.",
-          icon: <Smartphone size={32} className="text-blue-400" />
-        };
       case 'assistance':
         return {
           title: "Accès Assistance & Experts",
@@ -34,7 +27,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ feature, onClose, on
         return {
           title: "AUTOBOOK PREMIUM",
           price: "5,00 €",
-          desc: "Débloquez TOUT : SIV illimité + Assistance + Stockage Cloud Sécurisé Illimité.",
+          desc: "Débloquez TOUT : Assistance + Stockage Cloud Sécurisé Illimité.",
           icon: <Star size={32} className="text-yellow-400 fill-yellow-400" />
         };
     }

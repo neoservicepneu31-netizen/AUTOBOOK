@@ -18,6 +18,7 @@ interface InvoicesListScreenProps {
 export const InvoicesListScreen: React.FC<InvoicesListScreenProps> = ({ car, invoices, onBack, onAdd, onDelete }) => {
   const [filter, setFilter] = useState<'all' | 'maintenance' | 'fuel' | 'dossier'>('all');
   const [viewingItem, setViewingItem] = useState<{title: string, url: string, type?: string, price?: number, km?: number, date?: string, id?: string} | null>(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
   const filteredInvoices = invoices.filter(inv => filter === 'all' || inv.type === filter);
@@ -44,14 +45,18 @@ export const InvoicesListScreen: React.FC<InvoicesListScreenProps> = ({ car, inv
 
   const handleDelete = async () => {
     if (!viewingItem?.id) return;
-    if (confirm('Voulez-vous vraiment supprimer cet archivage ?')) {
-      setIsDeleting(true);
-      try {
-        await onDelete(viewingItem.id);
-        setViewingItem(null);
-      } finally {
-        setIsDeleting(false);
-      }
+    setShowDeleteConfirm(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!viewingItem?.id) return;
+    setIsDeleting(true);
+    setShowDeleteConfirm(false);
+    try {
+      await onDelete(viewingItem.id);
+      setViewingItem(null);
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -254,6 +259,26 @@ export const InvoicesListScreen: React.FC<InvoicesListScreenProps> = ({ car, inv
                     Fermer
                   </button>
                </div>
+          </div>
+        </div>
+      )}
+
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 z-[3000] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+          <div className="bg-nsp-card w-full max-w-sm rounded-[2.5rem] border border-white/10 p-8 shadow-2xl">
+            <div className="flex justify-center mb-6">
+              <div className="p-3 rounded-2xl bg-red-500/10 text-red-500">
+                <Trash2 size={32} />
+              </div>
+            </div>
+            <h3 className="text-xl font-black text-white uppercase tracking-tight mb-2 text-center">Supprimer l'archivage ?</h3>
+            <p className="text-gray-400 text-sm font-medium leading-relaxed mb-8 text-center">
+              Voulez-vous vraiment supprimer cet archivage ? Cette action est irréversible.
+            </p>
+            <div className="flex flex-col gap-3">
+              <button onClick={confirmDelete} className="w-full py-4 bg-red-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg">Supprimer</button>
+              <button onClick={() => setShowDeleteConfirm(false)} className="w-full py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest text-gray-500 hover:text-white">Annuler</button>
+            </div>
           </div>
         </div>
       )}

@@ -6,16 +6,17 @@ interface AssistanceScreenProps {
   onBack: () => void;
   canUseAssistance: boolean;
   onRequireAccess: () => void;
+  onNotify: (type: 'success' | 'error' | 'info', title: string, message: string) => void;
 }
 
-export const AssistanceScreen: React.FC<AssistanceScreenProps> = ({ onBack, canUseAssistance, onRequireAccess }) => {
+export const AssistanceScreen: React.FC<AssistanceScreenProps> = ({ onBack, canUseAssistance, onRequireAccess, onNotify }) => {
   
   const handleCall = () => {
     if (!canUseAssistance) {
         onRequireAccess();
         return;
     }
-    alert("Appel vers la plateforme NSP Assistance...");
+    onNotify('info', 'Assistance', "Appel vers la plateforme NSP Assistance...");
     // window.location.href = "tel:0123456789";
   };
 
@@ -24,7 +25,7 @@ export const AssistanceScreen: React.FC<AssistanceScreenProps> = ({ onBack, canU
         onRequireAccess();
         return;
     }
-    alert("Ouverture du chat avec un expert mécanicien...");
+    onNotify('info', 'Chat Expert', "Ouverture du chat avec un expert mécanicien...");
   };
 
   return (

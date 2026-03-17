@@ -1,5 +1,5 @@
 
-const CACHE_NAME = 'autobook-cache-v4';
+const CACHE_NAME = 'autobook-cache-v5';
 const ASSETS_TO_CACHE = [
   './',
   'index.html',
@@ -54,6 +54,11 @@ self.addEventListener('notificationclick', (event) => {
 
 // Intercepter le fetch (mode hors-ligne)
 self.addEventListener('fetch', (event) => {
+  // Ne pas intercepter les appels API
+  if (event.request.url.includes('/api/')) {
+    return;
+  }
+  
   event.respondWith(
     fetch(event.request).catch(() => caches.match(event.request))
   );

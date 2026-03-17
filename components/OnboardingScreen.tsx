@@ -1,26 +1,22 @@
 
 import React, { useState } from 'react';
 import { Car } from '../types';
-import { Camera, Car as CarIcon, Activity, Bike, Search, Loader2, ScanLine, X } from 'lucide-react';
-import { searchVehicleByPlate } from '../services/sivService';
+import { Camera, Car as CarIcon, Activity, Bike, Loader2, ScanLine, X } from 'lucide-react';
 import { processFile, safeBase64ToBlobUrl } from '../services/geminiService';
 
 interface OnboardingScreenProps {
   onSave: (car: Car) => void;
   onCancel?: () => void;
-  canUseSiv: boolean;
-  onRequireSiv: () => void;
+  onNotify: (type: 'success' | 'error' | 'info', title: string, message: string) => void;
 }
 
-export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onSave, onCancel, canUseSiv, onRequireSiv }) => {
+export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onSave, onCancel, onNotify }) => {
   const [step, setStep] = useState(1);
   const [carName, setCarName] = useState('');
   const [vehicleType, setVehicleType] = useState<'car' | 'motorcycle'>('car');
   const [plate, setPlate] = useState('');
   const [firstRegDate, setFirstRegDate] = useState('');
-  const [isSearchingSIV, setIsSearchingSIV] = useState(false);
-  const [sivFound, setSivFound] = useState(false);
-  const [sivError, setSivError] = useState<string | null>(null);
+  const [grayCard, setGrayCard] = useState<string | null>(null);
   const [initialKm, setInitialKm] = useState('');
   const [fuelType, setFuelType] = useState<Car['fuelType']>('diesel');
   const [tiresState, setTiresState] = useState<Car['initialState']['tires']>('good');
@@ -28,7 +24,6 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onSave, onCa
   const [bodyState, setBodyState] = useState<Car['initialState']['body']>('good');
   const [interiorState, setInteriorState] = useState<Car['initialState']['interior']>('good');
   const [engineState, setEngineState] = useState<Car['initialState']['engine']>('good');
-  const [grayCard, setGrayCard] = useState<string | null>(null);
   const [photos, setPhotos] = useState<Car['photos']>({ front: null, back: null, left: null, right: null, engine: null, damages: [] });
   const [isProcessing, setIsProcessing] = useState(false);
 
@@ -51,7 +46,7 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onSave, onCa
         }
       } catch (err) { 
         console.error("[Onboarding] Erreur photo:", err);
-        alert("Erreur lors du traitement de la photo."); 
+        onNotify('error', 'Erreur', "Erreur lors du traitement de la photo."); 
       } finally { 
         setIsProcessing(false); 
       }
@@ -59,26 +54,9 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onSave, onCa
     e.target.value = ''; 
   };
 
-  const handleSIVSearch = async () => {
-    if (plate.length < 4) return;
-    if (!canUseSiv) { onRequireSiv(); return; }
-    setIsSearchingSIV(true);
-    setSivError(null);
-    try {
-      const result = await searchVehicleByPlate(plate);
-      if (result) {
-        setCarName(`${result.make} ${result.model} ${result.version}`);
-        setVehicleType(result.type);
-        setFirstRegDate(result.firstRegistrationDate);
-        setFuelType(result.fuelType);
-        setSivFound(true);
-      } else { setSivError("Véhicule non trouvé."); }
-    } catch (error) { setSivError("Erreur SIV."); } finally { setIsSearchingSIV(false); }
-  };
-
   const isStep1Valid = plate.length >= 2 && firstRegDate !== '' && carName !== '';
   const isStep2Valid = initialKm !== '';
-  const isStep3Valid = (grayCard !== null || sivFound) && !isProcessing;
+  const isStep3Valid = grayCard !== null && !isProcessing;
 
   const StateSelector = ({ label, value, onChange }: { label: string, value: string, onChange: (v: any) => void }) => (
     <div className="flex items-center justify-between bg-nsp-input/50 p-3 rounded-lg border border-nsp-border/30">
@@ -114,9 +92,7 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onSave, onCa
                 <input type="text" value={plate} onChange={(e) => setPlate(e.target.value.toUpperCase())} maxLength={9} placeholder="AB-123-CD" className="flex-1 text-black font-mono text-xl font-bold text-center outline-none" />
                 <div className="w-8 bg-[#003399] flex items-center justify-center text-white font-bold text-xs">75</div>
               </div>
-              <button onClick={handleSIVSearch} className="h-12 w-12 bg-nsp-primary rounded-xl flex items-center justify-center text-white shadow-lg">{isSearchingSIV ? <Loader2 className="animate-spin" size={20}/> : <Search size={20}/>}</button>
             </div>
-            {sivFound && <p className="text-green-500 text-[9px] font-black uppercase mt-2">Identifié !</p>}
           </div>
           <div className="flex gap-4">
             <button onClick={() => setVehicleType('car')} className={`flex-1 p-4 rounded-xl flex flex-col items-center gap-2 border ${vehicleType === 'car' ? 'bg-nsp-primary text-white border-nsp-primary' : 'bg-nsp-input text-gray-500 border-transparent'}`}><CarIcon size={24}/>Auto</button>

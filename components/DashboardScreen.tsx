@@ -22,16 +22,18 @@ interface DashboardScreenProps {
   onUpdateSpecs: (specs: TechnicalSpecs) => void;
   onUpdateCar: (car: Car) => void;
   onDeleteInvoice: (invoiceId: string) => void;
+  onNotify: (type: 'success' | 'error' | 'info', title: string, message: string) => void;
 }
 
 export const DashboardScreen: React.FC<DashboardScreenProps> = ({
-  user, car, invoices, onBackToGarage, onAddInvoice, onAssistance, onDeleteInvoice, onSellCar, onUpdateCar
+  user, car, invoices, onBackToGarage, onAddInvoice, onAssistance, onDeleteInvoice, onSellCar, onUpdateCar, onDeleteCar, onNotify
 }) => {
   const [specs, setSpecs] = useState<ManufacturerSpecs | null>(null);
   const [isLoadingSpecs, setIsLoadingSpecs] = useState(false);
   const [activeReport, setActiveReport] = useState<'health' | 'tires' | 'fluids' | 'ct' | 'insurance' | 'parts' | 'photos' | null>(null);
   const [viewingInvoice, setViewingInvoice] = useState<Invoice | null>(null);
   const [viewingDoc, setViewingDoc] = useState<{title: string, url: string} | null>(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isUpdatingPhoto, setIsUpdatingPhoto] = useState<string | null>(null);
 
   const handlePhotoUpdate = async (e: React.ChangeEvent<HTMLInputElement>, angle: string) => {
@@ -62,7 +64,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
         onUpdateCar(updatedCar);
       } catch (err) {
         console.error("[Dashboard] Erreur mise à jour photo:", err);
-        alert("Erreur lors de la mise à jour de la photo.");
+        onNotify('error', 'Erreur', "Erreur lors de la mise à jour de la photo.");
       } finally {
         setIsUpdatingPhoto(null);
         // Reset l'input pour permettre de reprendre la même photo si besoin
@@ -96,11 +98,15 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
 
   const handleDelete = async () => {
     if (!viewingInvoice) return;
-    if (confirm('Voulez-vous supprimer ce document ?')) {
-      const idToDelete = viewingInvoice.id;
-      setViewingInvoice(null);
-      onDeleteInvoice(idToDelete);
-    }
+    setShowDeleteConfirm(true);
+  };
+
+  const confirmDelete = () => {
+    if (!viewingInvoice) return;
+    const idToDelete = viewingInvoice.id;
+    setViewingInvoice(null);
+    setShowDeleteConfirm(false);
+    onDeleteInvoice(idToDelete);
   };
 
   return (
@@ -111,9 +117,14 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
            <h2 className="text-lg font-black text-white leading-none truncate uppercase tracking-tight">{car.name}</h2>
            <p className="text-[10px] text-nsp-primary font-black mt-1 tracking-widest">{car.plate}</p>
         </div>
-        <button onClick={onSellCar} className="p-3 rounded-xl bg-nsp-input text-white border border-white/5 shadow-lg">
-           <Share2 size={20} />
-        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={onSellCar} className="p-3 rounded-xl bg-nsp-input text-white border border-white/5 shadow-lg">
+             <Share2 size={20} />
+          </button>
+          <button onClick={onDeleteCar} className="p-3 rounded-xl bg-red-600/10 text-red-500 border border-red-500/20 shadow-lg" title="Supprimer le véhicule">
+             <Trash2 size={20} />
+          </button>
+        </div>
       </header>
 
       <main className="p-6 space-y-8 animate-fade-in flex-1">
@@ -613,6 +624,26 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
               ) : (
                 <img src={safeBase64ToBlobUrl(viewingInvoice?.imageUrl || viewingDoc?.url || '')} className="max-w-full max-h-full object-contain rounded-2xl" alt="Document" referrerPolicy="no-referrer" />
               )}
+          </div>
+        </div>
+      )}
+
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 z-[3000] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+          <div className="bg-nsp-card w-full max-w-sm rounded-[2.5rem] border border-white/10 p-8 shadow-2xl">
+            <div className="flex justify-center mb-6">
+              <div className="p-3 rounded-2xl bg-red-500/10 text-red-500">
+                <Trash2 size={32} />
+              </div>
+            </div>
+            <h3 className="text-xl font-black text-white uppercase tracking-tight mb-2 text-center">Supprimer le document ?</h3>
+            <p className="text-gray-400 text-sm font-medium leading-relaxed mb-8 text-center">
+              Voulez-vous vraiment supprimer ce document ? Cette action est irréversible.
+            </p>
+            <div className="flex flex-col gap-3">
+              <button onClick={confirmDelete} className="w-full py-4 bg-red-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg">Supprimer</button>
+              <button onClick={() => setShowDeleteConfirm(false)} className="w-full py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest text-gray-500 hover:text-white">Annuler</button>
+            </div>
           </div>
         </div>
       )}

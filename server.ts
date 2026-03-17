@@ -10,14 +10,27 @@ async function startServer() {
   const app = express();
   const PORT = 3000;
   
-  // Initialize Resend with API Key from environment
-  const resend = new Resend(process.env.RESEND_API_KEY);
-
   app.use(cors());
   app.use(express.json());
 
+  // Health check
+  app.get("/api/health", (req, res) => {
+    res.json({ status: "ok", version: "1.1" });
+  });
+
+  app.get("/api/test", (req, res) => {
+    res.json({ message: "API is working", timestamp: new Date().toISOString() });
+  });
+
+  // Request logging middleware
+  app.use((req, res, next) => {
+    console.log(`${new Date().toISOString()} - ${req.method} ${req.path}`);
+    next();
+  });
+
   // API Route for sending emails
   app.post("/api/send-email", async (req, res) => {
+    console.log("Received email request to:", req.body?.to);
     const { to, subject, html, text } = req.body;
 
     if (!process.env.RESEND_API_KEY) {
@@ -29,6 +42,7 @@ async function startServer() {
     }
 
     try {
+      const resend = new Resend(process.env.RESEND_API_KEY);
       const fromEmail = process.env.RESEND_FROM_EMAIL || "onboarding@resend.dev";
       // Use simple email for onboarding to avoid validation issues, custom name for verified domains
       const from = fromEmail === "onboarding@resend.dev" ? fromEmail : `AutoBook <${fromEmail}>`;
@@ -87,6 +101,16 @@ async function startServer() {
       }
     });
   }
+
+  // Global error handler
+  app.use((err: any, req: any, res: any, next: any) => {
+    console.error("Global Error Handler:", err);
+    res.status(err.status || 500).json({
+      success: false,
+      message: err.message || "Une erreur interne est survenue sur le serveur.",
+      error: process.env.NODE_ENV === 'production' ? {} : err
+    });
+  });
 
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on http://localhost:${PORT}`);

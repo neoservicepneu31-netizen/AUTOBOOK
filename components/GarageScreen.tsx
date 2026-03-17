@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Car, User, NewsArticle, Invoice } from '../types';
-import { Plus, Car as CarIcon, Bike, ChevronRight, LogOut, Newspaper, X, ArrowRight, FolderOpen, DownloadCloud, ShieldCheck, Zap, Bell, BellRing, ShieldAlert, RefreshCw } from 'lucide-react';
+import { Plus, Car as CarIcon, Bike, ChevronRight, LogOut, Newspaper, X, ArrowRight, FolderOpen, DownloadCloud, ShieldCheck, Zap, Bell, BellRing, ShieldAlert, RefreshCw, Trash2 } from 'lucide-react';
 import { requestNotificationPermission, checkVehicleHealthAndNotify } from '../services/notificationService';
 import { calculateMaintenanceStatus } from '../services/mechanicRules';
 
@@ -78,9 +78,11 @@ interface GarageScreenProps {
   onLogout: () => void;
   onBuyCar: () => void;
   onRefresh: () => void;
+  onDeleteCar: (id: string) => void;
+  onNotify: (type: 'success' | 'error' | 'info', title: string, message: string) => void;
 }
 
-export const GarageScreen: React.FC<GarageScreenProps> = ({ user, cars, invoices, onSelectCar, onAddCar, onLogout, onBuyCar, onRefresh }) => {
+export const GarageScreen: React.FC<GarageScreenProps> = ({ user, cars, invoices, onSelectCar, onAddCar, onLogout, onBuyCar, onRefresh, onDeleteCar, onNotify }) => {
   const [selectedArticle, setSelectedArticle] = useState<NewsArticle | null>(null);
   const [showNotifyPrompt, setShowNotifyPrompt] = useState(false);
 
@@ -98,7 +100,7 @@ export const GarageScreen: React.FC<GarageScreenProps> = ({ user, cars, invoices
     const granted = await requestNotificationPermission();
     if (granted) {
       setShowNotifyPrompt(false);
-      alert("✅ Alertes activées ! Vous recevrez désormais vos rappels de révision et contrôle technique.");
+      onNotify('success', 'Notifications', "✅ Alertes activées ! Vous recevrez désormais vos rappels de révision et contrôle technique.");
     }
   };
 
@@ -229,7 +231,7 @@ export const GarageScreen: React.FC<GarageScreenProps> = ({ user, cars, invoices
                     </div>
 
                     <div className="p-7 pt-2 flex items-center justify-between">
-                      <div>
+                      <div className="flex-1" onClick={() => onSelectCar(car.id)}>
                         <h3 className="text-2xl font-black text-white uppercase tracking-tighter">{car.name}</h3>
                         <div className="flex items-center gap-3 mt-1.5">
                           <span className="text-[10px] text-nsp-primary font-black uppercase tracking-widest">{car.fuelType}</span>
@@ -237,8 +239,20 @@ export const GarageScreen: React.FC<GarageScreenProps> = ({ user, cars, invoices
                           <span className="text-[10px] text-gray-500 font-black uppercase tracking-widest">{car.initialKm.toLocaleString()} KM</span>
                         </div>
                       </div>
-                      <div className="w-14 h-14 bg-nsp-primary rounded-[1.5rem] flex items-center justify-center text-white shadow-xl group-hover:scale-110 transition-transform">
-                        <ChevronRight size={28} />
+                      <div className="flex items-center gap-3">
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onDeleteCar(car.id);
+                          }}
+                          className="w-12 h-12 bg-red-600/10 text-red-500 rounded-[1.2rem] flex items-center justify-center hover:bg-red-600 hover:text-white transition-all border border-red-500/20"
+                          title="Supprimer le véhicule"
+                        >
+                          <Trash2 size={20} />
+                        </button>
+                        <div className="w-14 h-14 bg-nsp-primary rounded-[1.5rem] flex items-center justify-center text-white shadow-xl group-hover:scale-110 transition-transform" onClick={() => onSelectCar(car.id)}>
+                          <ChevronRight size={28} />
+                        </div>
                       </div>
                     </div>
                   </div>

@@ -11,7 +11,7 @@ import {
   ArrowRight, Search, Info, X, Mail, Eye, LogOut, History,
   ShieldCheck, ShieldX, SearchCode, CloudUpload, Terminal,
   LifeBuoy, Send, BellRing, ExternalLink, UserPlus, MailCheck,
-  KeyRound
+  KeyRound, AlertTriangle, Trash2
 } from 'lucide-react';
 
 interface AdminDashboardScreenProps {
@@ -23,10 +23,11 @@ interface AdminDashboardScreenProps {
   onUpdateUser: (user: User) => void;
   onDeleteUser: (userId: string) => void;
   onRefresh: () => void;
+  onNotify: (type: 'success' | 'error' | 'info', title: string, message: string) => void;
 }
 
 export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({ 
-  currentUser, allUsers, allCars, allInvoices, onLogout, onUpdateUser, onDeleteUser, onRefresh
+  currentUser, allUsers, allCars, allInvoices, onLogout, onUpdateUser, onDeleteUser, onRefresh, onNotify
 }) => {
   const [activeTab, setActiveTab] = useState<'overview' | 'diffusion' | 'users' | 'requests' | 'setup'>('overview');
   const [searchTerm, setSearchTerm] = useState('');
@@ -40,8 +41,10 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({
   const [isSendingMails, setIsSendingMails] = useState(false);
   const [messageText, setMessageText] = useState('');
   const [isMessageModalOpen, setIsMessageModalOpen] = useState(false);
+  const [resetConfirmation, setResetConfirmation] = useState<{ isOpen: boolean; user: User | null }>({ isOpen: false, user: null });
+  const [deleteUserConfirmation, setDeleteUserConfirmation] = useState<{ isOpen: boolean; userId: string | null }>({ isOpen: false, userId: null });
   const [infoRequests, setInfoRequests] = useState([
-    { id: '1', userName: 'Jean Dupont', email: 'jean@dupont.fr', subject: 'Question sur le SIV', date: new Date().toISOString() },
+    { id: '1', userName: 'Jean Dupont', email: 'jean@dupont.fr', subject: 'Question sur l\'assistance', date: new Date().toISOString() },
     { id: '2', userName: 'Marie Curie', email: 'marie@curie.fr', subject: 'Problème de connexion', date: new Date(Date.now() - 3600000).toISOString() }
   ]);
   
@@ -100,10 +103,10 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({
           </div>
         `
       });
-      alert(`✅ Mail d'invitation envoyé avec succès à ${user.name}.`);
+      onNotify('success', 'Email', `✅ Mail d'invitation envoyé avec succès à ${user.name}.`);
     } catch (error: any) {
       console.error("Email error:", error);
-      alert(`❌ Erreur lors de l'envoi du mail : ${error.message}\n\nNote: Vérifiez que RESEND_API_KEY est bien configurée.`);
+      onNotify('error', 'Erreur Email', `❌ Erreur lors de l'envoi du mail : ${error.message}\n\nNote: Vérifiez que RESEND_API_KEY est bien configurée.`);
     } finally {
       setIsSendingMails(false);
     }
@@ -139,20 +142,24 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({
       };
       
       onUpdateUser(updatedUser);
-      alert(`✅ Nouveau mot de passe envoyé à ${user.email}.`);
+      onNotify('success', 'Mot de passe', `✅ Nouveau mot de passe envoyé à ${user.email}.`);
     } catch (error: any) {
       console.error("Email error:", error);
-      alert(`❌ Erreur lors de l'envoi du mail : ${error.message}`);
+      onNotify('error', 'Erreur Email', `❌ Erreur lors de l'envoi du mail : ${error.message}`);
     } finally {
       setIsSendingMails(false);
     }
   };
 
   const handleResetAccount = async (user: User) => {
-    if (!confirm(`⚠️ ATTENTION : Voulez-vous vraiment RÉINITIALISER le compte de ${user.name} ?\n\nToutes ses voitures et factures seront supprimées définitivement.`)) {
-      return;
-    }
+    setResetConfirmation({ isOpen: true, user });
+  };
+
+  const confirmResetAccount = async () => {
+    const user = resetConfirmation.user;
+    if (!user) return;
     
+    setResetConfirmation({ isOpen: false, user: null });
     setIsSendingMails(true);
     try {
       // Suppression de toutes les voitures et factures associées
@@ -166,11 +173,11 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({
       }
       
       // Mise à jour locale (App.tsx s'en chargera via onRefresh ou le rechargement des données)
-      alert(`✅ Compte de ${user.name} réinitialisé avec succès (Garages et factures vidés).`);
+      onNotify('success', 'Réinitialisation', `✅ Compte de ${user.name} réinitialisé avec succès (Garages et factures vidés).`);
       onRefresh();
     } catch (e) {
       console.error("Reset account error", e);
-      alert("Erreur lors de la réinitialisation du compte.");
+      onNotify('error', 'Erreur', "Erreur lors de la réinitialisation du compte.");
     } finally {
       setIsSendingMails(false);
     }
@@ -196,12 +203,12 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({
           </div>
         `
       });
-      alert(`✅ Message envoyé avec succès à ${user.email}.`);
+      onNotify('success', 'Message', `✅ Message envoyé avec succès à ${user.email}.`);
       setMessageText('');
       setIsMessageModalOpen(false);
     } catch (error: any) {
       console.error("Email error:", error);
-      alert(`❌ Erreur lors de l'envoi du message : ${error.message}`);
+      onNotify('error', 'Erreur', `❌ Erreur lors de l'envoi du message : ${error.message}`);
     } finally {
       setIsSendingMails(false);
     }
@@ -417,7 +424,7 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({
                             setSelectedUser(u);
                             setActiveTab('users');
                           } else {
-                            alert("Client non trouvé dans la base.");
+                            onNotify('error', 'Erreur', "Client non trouvé dans la base.");
                           }
                         }}
                         className="p-3 bg-nsp-primary/10 text-nsp-primary rounded-xl hover:bg-nsp-primary hover:text-white transition-all"
@@ -472,6 +479,20 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({
                      {isTestingCloud ? <Loader2 size={16} className="animate-spin" /> : <SearchCode size={16}/>} 
                      Tester la connexion Cloud
                    </button>
+                   <button 
+                     onClick={async () => {
+                       try {
+                         const res = await fetch('/api/health');
+                         const data = await res.json();
+                         onNotify('info', 'API Health', `API Health: ${JSON.stringify(data)}`);
+                       } catch (e: any) {
+                         onNotify('error', 'API Health Error', `API Health Error: ${e.message}`);
+                       }
+                     }}
+                     className="w-full bg-nsp-input border border-white/10 text-white py-4 rounded-xl font-black text-[10px] uppercase flex items-center justify-center gap-2"
+                   >
+                     <ShieldCheck size={16}/> Tester l'API (Health)
+                   </button>
                    {diagnosticResult && (
                      <div className={`mt-4 p-4 rounded-xl border text-[10px] font-bold uppercase tracking-wider ${diagnosticResult.success ? 'bg-green-500/10 border-green-500/30 text-green-500' : 'bg-red-500/10 border-red-500/30 text-red-500'}`}>
                        <div className="flex items-center gap-2 mb-2">
@@ -512,7 +533,12 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({
                     <Mail size={16} /> Envoyer mail d'invitation
                   </button>
                   <button onClick={() => handleResetAccount(selectedUser)} className="w-full bg-orange-600/10 text-orange-500 p-5 rounded-2xl font-black text-[10px] uppercase border border-orange-500/10">Réinitialiser le compte (Vider garage)</button>
-                  <button onClick={() => { if(confirm("Supprimer ce client ?")) { onDeleteUser(selectedUser.id); setSelectedUser(null); } }} className="w-full bg-red-600/10 text-red-500 p-5 rounded-2xl font-black text-[10px] uppercase border border-red-500/10">Supprimer définitivement le compte</button>
+                  <button 
+                    onClick={() => setDeleteUserConfirmation({ isOpen: true, userId: selectedUser.id })} 
+                    className="w-full bg-red-600/10 text-red-500 p-5 rounded-2xl font-black text-[10px] uppercase border border-red-500/10"
+                  >
+                    Supprimer définitivement le compte
+                  </button>
                </div>
             </div>
           </div>
@@ -544,6 +570,46 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({
               >
                 Envoyer
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {resetConfirmation.isOpen && (
+        <div className="fixed inset-0 z-[3000] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+          <div className="bg-nsp-card w-full max-w-sm rounded-[2.5rem] border border-white/10 p-8 shadow-2xl">
+            <div className="flex justify-center mb-6">
+              <div className="p-3 rounded-2xl bg-orange-500/10 text-orange-500">
+                <AlertTriangle size={32} />
+              </div>
+            </div>
+            <h3 className="text-xl font-black text-white uppercase tracking-tight mb-2 text-center">Réinitialiser le compte ?</h3>
+            <p className="text-gray-400 text-sm font-medium leading-relaxed mb-8 text-center">
+              Voulez-vous vraiment RÉINITIALISER le compte de {resetConfirmation.user?.name} ? Toutes ses voitures et factures seront supprimées définitivement.
+            </p>
+            <div className="flex flex-col gap-3">
+              <button onClick={confirmResetAccount} className="w-full py-4 bg-orange-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg">Réinitialiser</button>
+              <button onClick={() => setResetConfirmation({ isOpen: false, user: null })} className="w-full py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest text-gray-500 hover:text-white">Annuler</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {deleteUserConfirmation.isOpen && (
+        <div className="fixed inset-0 z-[3000] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+          <div className="bg-nsp-card w-full max-w-sm rounded-[2.5rem] border border-white/10 p-8 shadow-2xl">
+            <div className="flex justify-center mb-6">
+              <div className="p-3 rounded-2xl bg-red-500/10 text-red-500">
+                <Trash2 size={32} />
+              </div>
+            </div>
+            <h3 className="text-xl font-black text-white uppercase tracking-tight mb-2 text-center">Supprimer le client ?</h3>
+            <p className="text-gray-400 text-sm font-medium leading-relaxed mb-8 text-center">
+              Voulez-vous vraiment supprimer ce client ? Cette action est irréversible.
+            </p>
+            <div className="flex flex-col gap-3">
+              <button onClick={() => { onDeleteUser(deleteUserConfirmation.userId!); setSelectedUser(null); setDeleteUserConfirmation({ isOpen: false, userId: null }); }} className="w-full py-4 bg-red-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg">Supprimer</button>
+              <button onClick={() => setDeleteUserConfirmation({ isOpen: false, userId: null })} className="w-full py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest text-gray-500 hover:text-white">Annuler</button>
             </div>
           </div>
         </div>

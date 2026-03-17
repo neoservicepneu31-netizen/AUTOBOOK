@@ -6,13 +6,14 @@ import { ArrowRight, UserPlus, ShieldCheck, CheckCircle2, Wrench, Car, Lock, Ale
 
 interface AuthScreenProps {
   onLogin: (user: User) => void;
-  onForgotPasswordRequest: (email: string) => boolean;
+  onForgotPasswordRequest: (email: string) => Promise<boolean>;
   existingUsers?: User[];
+  onNotify: (type: 'success' | 'error' | 'info', title: string, message: string) => void;
 }
 
 type AuthMode = 'login' | 'register' | 'recovery';
 
-export const AuthScreen: React.FC<AuthScreenProps> = ({ onLogin, onForgotPasswordRequest, existingUsers = [] }) => {
+export const AuthScreen: React.FC<AuthScreenProps> = ({ onLogin, onForgotPasswordRequest, existingUsers = [], onNotify }) => {
   const [mode, setMode] = useState<AuthMode>('login');
   const [isAdminMode, setIsAdminMode] = useState(false);
   const [name, setName] = useState('');
@@ -50,7 +51,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLogin, onForgotPasswor
             setIsLoading(false);
             if (success) {
               setMode('login');
-              alert("✅ Un nouveau mot de passe vous a été envoyé par e-mail.");
+              onNotify('success', 'Récupération', "✅ Un nouveau mot de passe vous a été envoyé par e-mail.");
             } else {
               setError("❌ Erreur lors de l'envoi de l'e-mail. Veuillez réessayer.");
             }
