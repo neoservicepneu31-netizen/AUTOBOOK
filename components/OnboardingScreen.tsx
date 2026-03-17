@@ -38,11 +38,23 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onSave, onCa
       setIsProcessing(true);
       try {
         const result = await processFile(file);
-        if (type === 'grayCard') setGrayCard(result);
-        else if (type === 'engine') setPhotos(prev => ({ ...prev, engine: result }));
-        else if (type === 'damage') setPhotos(prev => ({ ...prev, damages: [...prev.damages, result] }));
-        else if (['front', 'back', 'left', 'right'].includes(type)) setPhotos(prev => ({ ...prev, [type]: result }));
-      } catch (err) { alert("Erreur photo."); } finally { setIsProcessing(false); }
+        if (type === 'grayCard') {
+          setGrayCard(result);
+        } else {
+          setPhotos(prev => {
+            const currentDamages = Array.isArray(prev.damages) ? [...prev.damages] : [];
+            if (type === 'engine') return { ...prev, engine: result };
+            if (type === 'damage') return { ...prev, damages: [...currentDamages, result] };
+            if (['front', 'back', 'left', 'right'].includes(type)) return { ...prev, [type]: result };
+            return prev;
+          });
+        }
+      } catch (err) { 
+        console.error("[Onboarding] Erreur photo:", err);
+        alert("Erreur lors du traitement de la photo."); 
+      } finally { 
+        setIsProcessing(false); 
+      }
     }
     e.target.value = ''; 
   };

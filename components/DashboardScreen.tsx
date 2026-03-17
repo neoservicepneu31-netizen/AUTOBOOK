@@ -5,7 +5,7 @@ import {
   Plus, FileText, ArrowLeft, Sparkles, Gauge, Droplet, PhoneCall, X, Camera,
   Wrench, AlertCircle, Share2, ShieldCheck, ChevronRight, Activity, Info, Eye, Download, Maximize2, Loader2, Trash2, Layers, Search, History, CheckCircle2, AlertTriangle, ListChecks, Calendar, Scale, Image as ImageIcon, BellRing, Clock, ShieldAlert, CircleAlert, Shield, SearchCode, PackageSearch, TrendingUp, TrendingDown, Wallet, Medal, Target
 } from 'lucide-react';
-import { getPersonalizedMaintenance, safeBase64ToBlobUrl, base64ToRealBlobUrl } from '../services/geminiService';
+import { getPersonalizedMaintenance, safeBase64ToBlobUrl, base64ToRealBlobUrl, processFile } from '../services/geminiService';
 import { calculateMaintenanceStatus } from '../services/mechanicRules';
 
 interface DashboardScreenProps {
@@ -39,23 +39,34 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
       const file = e.target.files[0];
       setIsUpdatingPhoto(angle);
       try {
-        const { processFile } = await import('../services/geminiService');
         const result = await processFile(file);
-        const updatedCar = {
-          ...car,
-          photos: {
-            ...car.photos,
-            ...(angle === 'damage' 
-              ? { damages: [...car.photos.damages, result] } 
-              : { [angle]: result }
-            )
-          }
+        
+        // Création d'une copie profonde et sécurisée de l'objet photos
+        const currentPhotos = { ...car.photos };
+        const currentDamages = Array.isArray(currentPhotos.damages) ? [...currentPhotos.damages] : [];
+        
+        const updatedPhotos = {
+          ...currentPhotos,
+          ...(angle === 'damage' 
+            ? { damages: [...currentDamages, result] } 
+            : { [angle]: result }
+          )
         };
+
+        const updatedCar: Car = {
+          ...car,
+          photos: updatedPhotos
+        };
+
+        console.log(`[Dashboard] Mise à jour photo ${angle} réussie`);
         onUpdateCar(updatedCar);
       } catch (err) {
+        console.error("[Dashboard] Erreur mise à jour photo:", err);
         alert("Erreur lors de la mise à jour de la photo.");
       } finally {
         setIsUpdatingPhoto(null);
+        // Reset l'input pour permettre de reprendre la même photo si besoin
+        e.target.value = '';
       }
     }
   };
@@ -349,12 +360,15 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
                       {(['front', 'back', 'left', 'right', 'engine'] as const).map(angle => (
                         <div key={angle} className="space-y-2">
                           <p className="text-[9px] text-gray-500 font-black uppercase tracking-widest ml-2">{angle}</p>
-                          <div className={`relative aspect-video rounded-3xl border-2 border-dashed flex flex-col items-center justify-center overflow-hidden bg-nsp-input transition-all ${car.photos[angle as keyof typeof car.photos] ? 'border-nsp-primary/30' : 'border-white/5'}`}>
+                          <div 
+                            onClick={() => car.photos[angle as keyof typeof car.photos] && setViewingDoc({ title: angle.toUpperCase(), url: car.photos[angle as keyof typeof car.photos] as string })}
+                            className={`relative aspect-video rounded-3xl border-2 border-dashed flex flex-col items-center justify-center overflow-hidden bg-nsp-input transition-all cursor-pointer ${car.photos[angle as keyof typeof car.photos] ? 'border-nsp-primary/30' : 'border-white/5'}`}
+                          >
                             {car.photos[angle as keyof typeof car.photos] ? (
                               <>
                                 <img src={safeBase64ToBlobUrl(car.photos[angle as keyof typeof car.photos] as string)} className="absolute inset-0 w-full h-full object-cover" referrerPolicy="no-referrer" />
-                                <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity">
-                                  <button onClick={() => setViewingDoc({ title: angle.toUpperCase(), url: car.photos[angle as keyof typeof car.photos] as string })} className="p-3 bg-white/20 backdrop-blur-md rounded-full text-white"><Maximize2 size={20}/></button>
+                                <div className="absolute inset-0 bg-black/20 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity">
+                                  <div className="p-3 bg-white/20 backdrop-blur-md rounded-full text-white"><Maximize2 size={20}/></div>
                                 </div>
                               </>
                             ) : (
@@ -369,7 +383,10 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
                                 <Loader2 className="animate-spin text-nsp-primary" size={24} />
                               </div>
                             ) : (
-                              <label className="absolute bottom-3 right-3 p-2 bg-nsp-primary rounded-xl text-white shadow-lg cursor-pointer active:scale-90 transition-transform z-10">
+                              <label 
+                                onClick={(e) => e.stopPropagation()}
+                                className="absolute bottom-3 right-3 p-2 bg-nsp-primary rounded-xl text-white shadow-lg cursor-pointer active:scale-90 transition-transform z-10"
+                              >
                                 <Plus size={16} />
                                 <input 
                                   type="file" 
@@ -408,7 +425,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
                           {car.photos.damages.map((dmg, idx) => (
                             <div key={idx} className="relative aspect-square rounded-xl overflow-hidden border border-white/10">
                               <img src={safeBase64ToBlobUrl(dmg)} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                              <button onClick={() => setViewingDoc({ title: `DOMMAGE ${idx + 1}`, url: dmg })} className="absolute inset-0 bg-black/20 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity">
+                              <button onClick={() => setViewingDoc({ title: `DOMMAGE ${idx + 1}`, url: dmg })} className="absolute inset-0 bg-black/20 flex items-center justify-center sm:opacity-0 sm:hover:opacity-100 transition-opacity">
                                 <Maximize2 size={16} className="text-white" />
                               </button>
                             </div>
