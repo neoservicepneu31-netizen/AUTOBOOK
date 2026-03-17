@@ -27,7 +27,7 @@ interface AdminDashboardScreenProps {
 export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({ 
   currentUser, allUsers, allCars, allInvoices, onLogout, onUpdateUser, onDeleteUser, onRefresh
 }) => {
-  const [activeTab, setActiveTab] = useState<'overview' | 'diffusion' | 'users' | 'setup'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'diffusion' | 'users' | 'requests' | 'setup'>('overview');
   const [searchTerm, setSearchTerm] = useState('');
   const [cloudStatus, setCloudStatus] = useState<'online' | 'syncing' | 'warning' | 'error'>('online');
   const [isEmergencyAction, setIsEmergencyAction] = useState(false);
@@ -37,6 +37,10 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [customDomain, setCustomDomain] = useState('autobook-zxwf.vercel.app');
   const [isSendingMails, setIsSendingMails] = useState(false);
+  const [infoRequests, setInfoRequests] = useState([
+    { id: '1', userName: 'Jean Dupont', email: 'jean@dupont.fr', subject: 'Question sur le SIV', date: new Date().toISOString() },
+    { id: '2', userName: 'Marie Curie', email: 'marie@curie.fr', subject: 'Problème de connexion', date: new Date(Date.now() - 3600000).toISOString() }
+  ]);
   
   const isCloudActive = cloud.isConnected();
   const isApiDisabled = cloud.isApiDisabled();
@@ -97,6 +101,45 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({
     onUpdateUser(updatedUser);
     setIsSendingMails(false);
     alert(`✅ Nouveau mot de passe généré et "envoyé" à ${user.email} : ${newPassword}`);
+  };
+
+  const handleResetAccount = async (user: User) => {
+    if (!confirm(`⚠️ ATTENTION : Voulez-vous vraiment RÉINITIALISER le compte de ${user.name} ?\n\nToutes ses voitures et factures seront supprimées définitivement.`)) {
+      return;
+    }
+    
+    setIsSendingMails(true);
+    try {
+      // Suppression de toutes les voitures et factures associées
+      const userCars = allCars.filter(c => c.ownerId === user.id);
+      for (const car of userCars) {
+        const carInvoices = allInvoices.filter(i => i.carId === car.id);
+        for (const inv of carInvoices) {
+          if (cloud.isConnected()) await cloud.deleteInvoice(inv.id);
+        }
+        if (cloud.isConnected()) await cloud.deleteCar(car.id);
+      }
+      
+      // Mise à jour locale (App.tsx s'en chargera via onRefresh ou le rechargement des données)
+      alert(`✅ Compte de ${user.name} réinitialisé avec succès (Garages et factures vidés).`);
+      onRefresh();
+    } catch (e) {
+      console.error("Reset account error", e);
+      alert("Erreur lors de la réinitialisation du compte.");
+    } finally {
+      setIsSendingMails(false);
+    }
+  };
+
+  const handleSendMessage = async (user: User) => {
+    const message = prompt(`Envoyer un message/question à ${user.name} (${user.email}) :`);
+    if (!message) return;
+
+    setIsSendingMails(true);
+    // Simulation envoi mail
+    await new Promise(res => setTimeout(res, 1500));
+    setIsSendingMails(false);
+    alert(`✅ Message envoyé à ${user.email} :\n\n"${message}"`);
   };
 
   const stats = useMemo(() => {
@@ -176,6 +219,7 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({
         {[
           { id: 'overview', label: 'Surveillance', icon: <BarChart3 size={14}/> },
           { id: 'users', label: 'Clients', icon: <Users size={14}/> },
+          { id: 'requests', label: 'Demandes', icon: <Mail size={14}/> },
           { id: 'diffusion', label: 'Diffusion', icon: <QrCode size={14}/> },
           { id: 'setup', label: 'Maintenance', icon: <LifeBuoy size={14}/> }
         ].map(tab => (
@@ -284,6 +328,44 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({
            </div>
          )}
 
+         {activeTab === 'requests' && (
+            <div className="space-y-4 animate-fade-in">
+              <h3 className="text-white font-black text-[10px] uppercase tracking-widest mb-4 flex items-center gap-2"><Mail size={14} className="text-nsp-primary" /> Demandes d'informations</h3>
+              {infoRequests.length === 0 ? (
+                <div className="bg-nsp-card border border-nsp-border p-10 rounded-3xl text-center">
+                  <Mail size={32} className="text-gray-600 mx-auto mb-4" />
+                  <p className="text-gray-500 text-[10px] font-black uppercase">Aucune demande en attente</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {infoRequests.map(req => (
+                    <div key={req.id} className="bg-nsp-card border border-nsp-border p-5 rounded-2xl flex justify-between items-center group">
+                      <div>
+                        <p className="text-white font-black text-[10px] uppercase">{req.subject}</p>
+                        <p className="text-gray-500 text-[8px] font-bold uppercase mt-1">{req.userName} • {req.email}</p>
+                        <p className="text-nsp-primary text-[7px] font-bold uppercase mt-2">{new Date(req.date).toLocaleString()}</p>
+                      </div>
+                      <button 
+                        onClick={() => {
+                          const u = allUsers.find(u => u.email === req.email);
+                          if (u) {
+                            setSelectedUser(u);
+                            setActiveTab('users');
+                          } else {
+                            alert("Client non trouvé dans la base.");
+                          }
+                        }}
+                        className="p-3 bg-nsp-primary/10 text-nsp-primary rounded-xl hover:bg-nsp-primary hover:text-white transition-all"
+                      >
+                        <ArrowRight size={16} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
          {activeTab === 'diffusion' && (
            <div className="space-y-8 animate-fade-in text-center max-w-sm mx-auto">
               <div className="bg-nsp-card border border-nsp-border rounded-[3rem] p-10 shadow-2xl flex flex-col items-center">
@@ -380,10 +462,14 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({
                       <KeyRound size={16} /> Réinitialiser le mot de passe
                     </button>
                   )}
-                  <button onClick={() => handleInvitationMail(selectedUser)} className="w-full bg-nsp-primary text-white p-5 rounded-2xl font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 shadow-xl active:scale-95 transition-all">
+                  <button onClick={() => handleSendMessage(selectedUser)} className="w-full bg-nsp-primary text-white p-5 rounded-2xl font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 shadow-xl active:scale-95 transition-all">
+                    <Send size={16} /> Envoyer un message / Question
+                  </button>
+                  <button onClick={() => handleInvitationMail(selectedUser)} className="w-full bg-nsp-input text-white p-5 rounded-2xl font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 shadow-xl active:scale-95 transition-all">
                     <Mail size={16} /> Envoyer mail d'invitation
                   </button>
-                  <button onClick={() => { if(confirm("Supprimer ce client ?")) { onDeleteUser(selectedUser.id); setSelectedUser(null); } }} className="w-full bg-red-600/10 text-red-500 p-5 rounded-2xl font-black text-[10px] uppercase border border-red-500/10">Supprimer le compte</button>
+                  <button onClick={() => handleResetAccount(selectedUser)} className="w-full bg-orange-600/10 text-orange-500 p-5 rounded-2xl font-black text-[10px] uppercase border border-orange-500/10">Réinitialiser le compte (Vider garage)</button>
+                  <button onClick={() => { if(confirm("Supprimer ce client ?")) { onDeleteUser(selectedUser.id); setSelectedUser(null); } }} className="w-full bg-red-600/10 text-red-500 p-5 rounded-2xl font-black text-[10px] uppercase border border-red-500/10">Supprimer définitivement le compte</button>
                </div>
             </div>
           </div>
