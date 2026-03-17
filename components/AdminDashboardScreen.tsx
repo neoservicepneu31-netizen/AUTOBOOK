@@ -293,7 +293,7 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({
                  <h3 className="text-white font-black text-xs uppercase tracking-[0.2em] mb-8">Diffusez AutoBook</h3>
                  
                  <div className="bg-white p-6 rounded-[2.5rem] shadow-[0_0_50px_rgba(230,57,70,0.3)] mb-8">
-                    <img src={qrCodeUrl} alt="QR Code Diffusion" className="w-48 h-48" />
+                    <img src={qrCodeUrl} alt="QR Code Diffusion" className="w-48 h-48" referrerPolicy="no-referrer" />
                  </div>
 
                  <div className="w-full space-y-4">

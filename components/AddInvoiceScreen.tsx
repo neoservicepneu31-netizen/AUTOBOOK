@@ -137,7 +137,7 @@ export const AddInvoiceScreen: React.FC<AddInvoiceScreenProps> = ({ carId, onSav
                isPDF ? (
                  <div className="flex flex-col items-center gap-4 text-center p-10"><FileText size={48} className="text-red-500" /><p className="text-white font-bold text-[10px] uppercase">PDF prêt</p></div>
                ) : (
-                 <img src={persistentImage} className="absolute inset-0 w-full h-full object-cover" alt="Scan" />
+                 <img src={persistentImage} className="absolute inset-0 w-full h-full object-cover" alt="Scan" referrerPolicy="no-referrer" />
                )
             ) : (
                <div className="flex flex-col items-center gap-3 text-gray-500"><Camera size={48} className="opacity-20" /><p className="text-[10px] font-black uppercase tracking-widest">Appuyez pour scanner</p></div>

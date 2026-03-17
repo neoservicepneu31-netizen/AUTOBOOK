@@ -13,32 +13,92 @@ import {
   Timestamp,
   limit,
   orderBy,
-  getDoc
+  getDoc,
+  getDocFromServer
 } from 'firebase/firestore';
+import { getAuth } from 'firebase/auth';
 import { User, Car, Invoice } from '../types';
 
-const firebaseConfig = {
-  apiKey: "AIzaSyC0aoU59SqREEixo7VZbQ5_YmYcG-z3CSw",
-  authDomain: "autobook-nsp.firebaseapp.com",
-  projectId: "autobook-nsp",
-  storageBucket: "autobook-nsp.firebasestorage.app",
-  messagingSenderId: "268251454",
-  appId: "1:268251454:web:912f49b4647e87013efc6f",
-  measurementId: "G-Y7GNT1WCH5"
-};
+// Import the Firebase configuration
+import firebaseConfig from '../firebase-applet-config.json';
 
 const API_DISABLED_KEY = 'AUTOBOOK_CLOUD_API_DISABLED';
 let db: any = null;
+let auth: any = null;
 let isRealFirebase = false;
 
 try {
     if (firebaseConfig.apiKey && firebaseConfig.apiKey !== "VOTRE_API_KEY") {
         const app = initializeApp(firebaseConfig);
-        db = getFirestore(app);
+        db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+        auth = getAuth(app);
         isRealFirebase = true;
+        
+        // Test connection
+        const testConnection = async () => {
+          try {
+            await getDocFromServer(doc(db, 'test', 'connection'));
+          } catch (error) {
+            if(error instanceof Error && error.message.includes('the client is offline')) {
+              console.error("Please check your Firebase configuration. The client is offline.");
+            }
+          }
+        };
+        testConnection();
     }
 } catch (e) {
     console.error("❌ Erreur d'initialisation Firebase:", e);
+}
+
+enum OperationType {
+  CREATE = 'create',
+  UPDATE = 'update',
+  DELETE = 'delete',
+  LIST = 'list',
+  GET = 'get',
+  WRITE = 'write',
+}
+
+interface FirestoreErrorInfo {
+  error: string;
+  operationType: OperationType;
+  path: string | null;
+  authInfo: {
+    userId: string | undefined;
+    email: string | null | undefined;
+    emailVerified: boolean | undefined;
+    isAnonymous: boolean | undefined;
+    tenantId: string | null | undefined;
+    providerInfo: {
+      providerId: string;
+      displayName: string | null;
+      email: string | null;
+      photoUrl: string | null;
+    }[];
+  }
+}
+
+function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
+  const errInfo: FirestoreErrorInfo = {
+    error: error instanceof Error ? error.message : String(error),
+    authInfo: {
+      userId: auth?.currentUser?.uid,
+      email: auth?.currentUser?.email,
+      emailVerified: auth?.currentUser?.emailVerified,
+      isAnonymous: auth?.currentUser?.isAnonymous,
+      tenantId: auth?.currentUser?.tenantId,
+      providerInfo: auth?.currentUser?.providerData.map((provider: any) => ({
+        providerId: provider.providerId,
+        displayName: provider.displayName,
+        email: provider.email,
+        photoUrl: provider.photoURL
+      })) || []
+    },
+    operationType,
+    path
+  }
+  console.error('Firestore Error: ', JSON.stringify(errInfo));
+  throw new Error(JSON.stringify(errInfo));
 }
 
 const cleanData = (obj: any): any => {
@@ -106,6 +166,7 @@ class CloudConnector {
 
   async syncUser(user: User): Promise<void> {
     if (!this.isConnected()) return;
+    const path = `users/${user.id}`;
     try {
         const cleaned = cleanData(user);
         await setDoc(doc(db, "users", user.id), { 
@@ -116,12 +177,14 @@ class CloudConnector {
     } catch (e: any) { 
         if(e.code === 'permission-denied') {
           localStorage.setItem(API_DISABLED_KEY, 'true');
+          handleFirestoreError(e, OperationType.WRITE, path);
         }
     }
   }
 
   async fetchUserByEmail(email: string): Promise<User | null> {
     if (!this.isConnected()) return null;
+    const path = "users";
     try {
       const q = query(collection(db, "users"), where("email", "==", email.toLowerCase()), limit(1));
       const snap = await getDocs(q);
@@ -130,106 +193,145 @@ class CloudConnector {
       }
       return null;
     } catch (e) {
+      handleFirestoreError(e, OperationType.GET, path);
       return null;
     }
   }
 
   async fetchAllUsersRaw(): Promise<User[]> {
     if (!this.isConnected()) return [];
+    const path = "users";
     try {
         const querySnapshot = await getDocs(collection(db, "users"));
         return querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as User));
     } catch (e: any) { 
+      handleFirestoreError(e, OperationType.LIST, path);
       throw e;
     }
   }
 
   async fetchAllUsers(): Promise<User[]> {
     if (!this.isConnected()) return [];
+    const path = "users";
     try {
         const q = query(collection(db, "users"), limit(1000)); 
         const querySnapshot = await getDocs(q);
         return querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as User));
     } catch (e: any) { 
+      handleFirestoreError(e, OperationType.LIST, path);
       return []; 
     }
   }
 
   async syncCar(car: Car): Promise<void> {
     if (!this.isConnected()) return;
+    const path = `cars/${car.id}`;
     try {
       const cleaned = cleanData(car);
       await setDoc(doc(db, "cars", car.id), { ...cleaned, lastSync: Timestamp.now() }, { merge: true });
-    } catch (e) { console.error(e); }
+    } catch (e) { 
+      handleFirestoreError(e, OperationType.WRITE, path);
+    }
   }
 
   async deleteCar(carId: string): Promise<void> {
     if (!this.isConnected()) return;
+    const path = `cars/${carId}`;
     try {
       await deleteDoc(doc(db, "cars", carId));
-    } catch (e) { console.error(e); }
+    } catch (e) { 
+      handleFirestoreError(e, OperationType.DELETE, path);
+    }
   }
 
   async fetchAllCars(): Promise<Car[]> {
     if (!this.isConnected()) return [];
+    const path = "cars";
     try {
       const snap = await getDocs(collection(db, "cars"));
       return snap.docs.map(d => d.data() as Car);
-    } catch (e) { return []; }
+    } catch (e) { 
+      handleFirestoreError(e, OperationType.LIST, path);
+      return []; 
+    }
   }
 
   async syncInvoice(invoice: Invoice): Promise<void> {
     if (!this.isConnected()) return;
+    const path = `invoices/${invoice.id}`;
     try {
       const cleaned = cleanData(invoice);
       await setDoc(doc(db, "invoices", invoice.id), { ...cleaned, lastSync: Timestamp.now() }, { merge: true });
-    } catch (e) { console.error(e); }
+    } catch (e) { 
+      handleFirestoreError(e, OperationType.WRITE, path);
+    }
   }
 
   async deleteInvoice(invoiceId: string): Promise<void> {
     if (!this.isConnected()) return;
+    const path = `invoices/${invoiceId}`;
     try {
       await deleteDoc(doc(db, "invoices", invoiceId));
-    } catch (e) { console.error(e); }
+    } catch (e) { 
+      handleFirestoreError(e, OperationType.DELETE, path);
+    }
   }
 
   async fetchAllInvoices(): Promise<Invoice[]> {
     if (!this.isConnected()) return [];
+    const path = "invoices";
     try {
       const snap = await getDocs(collection(db, "invoices"));
       return snap.docs.map(d => d.data() as Invoice);
-    } catch (e) { return []; }
+    } catch (e) { 
+      handleFirestoreError(e, OperationType.LIST, path);
+      return []; 
+    }
   }
 
   async fetchUserCars(userId: string): Promise<Car[]> {
     if (!this.isConnected()) return [];
+    const path = "cars";
     try {
       const q = query(collection(db, "cars"), where("ownerId", "==", userId));
       const snap = await getDocs(q);
       return snap.docs.map(d => d.data() as Car);
-    } catch (e) { return []; }
+    } catch (e) { 
+      handleFirestoreError(e, OperationType.LIST, path);
+      return []; 
+    }
   }
 
   async fetchUserInvoices(carId: string): Promise<Invoice[]> {
     if (!this.isConnected()) return [];
+    const path = "invoices";
     try {
       const q = query(collection(db, "invoices"), where("carId", "==", carId));
       const snap = await getDocs(q);
       return snap.docs.map(d => d.data() as Invoice);
-    } catch (e) { return []; }
+    } catch (e) { 
+      handleFirestoreError(e, OperationType.LIST, path);
+      return []; 
+    }
   }
 
   async deleteUser(userId: string): Promise<void> {
     if (!this.isConnected()) return;
+    const path = `users/${userId}`;
     try {
       await deleteDoc(doc(db, "users", userId));
-    } catch (e) { console.error(e); }
+    } catch (e) { 
+      handleFirestoreError(e, OperationType.DELETE, path);
+    }
   }
 
   listenToAllUsers(callback: (users: User[]) => void) {
     if (!this.isConnected()) return null;
+    const path = "users";
     return onSnapshot(collection(db, "users"), (snapshot) => {
       callback(snapshot.docs.map(doc => doc.data() as User));
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, path);
     });
   }
 }

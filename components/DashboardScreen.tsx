@@ -2,7 +2,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { User, Car, Invoice, AIStatus, ManufacturerSpecs, TechnicalSpecs } from '../types';
 import { 
-  Plus, FileText, ArrowLeft, Sparkles, Gauge, Droplet, PhoneCall, X, 
+  Plus, FileText, ArrowLeft, Sparkles, Gauge, Droplet, PhoneCall, X, Camera,
   Wrench, AlertCircle, Share2, ShieldCheck, ChevronRight, Activity, Info, Eye, Download, Maximize2, Loader2, Trash2, Layers, Search, History, CheckCircle2, AlertTriangle, ListChecks, Calendar, Scale, Image as ImageIcon, BellRing, Clock, ShieldAlert, CircleAlert, Shield, SearchCode, PackageSearch, TrendingUp, TrendingDown, Wallet, Medal, Target
 } from 'lucide-react';
 import { getPersonalizedMaintenance, safeBase64ToBlobUrl, base64ToRealBlobUrl } from '../services/geminiService';
@@ -25,13 +25,40 @@ interface DashboardScreenProps {
 }
 
 export const DashboardScreen: React.FC<DashboardScreenProps> = ({
-  user, car, invoices, onBackToGarage, onAddInvoice, onAssistance, onDeleteInvoice, onSellCar
+  user, car, invoices, onBackToGarage, onAddInvoice, onAssistance, onDeleteInvoice, onSellCar, onUpdateCar
 }) => {
   const [specs, setSpecs] = useState<ManufacturerSpecs | null>(null);
   const [isLoadingSpecs, setIsLoadingSpecs] = useState(false);
-  const [activeReport, setActiveReport] = useState<'health' | 'tires' | 'fluids' | 'ct' | 'insurance' | 'parts' | null>(null);
+  const [activeReport, setActiveReport] = useState<'health' | 'tires' | 'fluids' | 'ct' | 'insurance' | 'parts' | 'photos' | null>(null);
   const [viewingInvoice, setViewingInvoice] = useState<Invoice | null>(null);
   const [viewingDoc, setViewingDoc] = useState<{title: string, url: string} | null>(null);
+  const [isUpdatingPhoto, setIsUpdatingPhoto] = useState<string | null>(null);
+
+  const handlePhotoUpdate = async (e: React.ChangeEvent<HTMLInputElement>, angle: string) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      setIsUpdatingPhoto(angle);
+      try {
+        const { processFile } = await import('../services/geminiService');
+        const result = await processFile(file);
+        const updatedCar = {
+          ...car,
+          photos: {
+            ...car.photos,
+            ...(angle === 'damage' 
+              ? { damages: [...car.photos.damages, result] } 
+              : { [angle]: result }
+            )
+          }
+        };
+        onUpdateCar(updatedCar);
+      } catch (err) {
+        alert("Erreur lors de la mise à jour de la photo.");
+      } finally {
+        setIsUpdatingPhoto(null);
+      }
+    }
+  };
 
   const proactiveStatus = calculateMaintenanceStatus(car, invoices);
   const lastMileage = invoices.length > 0 ? Math.max(...invoices.map(i => i.km)) : car.initialKm;
@@ -183,17 +210,19 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
            </div>
         </div>
 
-        {/* Grille de Navigation Quick-Access 2x3 */}
-        <div className="grid grid-cols-3 gap-3">
+        {/* Grille de Navigation Quick-Access 2x4 */}
+        <div className="grid grid-cols-4 gap-2">
             {[
-              { id: 'health', icon: <Wrench size={20}/>, label: 'Santé', color: 'text-green-500 bg-green-500/10', badge: alertCount },
-              { id: 'tires', icon: <Gauge size={20}/>, label: 'Pneus', color: 'text-blue-400 bg-blue-400/10' },
-              { id: 'fluids', icon: <Droplet size={20}/>, label: 'Fluides', color: 'text-yellow-400 bg-yellow-400/10' },
-              { id: 'ct', icon: <ShieldCheck size={20}/>, label: 'C.T', color: 'text-orange-400 bg-orange-400/10' },
-              { id: 'insurance', icon: <Shield size={20}/>, label: 'Assurance', color: 'text-purple-400 bg-purple-400/10' },
-              { id: 'parts', icon: <PackageSearch size={20}/>, label: 'Pièces', color: 'text-gray-200 bg-gray-200/10' },
+              { id: 'health', icon: <Wrench size={18}/>, label: 'Santé', color: 'text-green-500 bg-green-500/10', badge: alertCount },
+              { id: 'tires', icon: <Gauge size={18}/>, label: 'Pneus', color: 'text-blue-400 bg-blue-400/10' },
+              { id: 'fluids', icon: <Droplet size={18}/>, label: 'Fluides', color: 'text-yellow-400 bg-yellow-400/10' },
+              { id: 'ct', icon: <ShieldCheck size={18}/>, label: 'C.T', color: 'text-orange-400 bg-orange-400/10' },
+              { id: 'insurance', icon: <Shield size={18}/>, label: 'Assur.', color: 'text-purple-400 bg-purple-400/10' },
+              { id: 'parts', icon: <PackageSearch size={18}/>, label: 'Pièces', color: 'text-gray-200 bg-gray-200/10' },
+              { id: 'photos', icon: <ImageIcon size={18}/>, label: 'Photos', color: 'text-pink-400 bg-pink-400/10' },
+              { id: 'invoices', icon: <FileText size={18}/>, label: 'Docs', color: 'text-cyan-400 bg-cyan-400/10' },
             ].map(item => (
-              <button key={item.id} onClick={() => setActiveReport(item.id as any)} className="bg-nsp-card border border-nsp-border rounded-2xl p-4 flex flex-col items-center text-center shadow-lg active:scale-95 transition-all relative">
+              <button key={item.id} onClick={() => item.id === 'invoices' ? window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' }) : setActiveReport(item.id as any)} className="bg-nsp-card border border-nsp-border rounded-xl p-3 flex flex-col items-center text-center shadow-lg active:scale-95 transition-all relative">
                 {item.badge ? (
                    <div className="absolute top-2 right-2 bg-red-600 text-white w-5 h-5 rounded-full flex items-center justify-center text-[8px] font-black border border-nsp-card animate-pulse z-10">
                      {item.badge}
@@ -222,12 +251,12 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
               <ShieldCheck size={14} className="text-green-500" /> Dossier Certifié & Photos
            </h3>
 
-           <div className="grid grid-cols-4 gap-2">
+           <div className="grid grid-cols-3 gap-2">
               <button 
                 onClick={() => car.grayCardUrl && setViewingDoc({ title: 'Carte Grise', url: car.grayCardUrl })}
                 className={`aspect-square rounded-xl border flex flex-col items-center justify-center gap-1 overflow-hidden relative ${car.grayCardUrl ? 'border-nsp-primary/30' : 'border-dashed border-white/5 opacity-30'}`}
               >
-                {car.grayCardUrl ? <img src={safeBase64ToBlobUrl(car.grayCardUrl)} className="absolute inset-0 w-full h-full object-cover opacity-50" /> : <FileText size={18} className="text-gray-700" />}
+                {car.grayCardUrl ? <img src={safeBase64ToBlobUrl(car.grayCardUrl)} className="absolute inset-0 w-full h-full object-cover opacity-50" referrerPolicy="no-referrer" /> : <FileText size={18} className="text-gray-700" />}
                 <span className="text-[7px] text-white font-black uppercase relative z-10">C. Grise</span>
               </button>
 
@@ -235,17 +264,17 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
                 onClick={() => car.insurance?.greenCardUrl && setViewingDoc({ title: 'Carte Verte', url: car.insurance.greenCardUrl })}
                 className={`aspect-square rounded-xl border flex flex-col items-center justify-center gap-1 overflow-hidden relative ${car.insurance?.greenCardUrl ? 'border-nsp-primary/30' : 'border-dashed border-white/5 opacity-30'}`}
               >
-                {car.insurance?.greenCardUrl ? <img src={safeBase64ToBlobUrl(car.insurance.greenCardUrl)} className="absolute inset-0 w-full h-full object-cover opacity-50" /> : <Shield size={18} className="text-gray-700" />}
+                {car.insurance?.greenCardUrl ? <img src={safeBase64ToBlobUrl(car.insurance.greenCardUrl)} className="absolute inset-0 w-full h-full object-cover opacity-50" referrerPolicy="no-referrer" /> : <Shield size={18} className="text-gray-700" />}
                 <span className="text-[7px] text-white font-black uppercase relative z-10">Assurance</span>
               </button>
 
-              {['front', 'back'].map(angle => (
+              {['front', 'back', 'left', 'right'].map(angle => (
                 <button 
                   key={angle}
-                  onClick={() => car.photos[angle as keyof typeof car.photos] && setViewingDoc({ title: angle.toUpperCase(), url: car.photos[angle as keyof typeof car.photos] as string })}
+                  onClick={() => car.photos[angle as keyof typeof car.photos] ? setViewingDoc({ title: angle.toUpperCase(), url: car.photos[angle as keyof typeof car.photos] as string }) : setActiveReport('photos')}
                   className={`aspect-square rounded-xl border flex flex-col items-center justify-center gap-1 overflow-hidden relative ${car.photos[angle as keyof typeof car.photos] ? 'border-nsp-primary/30' : 'border-dashed border-white/5 opacity-30'}`}
                 >
-                  {car.photos[angle as keyof typeof car.photos] ? <img src={safeBase64ToBlobUrl(car.photos[angle as keyof typeof car.photos] as string)} className="absolute inset-0 w-full h-full object-cover opacity-50" /> : <ImageIcon size={18} className="text-gray-700" />}
+                  {car.photos[angle as keyof typeof car.photos] ? <img src={safeBase64ToBlobUrl(car.photos[angle as keyof typeof car.photos] as string)} className="absolute inset-0 w-full h-full object-cover opacity-50" referrerPolicy="no-referrer" /> : <ImageIcon size={18} className="text-gray-700" />}
                   <span className="text-[7px] text-white font-black uppercase relative z-10">{angle}</span>
                 </button>
               ))}
@@ -300,10 +329,11 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
                     {activeReport === 'ct' && <ShieldCheck size={28}/>}
                     {activeReport === 'insurance' && <Shield size={28}/>}
                     {activeReport === 'parts' && <PackageSearch size={28}/>}
+                    {activeReport === 'photos' && <ImageIcon size={28}/>}
                  </div>
                  <div>
                     <h2 className="text-white font-black text-xl uppercase tracking-tighter">
-                        {activeReport === 'ct' ? 'Contrôle Technique' : activeReport === 'insurance' ? 'Assurance' : activeReport === 'parts' ? 'Catalogue Pièces' : 'Rapport IA'}
+                        {activeReport === 'ct' ? 'Contrôle Technique' : activeReport === 'insurance' ? 'Assurance' : activeReport === 'parts' ? 'Catalogue Pièces' : activeReport === 'photos' ? 'Photos du Véhicule' : 'Rapport IA'}
                     </h2>
                     <p className="text-nsp-primary text-[8px] font-black uppercase tracking-[0.2em]">Analyses Automatiques {alertCount > 0 && `(${alertCount} ALERTES)`}</p>
                  </div>
@@ -312,6 +342,83 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
             </div>
 
             <div className="space-y-10">
+                {/* SECTION PHOTOS */}
+                {activeReport === 'photos' && (
+                  <div className="space-y-8">
+                    <div className="grid grid-cols-2 gap-4">
+                      {(['front', 'back', 'left', 'right', 'engine'] as const).map(angle => (
+                        <div key={angle} className="space-y-2">
+                          <p className="text-[9px] text-gray-500 font-black uppercase tracking-widest ml-2">{angle}</p>
+                          <div className={`relative aspect-video rounded-3xl border-2 border-dashed flex flex-col items-center justify-center overflow-hidden bg-nsp-input transition-all ${car.photos[angle as keyof typeof car.photos] ? 'border-nsp-primary/30' : 'border-white/5'}`}>
+                            {car.photos[angle as keyof typeof car.photos] ? (
+                              <>
+                                <img src={safeBase64ToBlobUrl(car.photos[angle as keyof typeof car.photos] as string)} className="absolute inset-0 w-full h-full object-cover" referrerPolicy="no-referrer" />
+                                <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity">
+                                  <button onClick={() => setViewingDoc({ title: angle.toUpperCase(), url: car.photos[angle as keyof typeof car.photos] as string })} className="p-3 bg-white/20 backdrop-blur-md rounded-full text-white"><Maximize2 size={20}/></button>
+                                </div>
+                              </>
+                            ) : (
+                              <div className="text-center p-4">
+                                <Camera size={24} className="text-gray-700 mx-auto mb-2" />
+                                <p className="text-[8px] text-gray-600 font-black uppercase">Aucune photo</p>
+                              </div>
+                            )}
+                            
+                            {isUpdatingPhoto === angle ? (
+                              <div className="absolute inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-20">
+                                <Loader2 className="animate-spin text-nsp-primary" size={24} />
+                              </div>
+                            ) : (
+                              <label className="absolute bottom-3 right-3 p-2 bg-nsp-primary rounded-xl text-white shadow-lg cursor-pointer active:scale-90 transition-transform z-10">
+                                <Plus size={16} />
+                                <input 
+                                  type="file" 
+                                  accept="image/*" 
+                                  capture="environment" 
+                                  onChange={e => handlePhotoUpdate(e, angle)} 
+                                  className="hidden" 
+                                />
+                              </label>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    
+                    <div className="bg-nsp-input/30 p-6 rounded-[2rem] border border-white/5 flex items-center justify-between gap-4">
+                       <p className="text-gray-400 text-[10px] leading-relaxed italic flex-1">
+                         Prenez des photos nettes et bien éclairées. Ces photos sont utilisées par notre IA pour certifier l'état de votre véhicule et valoriser votre dossier d'entretien.
+                       </p>
+                       <label className="p-4 bg-nsp-input border border-white/10 rounded-2xl text-white cursor-pointer active:scale-95 transition-all">
+                          <Camera size={20} />
+                          <input 
+                            type="file" 
+                            accept="image/*" 
+                            capture="environment" 
+                            onChange={e => handlePhotoUpdate(e, 'damage')} 
+                            className="hidden" 
+                          />
+                       </label>
+                    </div>
+
+                    {car.photos.damages.length > 0 && (
+                      <div className="space-y-4">
+                        <h4 className="text-[10px] text-gray-500 font-black uppercase tracking-widest ml-2">Dommages & Défauts</h4>
+                        <div className="grid grid-cols-3 gap-2">
+                          {car.photos.damages.map((dmg, idx) => (
+                            <div key={idx} className="relative aspect-square rounded-xl overflow-hidden border border-white/10">
+                              <img src={safeBase64ToBlobUrl(dmg)} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                              <button onClick={() => setViewingDoc({ title: `DOMMAGE ${idx + 1}`, url: dmg })} className="absolute inset-0 bg-black/20 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity">
+                                <Maximize2 size={16} className="text-white" />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
                {/* SECTION SANTE DETAILLEE */}
                {activeReport === 'health' && (
                  <div className="space-y-6">
@@ -485,9 +592,9 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
           
           <div className="flex-1 flex items-center justify-center p-4">
               {isPDF(viewingInvoice?.imageUrl || viewingDoc?.url) ? (
-                <iframe src={base64ToRealBlobUrl((viewingInvoice?.imageUrl || viewingDoc?.url || ''), 'application/pdf')} className="w-full h-full rounded-2xl" />
+                <iframe src={base64ToRealBlobUrl((viewingInvoice?.imageUrl || viewingDoc?.url || ''), 'application/pdf')} className="w-full h-full rounded-2xl" referrerPolicy="no-referrer" />
               ) : (
-                <img src={safeBase64ToBlobUrl(viewingInvoice?.imageUrl || viewingDoc?.url || '')} className="max-w-full max-h-full object-contain rounded-2xl" alt="Document" />
+                <img src={safeBase64ToBlobUrl(viewingInvoice?.imageUrl || viewingDoc?.url || '')} className="max-w-full max-h-full object-contain rounded-2xl" alt="Document" referrerPolicy="no-referrer" />
               )}
           </div>
         </div>

@@ -1,0 +1,142 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: users
+    // Document ID: userId
+    // Fields:
+    //   - id: string (required)
+    //   - name: string (required)
+    //   - email: string (required, email format)
+    //   - role: string (required, 'user' | 'admin')
+    //   - clientType: string (optional)
+    //   - isValidated: bool (optional)
+    //   - passwordResetRequested: bool (optional)
+    //   - isPremium: bool (optional)
+    //   - hasSivAccess: bool (optional)
+    //   - hasAssistanceAccess: bool (optional)
+    //   - createdAt: string (optional)
+    //   - lastSync: timestamp (optional)
+    //
+    // Collection: cars
+    // Document ID: carId
+    // Fields:
+    //   - id: string (required)
+    //   - ownerId: string (required)
+    //   - name: string (required)
+    //   - type: string (required, 'car' | 'motorcycle')
+    //   - plate: string (required)
+    //   - firstRegistrationDate: string (optional)
+    //   - fuelType: string (optional)
+    //   - initialKm: number (optional)
+    //   - grayCardUrl: string (optional)
+    //   - lastSync: timestamp (optional)
+    //
+    // Collection: invoices
+    // Document ID: invoiceId
+    // Fields:
+    //   - id: string (required)
+    //   - carId: string (required)
+    //   - type: string (required, 'maintenance' | 'fuel')
+    //   - title: string (required)
+    //   - date: string (required)
+    //   - km: number (required)
+    //   - price: number (required)
+    //   - lastSync: timestamp (optional)
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() &&
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+          (request.auth.token.email == "fernand1802@gmail.com" && request.auth.token.email_verified == true));
+    }
+
+    function isValidEmail(email) {
+      return email is string && email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    }
+
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+
+    // ===============================================================
+    // Domain Validators
+    // ===============================================================
+
+    function isValidUser(data) {
+      return data.id is string &&
+             data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
+             isValidEmail(data.email) &&
+             data.role in ['user', 'admin'];
+    }
+
+    function isValidCar(data) {
+      return data.id is string &&
+             data.ownerId is string &&
+             data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
+             data.type in ['car', 'motorcycle'] &&
+             data.plate is string;
+    }
+
+    function isValidInvoice(data) {
+      return data.id is string &&
+             data.carId is string &&
+             data.type in ['maintenance', 'fuel'] &&
+             data.title is string && data.title.size() > 0 && data.title.size() < 200 &&
+             data.date is string &&
+             data.km is number &&
+             data.price is number;
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow create: if isAuthenticated() && isValidUser(request.resource.data) && 
+                      ((isOwner(userId) && request.resource.data.role == 'user') || isAdmin());
+      allow update: if isAuthenticated() && isValidUser(request.resource.data) && 
+                      ((isOwner(userId) && request.resource.data.role == resource.data.role) || isAdmin());
+      allow delete: if isAdmin();
+    }
+
+    match /cars/{carId} {
+      allow read: if isAuthenticated() && (resource.data.ownerId == request.auth.uid || isAdmin());
+      allow create: if isAuthenticated() && isValidCar(request.resource.data) && 
+                      (request.resource.data.ownerId == request.auth.uid || isAdmin());
+      allow update: if isAuthenticated() && isValidCar(request.resource.data) && 
+                      (resource.data.ownerId == request.auth.uid || isAdmin());
+      allow delete: if isAuthenticated() && (resource.data.ownerId == request.auth.uid || isAdmin());
+    }
+
+    match /invoices/{invoiceId} {
+      allow read: if isAuthenticated() && (get(/databases/$(database)/documents/cars/$(resource.data.carId)).data.ownerId == request.auth.uid || isAdmin());
+      allow create: if isAuthenticated() && isValidInvoice(request.resource.data) && 
+                      (get(/databases/$(database)/documents/cars/$(request.resource.data.carId)).data.ownerId == request.auth.uid || isAdmin());
+      allow update: if isAuthenticated() && isValidInvoice(request.resource.data) && 
+                      (get(/databases/$(database)/documents/cars/$(resource.data.carId)).data.ownerId == request.auth.uid || isAdmin());
+      allow delete: if isAuthenticated() && (get(/databases/$(database)/documents/cars/$(resource.data.carId)).data.ownerId == request.auth.uid || isAdmin());
+    }
+    
+    match /{path=**} {
+      allow read, write: if false;
+    }
+  }
+}

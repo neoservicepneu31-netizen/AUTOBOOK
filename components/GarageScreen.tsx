@@ -161,7 +161,7 @@ export const GarageScreen: React.FC<GarageScreenProps> = ({ user, cars, invoices
                   className="flex-none w-[300px] bg-nsp-card rounded-[3rem] border border-nsp-border overflow-hidden shadow-2xl active:scale-[0.98] transition-all relative group"
                 >
                   <div className="h-36 w-full relative overflow-hidden">
-                    <img src={article.imageUrl} className="w-full h-full object-cover opacity-60 group-hover:scale-110 transition-transform duration-700" alt={article.title} />
+                    <img src={article.imageUrl} className="w-full h-full object-cover opacity-60 group-hover:scale-110 transition-transform duration-700" alt={article.title} referrerPolicy="no-referrer" />
                     <div className="absolute inset-0 bg-gradient-to-t from-nsp-card via-transparent to-transparent"></div>
                     <div className="absolute top-4 left-4 bg-nsp-primary text-white text-[8px] font-black px-2.5 py-1 rounded-full uppercase tracking-widest shadow-lg">
                        {article.category}
@@ -205,7 +205,7 @@ export const GarageScreen: React.FC<GarageScreenProps> = ({ user, cars, invoices
                   <div key={car.id} className="bg-nsp-card rounded-[3rem] border border-nsp-border overflow-hidden shadow-2xl relative group active:scale-[0.98] transition-all" onClick={() => onSelectCar(car.id)}>
                     <div className="h-52 w-full bg-nsp-input relative">
                       {car.photos.front ? (
-                        <img src={car.photos.front} alt={car.name} className="w-full h-full object-cover" />
+                        <img src={car.photos.front} alt={car.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                       ) : (
                         <div className="w-full h-full flex items-center justify-center bg-gray-900">
                           {car.type === 'motorcycle' ? <Bike size={48} className="text-gray-800"/> : <CarIcon size={48} className="text-gray-800"/>}
@@ -258,7 +258,7 @@ export const GarageScreen: React.FC<GarageScreenProps> = ({ user, cars, invoices
               <div className="w-12"></div>
            </header>
            <div className="flex-1 overflow-y-auto">
-              <img src={selectedArticle.imageUrl} className="w-full aspect-video object-cover" alt={selectedArticle.title} />
+              <img src={selectedArticle.imageUrl} className="w-full aspect-video object-cover" alt={selectedArticle.title} referrerPolicy="no-referrer" />
               <div className="p-8 space-y-6">
                  <h2 className="text-4xl font-black text-white tracking-tighter leading-tight uppercase">{selectedArticle.title}</h2>
                  <div className="flex items-center gap-4 text-gray-500 text-[10px] font-black uppercase tracking-widest">

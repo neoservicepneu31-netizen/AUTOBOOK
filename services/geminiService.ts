@@ -63,7 +63,7 @@ export const processFile = (file: File): Promise<string> => {
 
 export const safeBase64ToBlobUrl = (base64Data: string): string => {
   if (!base64Data) return "";
-  if (base64Data.startsWith('data:')) return base64Data;
+  if (base64Data.startsWith('data:') || base64Data.startsWith('http') || base64Data.startsWith('blob:')) return base64Data;
   
   try {
     const isPDF = base64Data.length > 20 && base64Data.substring(0, 30).includes('JVBER');
@@ -75,6 +75,9 @@ export const safeBase64ToBlobUrl = (base64Data: string): string => {
 };
 
 export const base64ToRealBlobUrl = (base64: string, mimeType: string = 'application/pdf'): string => {
+  if (!base64) return "";
+  if (base64.startsWith('http') || base64.startsWith('blob:')) return base64;
+  
   try {
     const sliceSize = 1024;
     const byteCharacters = atob(base64.includes(',') ? base64.split(',')[1] : base64);

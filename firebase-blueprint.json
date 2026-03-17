@@ -1,0 +1,72 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "Application user profile",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "role": { "type": "string", "enum": ["user", "admin"] },
+        "clientType": { "type": "string", "enum": ["new", "existing"] },
+        "isValidated": { "type": "boolean" },
+        "passwordResetRequested": { "type": "boolean" },
+        "isPremium": { "type": "boolean" },
+        "hasSivAccess": { "type": "boolean" },
+        "hasAssistanceAccess": { "type": "boolean" },
+        "createdAt": { "type": "string" },
+        "lastSync": { "type": "object" }
+      },
+      "required": ["id", "name", "email", "role"]
+    },
+    "Car": {
+      "title": "Car",
+      "description": "Vehicle information",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "ownerId": { "type": "string" },
+        "name": { "type": "string" },
+        "type": { "type": "string", "enum": ["car", "motorcycle"] },
+        "plate": { "type": "string" },
+        "firstRegistrationDate": { "type": "string" },
+        "fuelType": { "type": "string", "enum": ["diesel", "essence", "hybride", "electrique"] },
+        "initialKm": { "type": "number" },
+        "grayCardUrl": { "type": "string" },
+        "lastSync": { "type": "object" }
+      },
+      "required": ["id", "ownerId", "name", "type", "plate"]
+    },
+    "Invoice": {
+      "title": "Invoice",
+      "description": "Maintenance or fuel invoice",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "carId": { "type": "string" },
+        "type": { "type": "string", "enum": ["maintenance", "fuel"] },
+        "title": { "type": "string" },
+        "date": { "type": "string" },
+        "km": { "type": "number" },
+        "price": { "type": "number" },
+        "lastSync": { "type": "object" }
+      },
+      "required": ["id", "carId", "type", "title", "date", "km", "price"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profiles"
+    },
+    "/cars/{carId}": {
+      "schema": "Car",
+      "description": "Vehicles"
+    },
+    "/invoices/{invoiceId}": {
+      "schema": "Invoice",
+      "description": "Invoices"
+    }
+  }
+}

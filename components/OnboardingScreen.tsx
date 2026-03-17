@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { Car } from '../types';
 import { Camera, Car as CarIcon, Activity, Bike, Search, Loader2, ScanLine, X } from 'lucide-react';
 import { searchVehicleByPlate } from '../services/sivService';
-import { processFile } from '../services/geminiService';
+import { processFile, safeBase64ToBlobUrl } from '../services/geminiService';
 
 interface OnboardingScreenProps {
   onSave: (car: Car) => void;
@@ -135,7 +135,7 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onSave, onCa
           <h3 className="text-sm font-black text-nsp-sub uppercase tracking-widest">3. Photos Certifiées</h3>
           
           <div className="relative w-full h-16 rounded-xl border-2 border-dashed flex items-center justify-center gap-3 transition-all overflow-hidden bg-nsp-input">
-             {grayCard ? <><img src={grayCard} className="absolute inset-0 w-full h-full object-cover opacity-30" /><span className="text-white font-black text-[10px] relative z-10">Carte Grise OK</span></> : <><ScanLine size={20} className="text-white"/><span className="text-white text-xs font-bold">Scanner Carte Grise</span></>}
+             {grayCard ? <><img src={safeBase64ToBlobUrl(grayCard)} className="absolute inset-0 w-full h-full object-cover opacity-30" referrerPolicy="no-referrer" /><span className="text-white font-black text-[10px] relative z-10">Carte Grise OK</span></> : <><ScanLine size={20} className="text-white"/><span className="text-white text-xs font-bold">Scanner Carte Grise</span></>}
              <input 
               type="file" 
               accept="image/*" 
@@ -147,7 +147,7 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onSave, onCa
           <div className="grid grid-cols-2 gap-3">
             {(['front', 'back', 'left', 'right'] as const).map(angle => (
               <div key={angle} className={`relative aspect-square rounded-xl border border-dashed flex flex-col items-center justify-center overflow-hidden bg-nsp-input ${photos[angle] ? 'border-green-500' : 'border-nsp-border'}`}>
-                {photos[angle] ? <img src={photos[angle]!} className="absolute inset-0 w-full h-full object-cover" /> : <><Camera size={20} className="text-nsp-sub"/><span className="text-[10px] text-nsp-sub uppercase font-black">{angle}</span></>}
+                {photos[angle] ? <img src={safeBase64ToBlobUrl(photos[angle]!)} className="absolute inset-0 w-full h-full object-cover" referrerPolicy="no-referrer" /> : <><Camera size={20} className="text-nsp-sub"/><span className="text-[10px] text-nsp-sub uppercase font-black">{angle}</span></>}
                 <input 
                   type="file" 
                   accept="image/*" 
@@ -160,7 +160,7 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onSave, onCa
           </div>
 
           <div className={`relative w-full aspect-video rounded-xl border border-dashed flex flex-col items-center justify-center overflow-hidden bg-nsp-input ${photos.engine ? 'border-green-500' : 'border-nsp-border'}`}>
-             {photos.engine ? <img src={photos.engine} className="absolute inset-0 w-full h-full object-cover" /> : <><Activity size={24} className="text-nsp-primary"/><span className="text-xs text-nsp-sub font-bold mt-2">Photo Compartiment Moteur</span></>}
+             {photos.engine ? <img src={safeBase64ToBlobUrl(photos.engine)} className="absolute inset-0 w-full h-full object-cover" referrerPolicy="no-referrer" /> : <><Activity size={24} className="text-nsp-primary"/><span className="text-xs text-nsp-sub font-bold mt-2">Photo Compartiment Moteur</span></>}
              <input 
               type="file" 
               accept="image/*" 

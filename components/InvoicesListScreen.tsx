@@ -106,7 +106,7 @@ export const InvoicesListScreen: React.FC<InvoicesListScreenProps> = ({ car, inv
                 >
                   <div className="flex items-center gap-4">
                     <div className="w-14 h-14 rounded-2xl overflow-hidden bg-nsp-input relative shrink-0 flex items-center justify-center border border-white/5">
-                      <img src={safeBase64ToBlobUrl(doc.url)} className="w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-opacity" alt={doc.title} />
+                      <img src={safeBase64ToBlobUrl(doc.url)} className="w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-opacity" alt={doc.title} referrerPolicy="no-referrer" />
                     </div>
                     <div>
                       <h4 className="text-white font-bold text-sm uppercase tracking-tight">{doc.title}</h4>
@@ -142,7 +142,7 @@ export const InvoicesListScreen: React.FC<InvoicesListScreenProps> = ({ car, inv
                       isPDF(inv.imageUrl) ? (
                         <FileText size={24} className="text-red-500" />
                       ) : (
-                        <img src={safeBase64ToBlobUrl(inv.imageUrl)} className="w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-opacity" alt="Scan" />
+                        <img src={safeBase64ToBlobUrl(inv.imageUrl)} className="w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-opacity" alt="Scan" referrerPolicy="no-referrer" />
                       )
                     ) : (
                       <div className={`w-full h-full flex items-center justify-center ${inv.type === 'fuel' ? 'text-blue-400' : 'text-nsp-primary'}`}>
@@ -196,6 +196,7 @@ export const InvoicesListScreen: React.FC<InvoicesListScreenProps> = ({ car, inv
                       src={base64ToRealBlobUrl(viewingItem.url, 'application/pdf') + '#toolbar=0&navpanes=0'} 
                       className="w-full h-full border-0"
                       title="PDF Doc"
+                      referrerPolicy="no-referrer"
                     />
                     <div className="absolute bottom-4 left-1/2 -translate-x-1/2">
                       <button 
@@ -211,6 +212,7 @@ export const InvoicesListScreen: React.FC<InvoicesListScreenProps> = ({ car, inv
                   src={safeBase64ToBlobUrl(viewingItem.url)} 
                   className="w-full h-full object-contain" 
                   alt="Document" 
+                  referrerPolicy="no-referrer"
                 />
               )}
               
