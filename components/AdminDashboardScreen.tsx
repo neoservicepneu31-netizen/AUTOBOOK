@@ -37,6 +37,8 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [customDomain, setCustomDomain] = useState('autobook-zxwf.vercel.app');
   const [isSendingMails, setIsSendingMails] = useState(false);
+  const [messageText, setMessageText] = useState('');
+  const [isMessageModalOpen, setIsMessageModalOpen] = useState(false);
   const [infoRequests, setInfoRequests] = useState([
     { id: '1', userName: 'Jean Dupont', email: 'jean@dupont.fr', subject: 'Question sur le SIV', date: new Date().toISOString() },
     { id: '2', userName: 'Marie Curie', email: 'marie@curie.fr', subject: 'Problème de connexion', date: new Date(Date.now() - 3600000).toISOString() }
@@ -132,14 +134,15 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({
   };
 
   const handleSendMessage = async (user: User) => {
-    const message = prompt(`Envoyer un message/question à ${user.name} (${user.email}) :`);
-    if (!message) return;
+    if (!messageText.trim()) return;
 
     setIsSendingMails(true);
     // Simulation envoi mail
     await new Promise(res => setTimeout(res, 1500));
     setIsSendingMails(false);
-    alert(`✅ Message envoyé à ${user.email} :\n\n"${message}"`);
+    alert(`✅ Message envoyé à ${user.email} :\n\n"${messageText}"`);
+    setMessageText('');
+    setIsMessageModalOpen(false);
   };
 
   const stats = useMemo(() => {
@@ -417,26 +420,6 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({
                        {diagnosticResult.code && <p className="mt-1 text-[8px] opacity-60">Code d'erreur: {diagnosticResult.code}</p>}
                      </div>
                    )}
-                   
-                   <button 
-                     onClick={handleRunDiagnostic} 
-                     disabled={isTestingCloud}
-                     className="w-full bg-nsp-input border border-white/10 text-white py-4 rounded-xl font-black text-[10px] uppercase flex items-center justify-center gap-2 disabled:opacity-50"
-                   >
-                     {isTestingCloud ? <Loader2 size={16} className="animate-spin" /> : <SearchCode size={16}/>} 
-                     Tester la connexion Cloud
-                   </button>
-
-                   {diagnosticResult && (
-                     <div className={`mt-4 p-4 rounded-xl border text-[10px] font-bold uppercase tracking-wider ${diagnosticResult.success ? 'bg-green-500/10 border-green-500/30 text-green-500' : 'bg-red-500/10 border-red-500/30 text-red-500'}`}>
-                       <div className="flex items-center gap-2 mb-2">
-                         {diagnosticResult.success ? <ShieldCheck size={14} /> : <ShieldX size={14} />}
-                         {diagnosticResult.success ? 'Diagnostic Positif' : 'Diagnostic Négatif'}
-                       </div>
-                       <p className="opacity-80">{diagnosticResult.message}</p>
-                       {diagnosticResult.code && <p className="mt-1 text-[8px] opacity-60">Code d'erreur: {diagnosticResult.code}</p>}
-                     </div>
-                   )}
                  </div>
               </div>
             </div>
@@ -457,12 +440,10 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({
                <p className="text-gray-500 text-xs mb-8">{selectedUser.email}</p>
                
                <div className="space-y-3">
-                  {selectedUser.passwordResetRequested && (
-                    <button onClick={() => handleResetPassword(selectedUser)} className="w-full bg-orange-500 text-white p-5 rounded-2xl font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 shadow-xl active:scale-95 transition-all">
-                      <KeyRound size={16} /> Réinitialiser le mot de passe
-                    </button>
-                  )}
-                  <button onClick={() => handleSendMessage(selectedUser)} className="w-full bg-nsp-primary text-white p-5 rounded-2xl font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 shadow-xl active:scale-95 transition-all">
+                  <button onClick={() => handleResetPassword(selectedUser)} className="w-full bg-orange-500 text-white p-5 rounded-2xl font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 shadow-xl active:scale-95 transition-all">
+                    <KeyRound size={16} /> Réinitialiser le mot de passe
+                  </button>
+                  <button onClick={() => setIsMessageModalOpen(true)} className="w-full bg-nsp-primary text-white p-5 rounded-2xl font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 shadow-xl active:scale-95 transition-all">
                     <Send size={16} /> Envoyer un message / Question
                   </button>
                   <button onClick={() => handleInvitationMail(selectedUser)} className="w-full bg-nsp-input text-white p-5 rounded-2xl font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 shadow-xl active:scale-95 transition-all">
@@ -471,6 +452,36 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({
                   <button onClick={() => handleResetAccount(selectedUser)} className="w-full bg-orange-600/10 text-orange-500 p-5 rounded-2xl font-black text-[10px] uppercase border border-orange-500/10">Réinitialiser le compte (Vider garage)</button>
                   <button onClick={() => { if(confirm("Supprimer ce client ?")) { onDeleteUser(selectedUser.id); setSelectedUser(null); } }} className="w-full bg-red-600/10 text-red-500 p-5 rounded-2xl font-black text-[10px] uppercase border border-red-500/10">Supprimer définitivement le compte</button>
                </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isMessageModalOpen && selectedUser && (
+        <div className="fixed inset-0 z-[200] bg-black/95 backdrop-blur-xl flex items-center justify-center p-6 animate-fade-in">
+          <div className="bg-nsp-card border border-nsp-border w-full max-w-md rounded-[2.5rem] p-8 shadow-2xl">
+            <h3 className="text-white font-black text-xs uppercase tracking-widest mb-6 flex items-center gap-3">
+              <Send size={18} className="text-nsp-primary" /> Message à {selectedUser.name}
+            </h3>
+            <textarea
+              className="w-full bg-nsp-input border border-white/10 rounded-2xl p-4 text-white text-xs font-bold min-h-[150px] outline-none focus:border-nsp-primary/50 transition-all mb-6"
+              placeholder="Écrivez votre message ici..."
+              value={messageText}
+              onChange={(e) => setMessageText(e.target.value)}
+            />
+            <div className="flex gap-4">
+              <button
+                onClick={() => setIsMessageModalOpen(false)}
+                className="flex-1 bg-nsp-input text-white py-4 rounded-xl font-black text-[10px] uppercase"
+              >
+                Annuler
+              </button>
+              <button
+                onClick={() => handleSendMessage(selectedUser)}
+                className="flex-1 bg-nsp-primary text-white py-4 rounded-xl font-black text-[10px] uppercase shadow-lg shadow-nsp-primary/20"
+              >
+                Envoyer
+              </button>
             </div>
           </div>
         </div>
