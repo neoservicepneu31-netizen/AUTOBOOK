@@ -3,6 +3,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { User, Car, Invoice } from '../types';
 import { cloud } from '../services/cloudService';
 import { db } from '../services/storageService';
+import { emailService } from '../services/emailService';
 import { safeBase64ToBlobUrl, base64ToRealBlobUrl } from '../services/geminiService';
 import { 
   BarChart3, Users, QrCode, Globe, AlertCircle, 
@@ -82,27 +83,69 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({
 
   const handleInvitationMail = async (user: User) => {
     setIsSendingMails(true);
-    // Simulation envoi mail personnalisé "Complétez votre garage"
-    await new Promise(res => setTimeout(res, 2000));
-    setIsSendingMails(false);
-    alert(`✅ Mail d'invitation envoyé à ${user.name}.\n\nContenu : Bienvenue sur AutoBook ! Scannez votre carte grise pour activer votre carnet de santé.`);
+    try {
+      await emailService.send({
+        to: user.email,
+        subject: "Bienvenue sur AutoBook - Activez votre carnet de santé",
+        text: `Bonjour ${user.name},\n\nBienvenue sur AutoBook ! Scannez votre carte grise pour activer votre carnet de santé numérique et suivre l'entretien de votre véhicule.\n\nL'équipe AutoBook`,
+        html: `
+          <div style="font-family: sans-serif; padding: 20px; color: #333;">
+            <h2 style="color: #E63946;">Bienvenue sur AutoBook !</h2>
+            <p>Bonjour <strong>${user.name}</strong>,</p>
+            <p>Votre compte est prêt. Scannez votre carte grise dès maintenant pour activer votre carnet de santé numérique et suivre l'entretien de votre véhicule en toute simplicité.</p>
+            <div style="margin: 30px 0;">
+              <a href="${publicUrl}" style="background-color: #E63946; color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold;">Accéder à mon Garage</a>
+            </div>
+            <p>L'équipe AutoBook</p>
+          </div>
+        `
+      });
+      alert(`✅ Mail d'invitation envoyé avec succès à ${user.name}.`);
+    } catch (error: any) {
+      console.error("Email error:", error);
+      alert(`❌ Erreur lors de l'envoi du mail : ${error.message}\n\nNote: Vérifiez que RESEND_API_KEY est bien configurée.`);
+    } finally {
+      setIsSendingMails(false);
+    }
   };
 
   const handleResetPassword = async (user: User) => {
     const newPassword = Math.random().toString(36).slice(-8).toUpperCase();
     setIsSendingMails(true);
-    // Simulation envoi mail avec nouveau mot de passe
-    await new Promise(res => setTimeout(res, 2000));
     
-    const updatedUser = { 
-      ...user, 
-      password: newPassword, 
-      passwordResetRequested: false 
-    };
-    
-    onUpdateUser(updatedUser);
-    setIsSendingMails(false);
-    alert(`✅ Nouveau mot de passe généré et "envoyé" à ${user.email} : ${newPassword}`);
+    try {
+      await emailService.send({
+        to: user.email,
+        subject: "Réinitialisation de votre mot de passe AutoBook",
+        text: `Bonjour ${user.name},\n\nVotre mot de passe a été réinitialisé par un administrateur.\n\nVotre nouveau mot de passe est : ${newPassword}\n\nNous vous conseillons de le changer dès votre prochaine connexion.\n\nL'équipe AutoBook`,
+        html: `
+          <div style="font-family: sans-serif; padding: 20px; color: #333;">
+            <h2 style="color: #E63946;">Nouveau Mot de Passe</h2>
+            <p>Bonjour <strong>${user.name}</strong>,</p>
+            <p>Votre mot de passe a été réinitialisé par un administrateur.</p>
+            <div style="background-color: #f4f4f4; padding: 15px; border-radius: 8px; font-family: monospace; font-size: 18px; text-align: center; margin: 20px 0;">
+              ${newPassword}
+            </div>
+            <p>Nous vous conseillons de le changer dès votre prochaine connexion.</p>
+            <p>L'équipe AutoBook</p>
+          </div>
+        `
+      });
+
+      const updatedUser = { 
+        ...user, 
+        password: newPassword, 
+        passwordResetRequested: false 
+      };
+      
+      onUpdateUser(updatedUser);
+      alert(`✅ Nouveau mot de passe envoyé à ${user.email}.`);
+    } catch (error: any) {
+      console.error("Email error:", error);
+      alert(`❌ Erreur lors de l'envoi du mail : ${error.message}`);
+    } finally {
+      setIsSendingMails(false);
+    }
   };
 
   const handleResetAccount = async (user: User) => {
@@ -137,12 +180,31 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({
     if (!messageText.trim()) return;
 
     setIsSendingMails(true);
-    // Simulation envoi mail
-    await new Promise(res => setTimeout(res, 1500));
-    setIsSendingMails(false);
-    alert(`✅ Message envoyé à ${user.email} :\n\n"${messageText}"`);
-    setMessageText('');
-    setIsMessageModalOpen(false);
+    try {
+      await emailService.send({
+        to: user.email,
+        subject: "Message de l'administrateur AutoBook",
+        text: messageText,
+        html: `
+          <div style="font-family: sans-serif; padding: 20px; color: #333; border-left: 4px solid #E63946;">
+            <p>Bonjour <strong>${user.name}</strong>,</p>
+            <p>Vous avez reçu un nouveau message de l'équipe AutoBook :</p>
+            <div style="background-color: #f9f9f9; padding: 20px; border-radius: 12px; font-style: italic; margin: 20px 0; white-space: pre-wrap;">
+              ${messageText}
+            </div>
+            <p>L'équipe AutoBook</p>
+          </div>
+        `
+      });
+      alert(`✅ Message envoyé avec succès à ${user.email}.`);
+      setMessageText('');
+      setIsMessageModalOpen(false);
+    } catch (error: any) {
+      console.error("Email error:", error);
+      alert(`❌ Erreur lors de l'envoi du message : ${error.message}`);
+    } finally {
+      setIsSendingMails(false);
+    }
   };
 
   const stats = useMemo(() => {

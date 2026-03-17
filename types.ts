@@ -22,6 +22,7 @@ export interface User {
   isValidated?: boolean;
   passwordResetRequested?: boolean;
   isPremium?: boolean;
+  rememberMe?: boolean;
   hasSivAccess?: boolean;
   hasAssistanceAccess?: boolean;
   createdAt?: string;

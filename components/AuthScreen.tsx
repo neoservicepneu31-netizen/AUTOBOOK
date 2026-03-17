@@ -1,6 +1,7 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { User } from '../types';
+import { db } from '../services/storageService';
 import { ArrowRight, UserPlus, ShieldCheck, CheckCircle2, Wrench, Car, Lock, AlertCircle, ShieldAlert, LayoutDashboard, CheckSquare, Square, UserCircle2, KeyRound, Check, RefreshCw, Mail } from 'lucide-react';
 
 interface AuthScreenProps {
@@ -20,6 +21,19 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLogin, onForgotPasswor
   const [rememberMe, setRememberMe] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+
+  useEffect(() => {
+    const lastEmail = db.session.getLastEmail();
+    if (lastEmail) {
+      setEmail(lastEmail);
+      const lastUser = existingUsers.find(u => u.email.toLowerCase() === lastEmail.toLowerCase());
+      if (lastUser && lastUser.rememberMe && lastUser.password) {
+        setPassword(lastUser.password);
+        setRememberMe(true);
+      }
+    }
+  }, [existingUsers]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -32,10 +46,17 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLogin, onForgotPasswor
 
       if (mode === 'recovery') {
         if (foundUser) {
-          onForgotPasswordRequest(email);
-          setMode('login');
-          alert("Demande envoyée à l'administrateur. Vous recevrez un nouveau mot de passe par email après validation.");
+          onForgotPasswordRequest(email).then(success => {
+            setIsLoading(false);
+            if (success) {
+              setMode('login');
+              alert("✅ Un nouveau mot de passe vous a été envoyé par e-mail.");
+            } else {
+              setError("❌ Erreur lors de l'envoi de l'e-mail. Veuillez réessayer.");
+            }
+          });
         } else {
+          setIsLoading(false);
           setError("Aucun compte trouvé avec cette adresse email.");
         }
         return;
@@ -51,7 +72,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLogin, onForgotPasswor
         }
       } else if (mode === 'login') {
         if (foundUser && foundUser.password === password) {
-          onLogin(foundUser);
+          onLogin({ ...foundUser, rememberMe });
         } else {
           setError("Identifiants incorrects ou compte inexistant.");
         }
@@ -69,6 +90,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLogin, onForgotPasswor
             role: 'user', 
             isValidated: true,
             isPremium: false,
+            rememberMe,
             createdAt: new Date().toISOString()
           });
         }
@@ -130,14 +152,26 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLogin, onForgotPasswor
             </div>
             <div className="relative">
               <KeyRound className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" size={18} />
-              <input type="password" placeholder="MOT DE PASSE" value={password} onChange={e => setPassword(e.target.value)} className={`w-full bg-nsp-input border border-transparent rounded-2xl pl-12 pr-4 py-4 text-white text-xs font-bold outline-none transition-all ${isAdminMode ? 'focus:border-red-500' : 'focus:border-nsp-primary'}`} required={mode !== 'recovery'} disabled={mode === 'recovery'} />
+              <input type={showPassword ? "text" : "password"} placeholder="MOT DE PASSE" value={password} onChange={e => setPassword(e.target.value)} className={`w-full bg-nsp-input border border-transparent rounded-2xl pl-12 pr-12 py-4 text-white text-xs font-bold outline-none transition-all ${isAdminMode ? 'focus:border-red-500' : 'focus:border-nsp-primary'}`} required={mode !== 'recovery'} disabled={mode === 'recovery'} />
+              <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white transition-colors">
+                {showPassword ? <Lock size={16} /> : <KeyRound size={16} />}
+              </button>
             </div>
 
-            {mode === 'login' && !isAdminMode && (
-              <div className="flex justify-end">
-                <button type="button" onClick={() => setMode('recovery')} className="text-[9px] text-gray-500 font-black uppercase tracking-widest hover:text-nsp-primary transition-colors">
-                  Mot de passe oublié ?
+            {mode !== 'recovery' && (
+              <div className="flex items-center justify-between">
+                <button type="button" onClick={() => setRememberMe(!rememberMe)} className="flex items-center gap-2 group">
+                  <div className={`w-5 h-5 rounded-lg border flex items-center justify-center transition-all ${rememberMe ? 'bg-nsp-primary border-nsp-primary' : 'bg-nsp-input border-white/10 group-hover:border-nsp-primary'}`}>
+                    {rememberMe && <Check size={12} className="text-white" />}
+                  </div>
+                  <span className="text-[9px] font-black uppercase tracking-widest text-gray-500 group-hover:text-gray-300">Rester connecté</span>
                 </button>
+                
+                {mode === 'login' && !isAdminMode && (
+                  <button type="button" onClick={() => setMode('recovery')} className="text-[9px] text-gray-500 font-black uppercase tracking-widest hover:text-nsp-primary transition-colors">
+                    Mot de passe oublié ?
+                  </button>
+                )}
               </div>
             )}
 

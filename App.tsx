@@ -13,6 +13,7 @@ import { SellCarScreen } from './components/SellCarScreen';
 import { BuyCarScreen } from './components/BuyCarScreen';
 import { db } from './services/storageService'; 
 import { cloud } from './services/cloudService';
+import { emailService } from './services/emailService';
 import { checkVehicleHealthAndNotify } from './services/notificationService';
 import { Cloud, Loader2, RefreshCw, ShieldAlert } from 'lucide-react';
 
@@ -314,9 +315,40 @@ const App: React.FC = () => {
   const handleForgotPassword = async (email: string) => {
     const targetUser = allUsers.find(u => u.email.toLowerCase() === email.toLowerCase());
     if (targetUser) {
-      const updatedUser = { ...targetUser, passwordResetRequested: true };
-      await handleUpdateUser(updatedUser);
-      return true;
+      const newPassword = Math.random().toString(36).slice(-8).toUpperCase();
+      
+      try {
+        // 1. Envoyer l'email
+        await emailService.send({
+          to: targetUser.email,
+          subject: "Réinitialisation de votre mot de passe AutoBook",
+          text: `Bonjour ${targetUser.name},\n\nVous avez demandé la réinitialisation de votre mot de passe.\n\nVotre nouveau mot de passe est : ${newPassword}\n\nNous vous conseillons de le changer dès votre prochaine connexion.\n\nL'équipe AutoBook`,
+          html: `
+            <div style="font-family: sans-serif; padding: 20px; color: #333;">
+              <h2 style="color: #E63946;">Nouveau Mot de Passe</h2>
+              <p>Bonjour <strong>${targetUser.name}</strong>,</p>
+              <p>Vous avez demandé la réinitialisation de votre mot de passe.</p>
+              <div style="background-color: #f4f4f4; padding: 15px; border-radius: 8px; font-family: monospace; font-size: 18px; text-align: center; margin: 20px 0;">
+                ${newPassword}
+              </div>
+              <p>Nous vous conseillons de le changer dès votre prochaine connexion.</p>
+              <p>L'équipe AutoBook</p>
+            </div>
+          `
+        });
+
+        // 2. Mettre à jour l'utilisateur
+        const updatedUser = { 
+          ...targetUser, 
+          password: newPassword, 
+          passwordResetRequested: false 
+        };
+        await handleUpdateUser(updatedUser);
+        return true;
+      } catch (error) {
+        console.error("Forgot password email error:", error);
+        return false;
+      }
     }
     return false;
   };
