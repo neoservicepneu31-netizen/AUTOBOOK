@@ -16,35 +16,59 @@ import {
   getDoc,
   getDocFromServer
 } from 'firebase/firestore';
-import { getAuth } from 'firebase/auth';
+import { 
+  getAuth, 
+  signInWithEmailAndPassword, 
+  createUserWithEmailAndPassword, 
+  signOut, 
+  onAuthStateChanged, 
+  sendPasswordResetEmail,
+  GoogleAuthProvider,
+  signInWithPopup,
+  User as FirebaseUser
+} from 'firebase/auth';
 import { User, Car, Invoice } from '../types';
 
 // Import the Firebase configuration
 import firebaseConfig from '../firebase-applet-config.json';
+
+const config = (firebaseConfig as any).default || firebaseConfig;
 
 const API_DISABLED_KEY = 'AUTOBOOK_CLOUD_API_DISABLED';
 let db: any = null;
 let auth: any = null;
 let isRealFirebase = false;
 
+console.log("🔍 Firebase Config Check:", {
+  hasApiKey: !!config.apiKey,
+  apiKey: config.apiKey ? (config.apiKey.substring(0, 5) + "...") : "MISSING",
+  projectId: config.projectId
+});
+
 try {
-    if (firebaseConfig.apiKey && firebaseConfig.apiKey !== "VOTRE_API_KEY") {
-        const app = initializeApp(firebaseConfig);
-        db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+    if (config.apiKey && config.apiKey !== "VOTRE_API_KEY") {
+        const app = initializeApp(config);
+        db = getFirestore(app, config.firestoreDatabaseId);
         auth = getAuth(app);
         isRealFirebase = true;
+        console.log("✅ Firebase Initialisé avec succès");
         
         // Test connection
         const testConnection = async () => {
           try {
             await getDocFromServer(doc(db, 'test', 'connection'));
+            console.log("📡 Connexion Firestore OK");
           } catch (error) {
             if(error instanceof Error && error.message.includes('the client is offline')) {
-              console.error("Please check your Firebase configuration. The client is offline.");
+              console.error("⚠️ Please check your Firebase configuration. The client is offline.");
+            } else {
+              console.warn("ℹ️ Firestore connection test result:", error);
             }
           }
         };
         testConnection();
+    } else {
+        console.warn("⚠️ Firebase non configuré (Clé API manquante ou placeholder)");
     }
 } catch (e) {
     console.error("❌ Erreur d'initialisation Firebase:", e);
@@ -122,6 +146,8 @@ const cleanData = (obj: any): any => {
   return newObj;
 };
 
+const ADMIN_EMAIL = "neoservicepneu31@gmail.com";
+
 class CloudConnector {
   private static instance: CloudConnector;
   private constructor() {}
@@ -133,8 +159,159 @@ class CloudConnector {
     return CloudConnector.instance;
   }
 
+  private getRoleByEmail(email: string | null | undefined, currentRole: 'user' | 'admin' = 'user'): 'user' | 'admin' {
+    if (email && email.toLowerCase() === ADMIN_EMAIL.toLowerCase()) {
+      return 'admin';
+    }
+    return currentRole;
+  }
+
   public isConnected(): boolean {
-    return isRealFirebase && localStorage.getItem(API_DISABLED_KEY) !== 'true';
+    // We only check isRealFirebase. The API_DISABLED_KEY was too aggressive.
+    return isRealFirebase;
+  }
+
+  public getAuth() {
+    return auth;
+  }
+
+  public async login(email: string, password: string): Promise<User> {
+    if (!this.isConnected()) throw new Error("Cloud non connecté");
+    try {
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      const firebaseUser = userCredential.user;
+      
+      // Récupérer les infos additionnelles du profil dans Firestore
+      const userDoc = await getDoc(doc(db, "users", firebaseUser.uid));
+      if (userDoc.exists()) {
+        const userData = userDoc.data() as User;
+        const role = this.getRoleByEmail(firebaseUser.email || email, userData.role);
+        
+        // Si le rôle a changé (ex: promu admin via email), on synchronise
+        if (role !== userData.role) {
+          const updatedUser = { ...userData, uid: firebaseUser.uid, role };
+          await setDoc(doc(db, "users", firebaseUser.uid), updatedUser);
+          return updatedUser;
+        }
+        
+        return { ...userData, uid: firebaseUser.uid } as User;
+      } else {
+        // Créer un profil par défaut si inexistant (cas rare)
+        const newUser: User = {
+          id: firebaseUser.uid,
+          email: firebaseUser.email || email,
+          name: firebaseUser.displayName || email.split('@')[0],
+          role: this.getRoleByEmail(firebaseUser.email || email, 'user'),
+          createdAt: new Date().toISOString()
+        };
+        await this.syncUser(newUser);
+        return newUser;
+      }
+    } catch (e: any) {
+      console.error("Login Error:", e);
+      throw e;
+    }
+  }
+
+  public async register(email: string, password: string, name: string, role: 'user' | 'admin' = 'user'): Promise<User> {
+    if (!this.isConnected()) throw new Error("Cloud non connecté");
+    try {
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      const firebaseUser = userCredential.user;
+      
+      const newUser: User = {
+        id: firebaseUser.uid,
+        email,
+        name,
+        role: this.getRoleByEmail(email, role),
+        createdAt: new Date().toISOString(),
+        isValidated: true
+      };
+      
+      await this.syncUser(newUser);
+      return newUser;
+    } catch (e: any) {
+      console.error("Register Error:", e);
+      throw e;
+    }
+  }
+
+  public async loginWithGoogle(): Promise<User> {
+    if (!this.isConnected()) throw new Error("Cloud non connecté");
+    try {
+      const provider = new GoogleAuthProvider();
+      const userCredential = await signInWithPopup(auth, provider);
+      const firebaseUser = userCredential.user;
+      
+      const userDoc = await getDoc(doc(db, "users", firebaseUser.uid));
+      if (userDoc.exists()) {
+        const userData = userDoc.data() as User;
+        const role = this.getRoleByEmail(firebaseUser.email, userData.role);
+        
+        if (role !== userData.role) {
+          const updatedUser = { ...userData, id: firebaseUser.uid, role };
+          await this.syncUser(updatedUser);
+          return updatedUser;
+        }
+        
+        return { ...userData, id: firebaseUser.uid } as User;
+      } else {
+        const newUser: User = {
+          id: firebaseUser.uid,
+          email: firebaseUser.email || '',
+          name: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'Utilisateur',
+          role: this.getRoleByEmail(firebaseUser.email, 'user'),
+          createdAt: new Date().toISOString(),
+          isValidated: true
+        };
+        await this.syncUser(newUser);
+        return newUser;
+      }
+    } catch (e: any) {
+      console.error("Google Login Error:", e);
+      throw e;
+    }
+  }
+
+  public async logout(): Promise<void> {
+    if (!this.isConnected()) return;
+    await signOut(auth);
+  }
+
+  public onAuthStateChanged(callback: (user: User | null) => void) {
+    if (!this.isConnected()) {
+      callback(null);
+      return () => {};
+    }
+    return onAuthStateChanged(auth, async (firebaseUser: FirebaseUser | null) => {
+      if (firebaseUser) {
+        try {
+          const userDoc = await getDoc(doc(db, "users", firebaseUser.uid));
+          if (userDoc.exists()) {
+            const userData = userDoc.data() as User;
+            const role = this.getRoleByEmail(firebaseUser.email, userData.role);
+            callback({ ...userData, id: firebaseUser.uid, role } as User);
+          } else {
+            callback({
+              id: firebaseUser.uid,
+              email: firebaseUser.email || '',
+              name: firebaseUser.displayName || '',
+              role: this.getRoleByEmail(firebaseUser.email, 'user')
+            } as User);
+          }
+        } catch (e) {
+          console.error("Auth State Change Error:", e);
+          callback(null);
+        }
+      } else {
+        callback(null);
+      }
+    });
+  }
+
+  public async resetPassword(email: string): Promise<void> {
+    if (!this.isConnected()) return;
+    await sendPasswordResetEmail(auth, email);
   }
 
   public isApiDisabled(): boolean {

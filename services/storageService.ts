@@ -19,7 +19,6 @@ const DEFAULT_USERS: User[] = [
     id: 'admin-001', 
     name: 'Administrateur National', 
     email: 'neoservicepneu31@gmail.com', 
-    password: 'PAM180279', 
     role: 'admin',
     isValidated: true,
     clientType: 'existing'
@@ -58,18 +57,10 @@ export const db = {
       const users = loadData<User[]>(KEYS.USERS, DEFAULT_USERS);
       const existingIndex = users.findIndex(u => u.id === user.id || u.email === user.email);
       
-      let updatedUser = { ...user };
       if (existingIndex !== -1) {
-        const existing = users[existingIndex];
-        // Fusion intelligente : on garde le mot de passe local si le nouveau est absent
-        updatedUser = { 
-          ...existing, 
-          ...user,
-          password: user.password || existing.password 
-        };
-        users[existingIndex] = updatedUser;
+        users[existingIndex] = { ...users[existingIndex], ...user };
       } else {
-        users.push(updatedUser);
+        users.push(user);
       }
       
       saveData(KEYS.USERS, users);

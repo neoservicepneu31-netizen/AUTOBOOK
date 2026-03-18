@@ -35,6 +35,25 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
   const [viewingDoc, setViewingDoc] = useState<{title: string, url: string} | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isUpdatingPhoto, setIsUpdatingPhoto] = useState<string | null>(null);
+  const [isEditingInsurance, setIsEditingInsurance] = useState(false);
+  const [insuranceForm, setInsuranceForm] = useState({
+    contractNumber: car.insurance?.contractNumber || '',
+    assistancePhone: car.insurance?.assistancePhone || ''
+  });
+
+  const handleInsuranceUpdate = async () => {
+    const updatedCar: Car = {
+      ...car,
+      insurance: {
+        ...car.insurance,
+        contractNumber: insuranceForm.contractNumber,
+        assistancePhone: insuranceForm.assistancePhone
+      }
+    };
+    onUpdateCar(updatedCar);
+    setIsEditingInsurance(false);
+    onNotify('success', 'Assurance', '✅ Informations d\'assurance mises à jour.');
+  };
 
   const handlePhotoUpdate = async (e: React.ChangeEvent<HTMLInputElement>, angle: string) => {
     if (e.target.files && e.target.files[0]) {
@@ -510,29 +529,58 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
                  </div>
                )}
 
-               {/* SECTION ASSURANCE */}
-               {activeReport === 'insurance' && (
-                 <div className="space-y-6">
-                    <div className="bg-nsp-input/50 p-6 rounded-[2rem] border border-white/5 space-y-4">
-                       <div>
-                          <p className="text-[9px] text-gray-500 font-black uppercase mb-1">Contrat N°</p>
-                          <p className="text-white font-black text-lg">{car.insurance?.contractNumber || 'Non renseigné'}</p>
-                       </div>
-                       <div>
-                          <p className="text-[9px] text-gray-500 font-black uppercase mb-1">Assistance</p>
-                          <p className="text-white font-black text-lg">{car.insurance?.assistancePhone || '0800...'}</p>
-                       </div>
-                    </div>
-                    {car.insurance?.greenCardUrl && (
-                      <button 
-                        onClick={() => setViewingDoc({title: 'Carte Verte', url: car.insurance!.greenCardUrl!})}
-                        className="w-full bg-nsp-success text-white py-5 rounded-2xl font-black text-xs uppercase flex items-center justify-center gap-3 shadow-xl"
-                      >
-                        <Shield size={18} /> Voir Carte Verte
-                      </button>
-                    )}
-                 </div>
-               )}
+                {/* SECTION ASSURANCE */}
+                {activeReport === 'insurance' && (
+                  <div className="space-y-6">
+                     <div className="bg-nsp-input/50 p-6 rounded-[2rem] border border-white/5 space-y-4">
+                        <div className="flex justify-between items-start">
+                           <div>
+                              <p className="text-[9px] text-gray-500 font-black uppercase mb-1">Contrat N°</p>
+                              <p className="text-white font-black text-lg">{car.insurance?.contractNumber || 'Non renseigné'}</p>
+                           </div>
+                           <button onClick={() => setIsEditingInsurance(true)} className="p-2 bg-white/5 rounded-xl text-nsp-primary">
+                              <Wrench size={16} />
+                           </button>
+                        </div>
+                        <div>
+                           <p className="text-[9px] text-gray-500 font-black uppercase mb-1">Assistance</p>
+                           <p className="text-white font-black text-lg">{car.insurance?.assistancePhone || '0800...'}</p>
+                        </div>
+                     </div>
+                     
+                     <div className="grid grid-cols-2 gap-3">
+                        <label className="bg-nsp-input border border-white/10 p-5 rounded-2xl flex flex-col items-center justify-center gap-2 cursor-pointer active:scale-95 transition-all">
+                           <Camera size={20} className="text-nsp-primary" />
+                           <span className="text-[8px] text-white font-black uppercase">Scanner Carte Verte</span>
+                           <input 
+                             type="file" 
+                             accept="image/*,application/pdf" 
+                             onChange={async (e) => {
+                               if (e.target.files?.[0]) {
+                                 const result = await processFile(e.target.files[0]);
+                                 onUpdateCar({
+                                   ...car,
+                                   insurance: { ...car.insurance, greenCardUrl: result }
+                                 });
+                                 onNotify('success', 'Assurance', '✅ Carte verte enregistrée.');
+                               }
+                             }} 
+                             className="hidden" 
+                           />
+                        </label>
+                        
+                        {car.insurance?.greenCardUrl && (
+                          <button 
+                            onClick={() => setViewingDoc({title: 'Carte Verte', url: car.insurance!.greenCardUrl!})}
+                            className="bg-nsp-success/10 border border-nsp-success/20 p-5 rounded-2xl flex flex-col items-center justify-center gap-2 active:scale-95 transition-all"
+                          >
+                            <Shield size={20} className="text-nsp-success" />
+                            <span className="text-[8px] text-nsp-success font-black uppercase">Voir Carte Verte</span>
+                          </button>
+                        )}
+                     </div>
+                  </div>
+                )}
 
                {/* SECTION CATALOGUE PIÈCES IA */}
                {activeReport === 'parts' && (
@@ -643,6 +691,48 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
             <div className="flex flex-col gap-3">
               <button onClick={confirmDelete} className="w-full py-4 bg-red-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg">Supprimer</button>
               <button onClick={() => setShowDeleteConfirm(false)} className="w-full py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest text-gray-500 hover:text-white">Annuler</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isEditingInsurance && (
+        <div className="fixed inset-0 z-[3000] flex items-center justify-center p-6 bg-black/90 backdrop-blur-xl animate-fade-in">
+          <div className="bg-nsp-card border border-nsp-border w-full max-w-md rounded-[2.5rem] p-8 shadow-2xl">
+            <div className="flex justify-between items-center mb-8">
+              <h3 className="text-white font-black text-xs uppercase tracking-widest">Modifier l'Assurance</h3>
+              <button onClick={() => setIsEditingInsurance(false)} className="p-2 bg-white/5 rounded-xl text-white"><X size={20}/></button>
+            </div>
+            
+            <div className="space-y-6">
+              <div className="space-y-2">
+                <label className="text-[8px] text-gray-500 font-black uppercase tracking-widest ml-2">Numéro de Contrat</label>
+                <input 
+                  type="text"
+                  value={insuranceForm.contractNumber}
+                  onChange={e => setInsuranceForm({...insuranceForm, contractNumber: e.target.value})}
+                  className="w-full bg-nsp-input border border-white/5 p-5 rounded-2xl text-white font-bold text-sm focus:border-nsp-primary outline-none transition-all"
+                  placeholder="Ex: 123456789"
+                />
+              </div>
+              
+              <div className="space-y-2">
+                <label className="text-[8px] text-gray-500 font-black uppercase tracking-widest ml-2">Téléphone Assistance</label>
+                <input 
+                  type="tel"
+                  value={insuranceForm.assistancePhone}
+                  onChange={e => setInsuranceForm({...insuranceForm, assistancePhone: e.target.value})}
+                  className="w-full bg-nsp-input border border-white/5 p-5 rounded-2xl text-white font-bold text-sm focus:border-nsp-primary outline-none transition-all"
+                  placeholder="Ex: 0800..."
+                />
+              </div>
+              
+              <button 
+                onClick={handleInsuranceUpdate}
+                className="w-full bg-nsp-primary text-white py-5 rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl active:scale-95 transition-all mt-4"
+              >
+                Enregistrer les modifications
+              </button>
             </div>
           </div>
         </div>

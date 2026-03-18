@@ -62,6 +62,9 @@ const App: React.FC = () => {
         setAllUsers(localUsers);
         setAllCars(localCars);
         setAllInvoices(localInvoices);
+        
+        // On permet l'affichage immédiat des données locales
+        setIsDatabaseReady(true);
 
         if (cloud.isConnected()) {
           const [remoteUsers, remoteCars, remoteInvoices] = await Promise.all([
@@ -72,30 +75,30 @@ const App: React.FC = () => {
           
           // FUSION INTELLIGENTE : On garde le local ET on ajoute le distant
           // En utilisant Map pour éviter les doublons par ID
-          if (remoteUsers.length > 0) {
-            const mergedUsersMap = new Map<string, User>();
-            localUsers.forEach(u => mergedUsersMap.set(u.id, u));
-            
-            remoteUsers.forEach(remote => {
-              const local = mergedUsersMap.get(remote.id);
-              if (local) {
-                mergedUsersMap.set(remote.id, { 
-                  ...local, 
-                  ...remote, 
-                  password: remote.password || local.password 
-                });
-              } else {
-                mergedUsersMap.set(remote.id, remote);
-              }
-            });
-            
-            const merged = Array.from(mergedUsersMap.values());
-            setAllUsers(merged);
-            db.users.saveAll(merged);
-          }
+          const mergedUsersMap = new Map<string, User>();
+          localUsers.forEach(u => mergedUsersMap.set(u.id, u));
           
-          if (remoteCars.length > 0) setAllCars(remoteCars);
-          if (remoteInvoices.length > 0) setAllInvoices(remoteInvoices);
+          remoteUsers.forEach(remote => {
+            const local = mergedUsersMap.get(remote.id);
+            if (local) {
+              mergedUsersMap.set(remote.id, { 
+                ...local, 
+                ...remote
+              });
+            } else {
+              mergedUsersMap.set(remote.id, remote);
+            }
+          });
+          
+          const merged = Array.from(mergedUsersMap.values());
+          setAllUsers(merged);
+          db.users.saveAll(merged);
+          
+          setAllCars(remoteCars);
+          db.cars.saveAll(remoteCars); // On remplace par le cloud (source de vérité)
+          
+          setAllInvoices(remoteInvoices);
+          db.invoices.saveAll(remoteInvoices);
         }
       } else {
         // Mode Utilisateur : On filtre pour lui
@@ -104,6 +107,9 @@ const App: React.FC = () => {
         
         setAllCars(myLocalCars);
         setAllInvoices(myLocalInvoices);
+        
+        // On permet l'affichage immédiat des données locales
+        setIsDatabaseReady(true);
 
         if (cloud.isConnected()) {
           const remoteCars = await cloud.fetchUserCars(targetUser.id);
@@ -113,15 +119,12 @@ const App: React.FC = () => {
             remoteInvoices = [...remoteInvoices, ...invs];
           }
 
-          if (remoteCars.length > 0) {
-            setAllCars(remoteCars);
-            db.cars.saveAll([...localCars.filter(c => c.ownerId !== targetUser.id), ...remoteCars]);
-          }
+          // On remplace le local par le distant pour cet utilisateur précis
+          setAllCars(remoteCars);
+          db.cars.saveAll([...localCars.filter(c => c.ownerId !== targetUser.id), ...remoteCars]);
           
-          if (remoteInvoices.length > 0) {
-            setAllInvoices(remoteInvoices);
-            db.invoices.saveAll([...localInvoices.filter(inv => !remoteInvoices.some(ri => ri.id === inv.id)), ...remoteInvoices]);
-          }
+          setAllInvoices(remoteInvoices);
+          db.invoices.saveAll([...localInvoices.filter(inv => !remoteInvoices.some(ri => ri.id === inv.id)), ...remoteInvoices]);
         }
       }
     } catch (e) {
@@ -133,74 +136,50 @@ const App: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    const initApp = async () => {
-      const sessionId = db.session.get();
-      const lastEmail = db.session.getLastEmail();
-      let currentUser: User | null = null;
-      const localUsers = db.users.getAll();
-      setAllUsers(localUsers);
-      
-      // Récupération des utilisateurs du cloud pour permettre la connexion sur de nouveaux appareils
-      if (cloud.isConnected()) {
-        try {
-          const cloudUsers = await cloud.fetchAllUsers();
-          if (cloudUsers.length > 0) {
-            const mergedUsersMap = new Map<string, User>();
-            localUsers.forEach(u => mergedUsersMap.set(u.id, u));
-            cloudUsers.forEach(remote => {
-              const local = mergedUsersMap.get(remote.id);
-              if (local) {
-                mergedUsersMap.set(remote.id, { ...local, ...remote, password: remote.password || local.password });
-              } else {
-                mergedUsersMap.set(remote.id, remote);
-              }
-            });
-            const merged = Array.from(mergedUsersMap.values());
-            setAllUsers(merged);
-            db.users.saveAll(merged);
-          }
-        } catch (e) {
-          console.error("Cloud users pre-fetch failed", e);
+    const unsubscribe = cloud.onAuthStateChanged(async (authenticatedUser) => {
+      if (authenticatedUser) {
+        setUser(authenticatedUser);
+        db.session.set(authenticatedUser.id);
+        db.users.addOne(authenticatedUser);
+        
+        const rememberMe = localStorage.getItem('AUTOBOOK_REMEMBER_ME') === 'true';
+        if (authenticatedUser.role !== 'admin' && rememberMe) {
+          db.session.setLastEmail(authenticatedUser.email);
         }
-      }
-      
-      if (sessionId) { 
-        currentUser = localUsers.find(u => u.id === sessionId) || null; 
-      }
-      
-      if (!currentUser && lastEmail && cloud.isConnected()) {
-        try {
-          const cloudUsers = await cloud.fetchAllUsers();
-          currentUser = cloudUsers.find(u => u.email.toLowerCase() === lastEmail.toLowerCase()) || null;
-          if (currentUser) { 
-            db.users.addOne(currentUser); 
-            db.session.set(currentUser.id); 
+        
+        await loadAllData(authenticatedUser);
+        
+        // Ne change l'écran que si on est sur l'écran d'auth
+        setScreen(prev => {
+          if (prev === Screen.AUTH) {
+            return authenticatedUser.role === 'admin' ? Screen.ADMIN_DASHBOARD : Screen.GARAGE;
           }
-        } catch (e) { 
-          console.error("Cloud recovery failed", e); 
-        }
+          return prev;
+        });
+      } else {
+        setUser(null);
+        setAllCars([]);
+        setAllInvoices([]);
+        db.session.clear();
+        setScreen(Screen.AUTH);
       }
+      setIsDatabaseReady(true);
+    });
 
-      if (currentUser) {
-        setUser(currentUser);
-        await loadAllData(currentUser);
-        setScreen(currentUser.role === 'admin' ? Screen.ADMIN_DASHBOARD : Screen.GARAGE);
-      } else { 
-        setIsDatabaseReady(true); 
-      }
-    };
-    initApp();
+    return () => unsubscribe();
   }, [loadAllData]);
 
   const handleLogin = async (loggedInUser: User) => {
+    // Le login réel est géré par cloud.login dans AuthScreen
+    // onAuthStateChanged s'occupera du reste
+    if (loggedInUser.rememberMe) {
+      localStorage.setItem('AUTOBOOK_REMEMBER_ME', 'true');
+      db.session.setLastEmail(loggedInUser.email);
+    } else {
+      localStorage.removeItem('AUTOBOOK_REMEMBER_ME');
+      localStorage.removeItem('AUTOBOOK_LAST_KNOWN_EMAIL');
+    }
     setUser(loggedInUser);
-    db.session.set(loggedInUser.id);
-    db.users.addOne(loggedInUser);
-    setAllUsers(db.users.getAll());
-    if (loggedInUser.role !== 'admin') db.session.setLastEmail(loggedInUser.email);
-    if (cloud.isConnected()) await cloud.syncUser(loggedInUser);
-    await loadAllData(loggedInUser);
-    setScreen(loggedInUser.role === 'admin' ? Screen.ADMIN_DASHBOARD : Screen.GARAGE);
   };
 
   const handleUpdateUser = async (updatedUser: User) => {
@@ -359,54 +338,14 @@ const App: React.FC = () => {
     }
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    await cloud.logout();
     setUser(null);
     setAllCars([]);
     setAllInvoices([]);
     setAllUsers(db.users.getAll());
     db.session.clear();
     setScreen(Screen.AUTH);
-  };
-
-  const handleForgotPassword = async (email: string) => {
-    const targetUser = allUsers.find(u => u.email.toLowerCase() === email.toLowerCase());
-    if (targetUser) {
-      const newPassword = Math.random().toString(36).slice(-8).toUpperCase();
-      
-      try {
-        // 1. Envoyer l'email
-        await emailService.send({
-          to: targetUser.email,
-          subject: "Réinitialisation de votre mot de passe AutoBook",
-          text: `Bonjour ${targetUser.name},\n\nVous avez demandé la réinitialisation de votre mot de passe.\n\nVotre nouveau mot de passe est : ${newPassword}\n\nNous vous conseillons de le changer dès votre prochaine connexion.\n\nL'équipe AutoBook`,
-          html: `
-            <div style="font-family: sans-serif; padding: 20px; color: #333;">
-              <h2 style="color: #E63946;">Nouveau Mot de Passe</h2>
-              <p>Bonjour <strong>${targetUser.name}</strong>,</p>
-              <p>Vous avez demandé la réinitialisation de votre mot de passe.</p>
-              <div style="background-color: #f4f4f4; padding: 15px; border-radius: 8px; font-family: monospace; font-size: 18px; text-align: center; margin: 20px 0;">
-                ${newPassword}
-              </div>
-              <p>Nous vous conseillons de le changer dès votre prochaine connexion.</p>
-              <p>L'équipe AutoBook</p>
-            </div>
-          `
-        });
-
-        // 2. Mettre à jour l'utilisateur
-        const updatedUser = { 
-          ...targetUser, 
-          password: newPassword, 
-          passwordResetRequested: false 
-        };
-        await handleUpdateUser(updatedUser);
-        return true;
-      } catch (error) {
-        console.error("Forgot password email error:", error);
-        return false;
-      }
-    }
-    return false;
   };
 
   return (
@@ -423,7 +362,7 @@ const App: React.FC = () => {
         </div>
       ) : (
         <div className="flex-1 flex flex-col w-full h-full min-h-full">
-         {screen === Screen.AUTH && <AuthScreen onLogin={handleLogin} onForgotPasswordRequest={handleForgotPassword} existingUsers={allUsers} onNotify={showNotification} />}
+         {screen === Screen.AUTH && <AuthScreen onLogin={handleLogin} onNotify={showNotification} />}
          {screen === Screen.GARAGE && <GarageScreen user={user!} cars={allCars} invoices={allInvoices} onSelectCar={(id) => { setActiveCarId(id); setScreen(Screen.DASHBOARD); }} onViewInvoices={(id) => { setActiveCarId(id); setScreen(Screen.INVOICES_LIST); }} onAddCar={() => setScreen(Screen.ONBOARDING)} onLogout={handleLogout} onBuyCar={() => setScreen(Screen.BUY_CAR)} onRefresh={() => loadAllData(user!)} onDeleteCar={handleDeleteCar} onNotify={showNotification} />}
          {screen === Screen.ADMIN_DASHBOARD && <AdminDashboardScreen currentUser={user!} allUsers={allUsers} allCars={allCars} allInvoices={allInvoices} onLogout={handleLogout} onUpdateUser={handleUpdateUser} onDeleteUser={handleDeleteUser} onRefresh={() => loadAllData(user!)} onNotify={showNotification} />}
          {screen === Screen.DASHBOARD && activeCarId && <DashboardScreen user={user!} car={allCars.find(c => c.id === activeCarId)!} invoices={allInvoices.filter(i => i.carId === activeCarId)} aiStatus={{status:'neutral', message:''}} onBackToGarage={() => setScreen(Screen.GARAGE)} onAddInvoice={() => setScreen(Screen.ADD_INVOICE)} onSellCar={() => setScreen(Screen.SELL_CAR)} onBuyCar={() => {}} onAssistance={() => setScreen(Screen.ASSISTANCE)} onDeleteCar={() => handleDeleteCar(activeCarId)} onUpdateSpecs={() => {}} onUpdateCar={handleSaveCar} onDeleteInvoice={handleDeleteInvoice} onNotify={showNotification} />}

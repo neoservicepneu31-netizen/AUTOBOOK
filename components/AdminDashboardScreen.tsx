@@ -113,39 +113,21 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({
   };
 
   const handleResetPassword = async (user: User) => {
-    const newPassword = Math.random().toString(36).slice(-8).toUpperCase();
     setIsSendingMails(true);
     
     try {
-      await emailService.send({
-        to: user.email,
-        subject: "Réinitialisation de votre mot de passe AutoBook",
-        text: `Bonjour ${user.name},\n\nVotre mot de passe a été réinitialisé par un administrateur.\n\nVotre nouveau mot de passe est : ${newPassword}\n\nNous vous conseillons de le changer dès votre prochaine connexion.\n\nL'équipe AutoBook`,
-        html: `
-          <div style="font-family: sans-serif; padding: 20px; color: #333;">
-            <h2 style="color: #E63946;">Nouveau Mot de Passe</h2>
-            <p>Bonjour <strong>${user.name}</strong>,</p>
-            <p>Votre mot de passe a été réinitialisé par un administrateur.</p>
-            <div style="background-color: #f4f4f4; padding: 15px; border-radius: 8px; font-family: monospace; font-size: 18px; text-align: center; margin: 20px 0;">
-              ${newPassword}
-            </div>
-            <p>Nous vous conseillons de le changer dès votre prochaine connexion.</p>
-            <p>L'équipe AutoBook</p>
-          </div>
-        `
-      });
-
+      await cloud.resetPassword(user.email);
+      
       const updatedUser = { 
         ...user, 
-        password: newPassword, 
         passwordResetRequested: false 
       };
       
       onUpdateUser(updatedUser);
-      onNotify('success', 'Mot de passe', `✅ Nouveau mot de passe envoyé à ${user.email}.`);
+      onNotify('success', 'Mot de passe', `✅ Un lien de réinitialisation a été envoyé à ${user.email}.`);
     } catch (error: any) {
-      console.error("Email error:", error);
-      onNotify('error', 'Erreur Email', `❌ Erreur lors de l'envoi du mail : ${error.message}`);
+      console.error("Reset Password error:", error);
+      onNotify('error', 'Erreur', `❌ Erreur lors de l'envoi du lien : ${error.message}`);
     } finally {
       setIsSendingMails(false);
     }

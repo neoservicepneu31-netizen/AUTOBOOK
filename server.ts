@@ -3,7 +3,7 @@ import cors from "cors";
 import { Resend } from "resend";
 import { createServer as createViteServer } from "vite";
 import path from "path";
-import process from "node:process";
+import process from "process";
 
 async function startServer() {
   console.log("Starting AutoBook Server v1.1...");

@@ -1,7 +1,7 @@
 import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
 // Fix: Import process as a default export from node:process to avoid issues with named exports in some environments
-import process from 'node:process';
+import process from 'process';
 
 export default defineConfig(({ mode }) => {
   // Charge les variables .env en local + les variables d'environnement Vercel
