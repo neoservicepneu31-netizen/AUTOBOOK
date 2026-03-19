@@ -127,7 +127,6 @@ export const AddInvoiceScreen: React.FC<AddInvoiceScreenProps> = ({ carId, onSav
                <input 
                  type="file" 
                  accept="image/*" 
-                 capture="environment" 
                  onChange={handleFileChange}
                  className="absolute inset-0 w-full h-full opacity-0 z-50 cursor-pointer"
                />
@@ -158,7 +157,7 @@ export const AddInvoiceScreen: React.FC<AddInvoiceScreenProps> = ({ carId, onSav
                 <div className="relative bg-nsp-primary text-white py-4 rounded-2xl flex flex-col items-center gap-2 shadow-xl overflow-hidden active:scale-95 transition-all">
                    <Camera size={20} />
                    <span className="text-[8px] font-black uppercase tracking-widest">Prendre Photo</span>
-                   <input type="file" accept="image/*" capture="environment" onChange={handleFileChange} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" />
+                   <input type="file" accept="image/*" onChange={handleFileChange} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" />
                 </div>
                 <div className="relative bg-nsp-input border border-white/5 text-white py-4 rounded-2xl flex flex-col items-center gap-2 shadow-xl overflow-hidden active:scale-95 transition-all">
                    <Upload size={20} />

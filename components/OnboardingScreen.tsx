@@ -135,11 +135,10 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onSave, onCa
           <div className="grid grid-cols-2 gap-3">
             {(['front', 'back', 'left', 'right'] as const).map(angle => (
               <div key={angle} className={`relative aspect-square rounded-xl border border-dashed flex flex-col items-center justify-center overflow-hidden bg-nsp-input ${photos[angle] ? 'border-green-500' : 'border-nsp-border'}`}>
-                {photos[angle] ? <img src={safeBase64ToBlobUrl(photos[angle]!)} className="absolute inset-0 w-full h-full object-cover" referrerPolicy="no-referrer" /> : <><Camera size={20} className="text-nsp-sub"/><span className="text-[10px] text-nsp-sub uppercase font-black">{angle}</span></>}
+                {photos[angle] ? <img src={safeBase64ToBlobUrl(photos[angle]!)} className="absolute inset-0 w-full h-full object-cover" referrerPolicy="no-referrer" /> : <><Camera size={20} className="text-nsp-sub"/><span className="text-[10px] text-nsp-sub uppercase font-black">{angle === 'front' ? 'AVANT' : angle === 'back' ? 'ARRIÈRE' : angle === 'left' ? 'GAUCHE' : 'DROIT'}</span></>}
                 <input 
                   type="file" 
                   accept="image/*" 
-                  capture="environment" 
                   onChange={e => handleFileChange(e, angle)} 
                   className="absolute inset-0 w-full h-full opacity-0 z-10 cursor-pointer" 
                 />
@@ -152,7 +151,6 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onSave, onCa
              <input 
               type="file" 
               accept="image/*" 
-              capture="environment" 
               onChange={e => handleFileChange(e, 'engine')} 
               className="absolute inset-0 w-full h-full opacity-0 z-10 cursor-pointer" 
              />

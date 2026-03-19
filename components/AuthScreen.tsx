@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { User } from '../types';
 import { db } from '../services/storageService';
 import { cloud } from '../services/cloudService';
-import { ArrowRight, UserPlus, ShieldCheck, CheckCircle2, Wrench, Car, Lock, AlertCircle, ShieldAlert, LayoutDashboard, CheckSquare, Square, UserCircle2, KeyRound, Check, RefreshCw, Mail } from 'lucide-react';
+import { ArrowRight, UserPlus, ShieldCheck, CheckCircle2, Wrench, Car, Lock, AlertCircle, ShieldAlert, LayoutDashboard, CheckSquare, Square, UserCircle2, KeyRound, Check, RefreshCw, Mail, ExternalLink } from 'lucide-react';
 
 interface AuthScreenProps {
   onLogin: (user: User) => void;
@@ -73,7 +73,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLogin, onNotify }) => 
       console.error("Auth Error:", e);
       let message = "Une erreur est survenue lors de l'authentification.";
       
-      if (e.code === 'auth/user-not-found' || e.code === 'auth/wrong-password' || e.code === 'auth/invalid-credential') {
+      if (e.code === 'auth/user-not-found' || e.code === 'auth/wrong-password' || e.code === 'auth/invalid-credential' || (e.message && e.message.includes('invalid-credential'))) {
         if (email.toLowerCase() === "neoservicepneu31@gmail.com") {
           message = "Le compte existe déjà mais le mot de passe est incorrect. Veuillez utiliser 'Mot de passe oublié' pour le réinitialiser.";
         } else {
@@ -101,7 +101,21 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLogin, onNotify }) => 
       onLogin({ ...loggedInUser, rememberMe: true });
     } catch (e: any) {
       console.error("Google Auth Error:", e);
-      setError("Erreur lors de la connexion avec Google.");
+      let message = "Erreur lors de la connexion avec Google.";
+      
+      if (e.code === 'auth/popup-blocked') {
+        message = "Le popup a été bloqué par votre navigateur. Veuillez autoriser les popups pour ce site.";
+      } else if (e.code === 'auth/cancelled-by-user' || e.code === 'auth/popup-closed-by-user' || (e.message && e.message.includes('popup-closed-by-user'))) {
+        message = "Connexion annulée (fenêtre fermée).";
+      } else if (e.code === 'auth/unauthorized-domain') {
+        message = "Ce domaine n'est pas autorisé dans la console Firebase. Veuillez ajouter les URLs de l'application aux domaines autorisés dans Authentication > Settings > Authorized domains.";
+      } else if (e.code === 'auth/operation-not-allowed') {
+        message = "La connexion Google n'est pas activée dans votre console Firebase. Veuillez l'activer dans Authentication > Sign-in method.";
+      } else {
+        message = "Erreur Google : " + (e.message || "Vérifiez que vous n'êtes pas dans une fenêtre de navigation privée ou que les popups ne sont pas bloqués.");
+      }
+      
+      setError(message);
     } finally {
       setIsLoading(false);
     }
@@ -145,6 +159,30 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLogin, onNotify }) => 
               <div className="flex items-center gap-3">
                 <AlertCircle size={16} /> {error}
               </div>
+              {error.includes("Google") && !error.includes("domaine") && (
+                <button 
+                  type="button"
+                  onClick={() => window.open(window.location.href, '_blank')}
+                  className="mt-2 bg-white text-black py-2 px-4 rounded-xl text-[9px] font-black hover:bg-gray-200 transition-colors flex items-center justify-center gap-2"
+                >
+                  Ouvrir dans un nouvel onglet <ArrowRight size={12} />
+                </button>
+              )}
+              {error.includes("domaine") && (
+                <div className="mt-2 space-y-2">
+                  <p className="text-[8px] text-gray-400 normal-case">Veuillez ajouter ces domaines dans votre console Firebase (Authentication &gt; Settings &gt; Authorized domains) :</p>
+                  <div className="bg-black/40 p-2 rounded-lg font-mono text-[8px] break-all select-all">
+                    {window.location.hostname}
+                  </div>
+                  <button 
+                    type="button"
+                    onClick={() => window.open('https://console.firebase.google.com/project/_/authentication/settings', '_blank')}
+                    className="w-full bg-nsp-primary text-white py-2 px-4 rounded-xl text-[9px] font-black hover:bg-nsp-primary/80 transition-colors flex items-center justify-center gap-2"
+                  >
+                    Ouvrir la Console Firebase <ExternalLink size={12} />
+                  </button>
+                </div>
+              )}
               {error.includes("S'INSCRIRE") && (
                 <button 
                   type="button"

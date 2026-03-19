@@ -44,8 +44,14 @@ async function startServer() {
     try {
       const resend = new Resend(process.env.RESEND_API_KEY);
       const fromEmail = process.env.RESEND_FROM_EMAIL || "onboarding@resend.dev";
-      // Use simple email for onboarding to avoid validation issues, custom name for verified domains
-      const from = fromEmail === "onboarding@resend.dev" ? fromEmail : `AutoBook <${fromEmail}>`;
+      
+      // Ensure 'from' follows the required format: 'Name <email@example.com>' or 'email@example.com'
+      let from = fromEmail;
+      if (fromEmail === "onboarding@resend.dev") {
+        from = "onboarding@resend.dev";
+      } else if (!fromEmail.includes("<") && fromEmail.includes("@")) {
+        from = `AutoBook <${fromEmail}>`;
+      }
       
       const { data, error } = await resend.emails.send({
         from: from,

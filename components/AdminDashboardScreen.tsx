@@ -11,7 +11,7 @@ import {
   ArrowRight, Search, Info, X, Mail, Eye, LogOut, History,
   ShieldCheck, ShieldX, SearchCode, CloudUpload, Terminal,
   LifeBuoy, Send, BellRing, ExternalLink, UserPlus, MailCheck,
-  KeyRound, AlertTriangle, Trash2
+  KeyRound, AlertTriangle, Trash2, Car as CarIcon
 } from 'lucide-react';
 
 interface AdminDashboardScreenProps {
@@ -350,7 +350,9 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({
               </div>
               <div className="grid grid-cols-1 gap-2">
                 {filteredUsers.map(u => {
-                  const hasCar = allCars.some(c => c.ownerId === u.id);
+                  const userCars = allCars.filter(c => c.ownerId === u.id);
+                  const userInvoices = allInvoices.filter(inv => userCars.some(c => c.id === inv.carId));
+                  const hasCar = userCars.length > 0;
                   const newUser = isNew(u);
                   return (
                     <div key={u.id} className={`bg-nsp-card p-4 rounded-2xl border transition-all flex justify-between items-center group ${newUser ? 'border-nsp-primary/40' : 'border-nsp-border'}`}>
@@ -362,7 +364,19 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({
                             {newUser && <span className="text-[7px] bg-nsp-primary text-white px-1.5 py-0.5 rounded-full font-black">NOUVEAU</span>}
                             {!hasCar && <span className="text-[7px] bg-red-600/20 text-red-500 border border-red-500/20 px-1.5 py-0.5 rounded-full font-black">GARAGE VIDE</span>}
                           </p>
-                          <p className="text-[9px] text-gray-500">{u.email}</p>
+                          <div className="flex items-center gap-3 mt-1">
+                            <p className="text-[9px] text-gray-500">{u.email}</p>
+                            {hasCar && (
+                              <div className="flex items-center gap-2">
+                                <span className="text-[8px] bg-white/5 text-gray-400 px-1.5 py-0.5 rounded flex items-center gap-1">
+                                  <CarIcon size={8} /> {userCars.length}
+                                </span>
+                                <span className="text-[8px] bg-white/5 text-gray-400 px-1.5 py-0.5 rounded flex items-center gap-1">
+                                  <History size={8} /> {userInvoices.length}
+                                </span>
+                              </div>
+                            )}
+                          </div>
                         </div>
                       </div>
                       <div className="flex gap-2">
@@ -499,11 +513,47 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({
             <div className="w-10"></div>
           </header>
           <div className="max-w-2xl mx-auto w-full p-6 space-y-6">
-            <div className="bg-nsp-card border border-nsp-border rounded-[2rem] p-8 text-center">
-               <div className="w-20 h-20 bg-nsp-input rounded-full mx-auto flex items-center justify-center text-3xl font-black text-nsp-primary mb-4">{selectedUser.name.charAt(0)}</div>
-               <h2 className="text-2xl font-black text-white uppercase">{selectedUser.name}</h2>
-               <p className="text-gray-500 text-xs mb-8">{selectedUser.email}</p>
+            <div className="bg-nsp-card border border-nsp-border rounded-[2rem] p-8">
+               <div className="text-center mb-6">
+                 <div className="w-20 h-20 bg-nsp-input rounded-full mx-auto flex items-center justify-center text-3xl font-black text-nsp-primary mb-4">{selectedUser.name.charAt(0)}</div>
+                 <h2 className="text-2xl font-black text-white uppercase">{selectedUser.name}</h2>
+                 <p className="text-gray-500 text-xs mb-2">{selectedUser.email}</p>
+                 <p className="text-[8px] text-gray-600 uppercase font-black tracking-widest">ID: {selectedUser.id}</p>
+               </div>
                
+               {/* Garage Details */}
+               <div className="mb-8 space-y-4">
+                 <h3 className="text-white font-black text-[10px] uppercase tracking-widest border-b border-white/5 pb-2">Garage du Client</h3>
+                 {allCars.filter(c => c.ownerId === selectedUser.id).length === 0 ? (
+                   <p className="text-center py-4 text-gray-600 text-[10px] font-black uppercase">Garage Vide</p>
+                 ) : (
+                   <div className="space-y-3">
+                     {allCars.filter(c => c.ownerId === selectedUser.id).map(car => {
+                       const carInvoices = allInvoices.filter(i => i.carId === car.id);
+                       return (
+                         <div key={car.id} className="bg-nsp-input/30 border border-white/5 p-4 rounded-2xl">
+                           <div className="flex justify-between items-start mb-2">
+                             <div>
+                               <p className="text-white font-bold text-xs uppercase">{car.name}</p>
+                               <p className="text-[9px] text-nsp-primary font-mono font-bold">{car.plate}</p>
+                             </div>
+                             <div className="text-right">
+                               <p className="text-[8px] text-gray-500 font-black uppercase">{carInvoices.length} Documents</p>
+                               <p className="text-[8px] text-gray-500 font-black uppercase">{car.initialKm.toLocaleString()} KM Initial</p>
+                             </div>
+                           </div>
+                           <div className="flex gap-2 overflow-x-auto no-scrollbar pt-2">
+                              {car.photos.front && <img src={safeBase64ToBlobUrl(car.photos.front)} className="w-12 h-12 rounded-lg object-cover border border-white/10" referrerPolicy="no-referrer" />}
+                              {car.photos.back && <img src={safeBase64ToBlobUrl(car.photos.back)} className="w-12 h-12 rounded-lg object-cover border border-white/10" referrerPolicy="no-referrer" />}
+                              {car.photos.engine && <img src={safeBase64ToBlobUrl(car.photos.engine)} className="w-12 h-12 rounded-lg object-cover border border-white/10" referrerPolicy="no-referrer" />}
+                           </div>
+                         </div>
+                       );
+                     })}
+                   </div>
+                 )}
+               </div>
+
                <div className="space-y-3">
                   <button onClick={() => handleResetPassword(selectedUser)} className="w-full bg-orange-500 text-white p-5 rounded-2xl font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 shadow-xl active:scale-95 transition-all">
                     <KeyRound size={16} /> Réinitialiser le mot de passe

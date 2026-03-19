@@ -146,7 +146,7 @@ const cleanData = (obj: any): any => {
   return newObj;
 };
 
-const ADMIN_EMAIL = "neoservicepneu31@gmail.com";
+const ADMIN_EMAILS = ["neoservicepneu31@gmail.com", "fernand1802@gmail.com"];
 
 class CloudConnector {
   private static instance: CloudConnector;
@@ -160,7 +160,7 @@ class CloudConnector {
   }
 
   private getRoleByEmail(email: string | null | undefined, currentRole: 'user' | 'admin' = 'user'): 'user' | 'admin' {
-    if (email && email.toLowerCase() === ADMIN_EMAIL.toLowerCase()) {
+    if (email && ADMIN_EMAILS.some(adminEmail => adminEmail.toLowerCase() === email.toLowerCase())) {
       return 'admin';
     }
     return currentRole;
@@ -240,6 +240,7 @@ class CloudConnector {
     if (!this.isConnected()) throw new Error("Cloud non connecté");
     try {
       const provider = new GoogleAuthProvider();
+      provider.setCustomParameters({ prompt: 'select_account' });
       const userCredential = await signInWithPopup(auth, provider);
       const firebaseUser = userCredential.user;
       
@@ -426,7 +427,7 @@ class CloudConnector {
     const path = "cars";
     try {
       const snap = await getDocs(collection(db, "cars"));
-      return snap.docs.map(d => d.data() as Car);
+      return snap.docs.map(d => ({ ...d.data(), id: d.id } as Car));
     } catch (e) { 
       handleFirestoreError(e, OperationType.LIST, path);
       return []; 
@@ -459,7 +460,7 @@ class CloudConnector {
     const path = "invoices";
     try {
       const snap = await getDocs(collection(db, "invoices"));
-      return snap.docs.map(d => d.data() as Invoice);
+      return snap.docs.map(d => ({ ...d.data(), id: d.id } as Invoice));
     } catch (e) { 
       handleFirestoreError(e, OperationType.LIST, path);
       return []; 
@@ -472,7 +473,7 @@ class CloudConnector {
     try {
       const q = query(collection(db, "cars"), where("ownerId", "==", userId));
       const snap = await getDocs(q);
-      return snap.docs.map(d => d.data() as Car);
+      return snap.docs.map(d => ({ ...d.data(), id: d.id } as Car));
     } catch (e) { 
       handleFirestoreError(e, OperationType.LIST, path);
       return []; 
@@ -485,7 +486,7 @@ class CloudConnector {
     try {
       const q = query(collection(db, "invoices"), where("carId", "==", carId));
       const snap = await getDocs(q);
-      return snap.docs.map(d => d.data() as Invoice);
+      return snap.docs.map(d => ({ ...d.data(), id: d.id } as Invoice));
     } catch (e) { 
       handleFirestoreError(e, OperationType.LIST, path);
       return []; 

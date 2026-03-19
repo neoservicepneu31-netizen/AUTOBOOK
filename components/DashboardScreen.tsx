@@ -293,30 +293,88 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
            </h3>
 
            <div className="grid grid-cols-3 gap-2">
-              <button 
-                onClick={() => car.grayCardUrl && setViewingDoc({ title: 'Carte Grise', url: car.grayCardUrl })}
-                className={`aspect-square rounded-xl border flex flex-col items-center justify-center gap-1 overflow-hidden relative ${car.grayCardUrl ? 'border-nsp-primary/30' : 'border-dashed border-white/5 opacity-30'}`}
-              >
-                {car.grayCardUrl ? <img src={safeBase64ToBlobUrl(car.grayCardUrl)} className="absolute inset-0 w-full h-full object-cover opacity-50" referrerPolicy="no-referrer" /> : <FileText size={18} className="text-gray-700" />}
-                <span className="text-[7px] text-white font-black uppercase relative z-10">C. Grise</span>
-              </button>
+              <div className="relative aspect-square group">
+                <button 
+                  onClick={() => car.grayCardUrl && setViewingDoc({ title: 'Carte Grise', url: car.grayCardUrl })}
+                  className={`w-full h-full rounded-xl border flex flex-col items-center justify-center gap-1 overflow-hidden relative transition-all ${car.grayCardUrl ? 'border-nsp-primary/30 bg-nsp-primary/5' : 'border-dashed border-white/10 bg-white/5'}`}
+                >
+                  {car.grayCardUrl ? (
+                    <img src={safeBase64ToBlobUrl(car.grayCardUrl)} className="absolute inset-0 w-full h-full object-cover opacity-40 group-hover:opacity-60 transition-opacity" referrerPolicy="no-referrer" />
+                  ) : (
+                    <FileText size={18} className="text-gray-600" />
+                  )}
+                  <span className="text-[7px] text-white font-black uppercase relative z-10">C. Grise</span>
+                </button>
+                <label className="absolute bottom-1 right-1 p-1.5 bg-nsp-primary rounded-lg text-white shadow-lg cursor-pointer active:scale-90 transition-transform z-20">
+                  <Camera size={12} />
+                  <input 
+                    type="file" 
+                    accept="image/*,application/pdf" 
+                    onChange={async (e) => {
+                      if (e.target.files?.[0]) {
+                        try {
+                          const result = await processFile(e.target.files[0]);
+                          onUpdateCar({ ...car, grayCardUrl: result });
+                          onNotify('success', 'Carte Grise', '✅ Carte grise enregistrée.');
+                        } catch (err) {
+                          onNotify('error', 'Erreur', 'Impossible de traiter le fichier.');
+                        }
+                      }
+                    }} 
+                    className="hidden" 
+                  />
+                </label>
+              </div>
 
-              <button 
-                onClick={() => car.insurance?.greenCardUrl && setViewingDoc({ title: 'Carte Verte', url: car.insurance.greenCardUrl })}
-                className={`aspect-square rounded-xl border flex flex-col items-center justify-center gap-1 overflow-hidden relative ${car.insurance?.greenCardUrl ? 'border-nsp-primary/30' : 'border-dashed border-white/5 opacity-30'}`}
-              >
-                {car.insurance?.greenCardUrl ? <img src={safeBase64ToBlobUrl(car.insurance.greenCardUrl)} className="absolute inset-0 w-full h-full object-cover opacity-50" referrerPolicy="no-referrer" /> : <Shield size={18} className="text-gray-700" />}
-                <span className="text-[7px] text-white font-black uppercase relative z-10">Assurance</span>
-              </button>
+              <div className="relative aspect-square group">
+                <button 
+                  onClick={() => car.insurance?.greenCardUrl && setViewingDoc({ title: 'Carte Verte', url: car.insurance.greenCardUrl })}
+                  className={`w-full h-full rounded-xl border flex flex-col items-center justify-center gap-1 overflow-hidden relative transition-all ${car.insurance?.greenCardUrl ? 'border-nsp-primary/30 bg-nsp-primary/5' : 'border-dashed border-white/10 bg-white/5'}`}
+                >
+                  {car.insurance?.greenCardUrl ? (
+                    <img src={safeBase64ToBlobUrl(car.insurance.greenCardUrl)} className="absolute inset-0 w-full h-full object-cover opacity-40 group-hover:opacity-60 transition-opacity" referrerPolicy="no-referrer" />
+                  ) : (
+                    <Shield size={18} className="text-gray-600" />
+                  )}
+                  <span className="text-[7px] text-white font-black uppercase relative z-10">Assurance</span>
+                </button>
+                <label className="absolute bottom-1 right-1 p-1.5 bg-nsp-primary rounded-lg text-white shadow-lg cursor-pointer active:scale-90 transition-transform z-20">
+                  <Camera size={12} />
+                  <input 
+                    type="file" 
+                    accept="image/*,application/pdf" 
+                    onChange={async (e) => {
+                      if (e.target.files?.[0]) {
+                        try {
+                          const result = await processFile(e.target.files[0]);
+                          onUpdateCar({
+                            ...car,
+                            insurance: { ...car.insurance, greenCardUrl: result }
+                          });
+                          onNotify('success', 'Assurance', '✅ Carte verte enregistrée.');
+                        } catch (err) {
+                          onNotify('error', 'Erreur', 'Impossible de traiter le fichier.');
+                        }
+                      }
+                    }} 
+                    className="hidden" 
+                  />
+                </label>
+              </div>
 
               {['front', 'back', 'left', 'right'].map(angle => (
                 <button 
                   key={angle}
-                  onClick={() => car.photos[angle as keyof typeof car.photos] ? setViewingDoc({ title: angle.toUpperCase(), url: car.photos[angle as keyof typeof car.photos] as string }) : setActiveReport('photos')}
+                  onClick={() => {
+                    const label = angle === 'front' ? 'AVANT' : angle === 'back' ? 'ARRIÈRE' : angle === 'left' ? 'GAUCHE' : 'DROIT';
+                    car.photos[angle as keyof typeof car.photos] ? setViewingDoc({ title: label, url: car.photos[angle as keyof typeof car.photos] as string }) : setActiveReport('photos');
+                  }}
                   className={`aspect-square rounded-xl border flex flex-col items-center justify-center gap-1 overflow-hidden relative ${car.photos[angle as keyof typeof car.photos] ? 'border-nsp-primary/30' : 'border-dashed border-white/5 opacity-30'}`}
                 >
                   {car.photos[angle as keyof typeof car.photos] ? <img src={safeBase64ToBlobUrl(car.photos[angle as keyof typeof car.photos] as string)} className="absolute inset-0 w-full h-full object-cover opacity-50" referrerPolicy="no-referrer" /> : <ImageIcon size={18} className="text-gray-700" />}
-                  <span className="text-[7px] text-white font-black uppercase relative z-10">{angle}</span>
+                  <span className="text-[7px] text-white font-black uppercase relative z-10">
+                    {angle === 'front' ? 'AVANT' : angle === 'back' ? 'ARRIÈRE' : angle === 'left' ? 'GAUCHE' : 'DROIT'}
+                  </span>
                 </button>
               ))}
            </div>
@@ -389,9 +447,14 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
                     <div className="grid grid-cols-2 gap-4">
                       {(['front', 'back', 'left', 'right', 'engine'] as const).map(angle => (
                         <div key={angle} className="space-y-2">
-                          <p className="text-[9px] text-gray-500 font-black uppercase tracking-widest ml-2">{angle}</p>
+                          <p className="text-[9px] text-gray-500 font-black uppercase tracking-widest ml-2">
+                            {angle === 'front' ? 'AVANT' : angle === 'back' ? 'ARRIÈRE' : angle === 'left' ? 'GAUCHE' : angle === 'right' ? 'DROIT' : 'MOTEUR'}
+                          </p>
                           <div 
-                            onClick={() => car.photos[angle as keyof typeof car.photos] && setViewingDoc({ title: angle.toUpperCase(), url: car.photos[angle as keyof typeof car.photos] as string })}
+                            onClick={() => {
+                              const label = angle === 'front' ? 'AVANT' : angle === 'back' ? 'ARRIÈRE' : angle === 'left' ? 'GAUCHE' : angle === 'right' ? 'DROIT' : 'MOTEUR';
+                              car.photos[angle as keyof typeof car.photos] && setViewingDoc({ title: label, url: car.photos[angle as keyof typeof car.photos] as string });
+                            }}
                             className={`relative aspect-video rounded-3xl border-2 border-dashed flex flex-col items-center justify-center overflow-hidden bg-nsp-input transition-all cursor-pointer ${car.photos[angle as keyof typeof car.photos] ? 'border-nsp-primary/30' : 'border-white/5'}`}
                           >
                             {car.photos[angle as keyof typeof car.photos] ? (
@@ -421,7 +484,6 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
                                 <input 
                                   type="file" 
                                   accept="image/*" 
-                                  capture="environment" 
                                   onChange={e => handlePhotoUpdate(e, angle)} 
                                   className="hidden" 
                                 />
@@ -441,7 +503,6 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
                           <input 
                             type="file" 
                             accept="image/*" 
-                            capture="environment" 
                             onChange={e => handlePhotoUpdate(e, 'damage')} 
                             className="hidden" 
                           />
@@ -668,9 +729,36 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
           
           <div className="flex-1 flex items-center justify-center p-4">
               {isPDF(viewingInvoice?.imageUrl || viewingDoc?.url) ? (
-                <iframe src={base64ToRealBlobUrl((viewingInvoice?.imageUrl || viewingDoc?.url || ''), 'application/pdf')} className="w-full h-full rounded-2xl" referrerPolicy="no-referrer" />
+                <div className="w-full h-full flex flex-col gap-6 items-center justify-center">
+                  <div className="flex-1 w-full bg-white/5 rounded-2xl border border-white/10 overflow-hidden relative flex flex-col items-center justify-center text-center p-8">
+                    <FileText size={64} className="text-nsp-primary mb-4 opacity-50" />
+                    <h4 className="text-white font-black text-lg uppercase mb-2">Document PDF</h4>
+                    <p className="text-gray-500 text-sm mb-8">Le document est prêt à être visualisé ou téléchargé.</p>
+                    
+                    <iframe 
+                      src={base64ToRealBlobUrl((viewingInvoice?.imageUrl || viewingDoc?.url || ''), 'application/pdf')} 
+                      className="absolute inset-0 w-full h-full border-none" 
+                      referrerPolicy="no-referrer" 
+                      title="PDF Viewer"
+                    />
+                  </div>
+                  
+                  <div className="flex flex-col gap-3 w-full max-w-xs">
+                    <a 
+                      href={base64ToRealBlobUrl((viewingInvoice?.imageUrl || viewingDoc?.url || ''), 'application/pdf')}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="w-full py-5 bg-nsp-primary text-white rounded-[2rem] font-black text-xs uppercase tracking-widest flex items-center justify-center gap-3 shadow-2xl active:scale-95 transition-all"
+                    >
+                      <Maximize2 size={18} /> Ouvrir / Télécharger
+                    </a>
+                    <p className="text-[10px] text-gray-600 text-center font-bold uppercase tracking-widest">
+                      Nécessaire si l'aperçu ne s'affiche pas
+                    </p>
+                  </div>
+                </div>
               ) : (
-                <img src={safeBase64ToBlobUrl(viewingInvoice?.imageUrl || viewingDoc?.url || '')} className="max-w-full max-h-full object-contain rounded-2xl" alt="Document" referrerPolicy="no-referrer" />
+                <img src={safeBase64ToBlobUrl(viewingInvoice?.imageUrl || viewingDoc?.url || '')} className="max-w-full max-h-full object-contain rounded-2xl shadow-2xl" alt="Document" referrerPolicy="no-referrer" />
               )}
           </div>
         </div>

@@ -113,6 +113,15 @@ export const GarageScreen: React.FC<GarageScreenProps> = ({ user, cars, invoices
             <p className="text-nsp-sub text-[10px] font-black uppercase tracking-widest">{user.name}</p>
           </div>
           <div className="flex items-center gap-2">
+            {user.role === 'admin' && (
+              <button 
+                onClick={() => onSelectCar('admin_dashboard')} 
+                className="p-3 bg-nsp-primary/20 rounded-2xl text-nsp-primary hover:bg-nsp-primary hover:text-white border border-nsp-primary/30 transition-all font-black text-[10px] uppercase px-4"
+                title="Administration"
+              >
+                Admin
+              </button>
+            )}
             <button onClick={onRefresh} className="p-3 bg-nsp-input rounded-2xl text-nsp-success hover:text-white border border-white/5 transition-colors" title="Synchroniser">
               <RefreshCw size={20} />
             </button>
