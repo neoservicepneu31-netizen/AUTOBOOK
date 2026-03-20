@@ -27,7 +27,11 @@ export const emailService = {
       const responseText = await response.text();
       console.log(`Server response (${response.status}):`, responseText);
 
-      if (!responseText) {
+      if (response.status === 405) {
+        throw new Error("Erreur 405 : Méthode non autorisée. Cela arrive souvent si vous utilisez un hébergeur statique (comme Vercel) sans fonctions backend, ou si le serveur n'est pas démarré.");
+      }
+
+      if (!responseText && response.status !== 204) {
         throw new Error(`Le serveur a renvoyé une réponse vide (${response.status}).`);
       }
 

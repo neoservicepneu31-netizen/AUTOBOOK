@@ -29,9 +29,14 @@ async function startServer() {
   });
 
   // API Route for sending emails
-  app.post("/api/send-email", async (req, res) => {
-    console.log("Received email request to:", req.body?.to);
+  app.post(["/api/send-email", "/api/send-email/"], async (req, res) => {
+    console.log("Incoming POST request to /api/send-email");
+    console.log("Body:", JSON.stringify(req.body));
     const { to, subject, html, text } = req.body;
+
+    if (!to) {
+      return res.status(400).json({ success: false, message: "Destinataire (to) manquant." });
+    }
 
     if (!process.env.RESEND_API_KEY) {
       console.error("RESEND_API_KEY is missing in environment variables.");
