@@ -1,6 +1,7 @@
 
-import { Car, Invoice } from '../types';
+import { Car, Invoice, AppNotification } from '../types';
 import { calculateMaintenanceStatus } from './mechanicRules';
+import { cloud } from './cloudService';
 
 /**
  * Demande la permission d'envoyer des notifications
@@ -57,7 +58,7 @@ export const simulateCloudEmail = (email: string, carName: string, reason: strin
 /**
  * Vérifie l'état d'un véhicule et envoie une alerte si nécessaire
  */
-export const checkVehicleHealthAndNotify = async (car: Car, invoices: Invoice[], userEmail: string) => {
+export const checkVehicleHealthAndNotify = async (car: Car, invoices: Invoice[], userEmail: string, userId: string) => {
   const health = calculateMaintenanceStatus(car, invoices);
   
   // Récupération de toutes les tâches
@@ -89,6 +90,20 @@ export const checkVehicleHealthAndNotify = async (car: Car, invoices: Invoice[],
       
       await sendLocalNotification(title, body);
       simulateCloudEmail(userEmail, car.name, body, allTasks);
+      
+      // Send persistent notification to Firestore
+      const notification: AppNotification = {
+        id: `auto_${car.id}_${now}`,
+        userId: userId,
+        title: title,
+        message: body,
+        type: hasCritical ? 'error' : 'warning',
+        date: new Date().toISOString(),
+        read: false,
+        carId: car.id
+      };
+      await cloud.sendNotification(notification);
+
       localStorage.setItem(lastAlertKey, now.toString());
     }
   }

@@ -1,4 +1,15 @@
 
+export interface AppNotification {
+  id: string;
+  userId: string;
+  title: string;
+  message: string;
+  type: 'info' | 'warning' | 'error' | 'success';
+  date: string;
+  read: boolean;
+  carId?: string;
+}
+
 export enum Screen {
   AUTH = 'AUTH',
   GARAGE = 'GARAGE',

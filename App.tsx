@@ -43,10 +43,10 @@ const App: React.FC = () => {
     setNotification({ isOpen: true, type, title, message });
   };
 
-  const performHealthChecks = useCallback((cars: Car[], invoices: Invoice[], email: string) => {
+  const performHealthChecks = useCallback((cars: Car[], invoices: Invoice[], email: string, userId: string) => {
     cars.forEach(car => {
       const carInvoices = invoices.filter(i => i.carId === car.id);
-      checkVehicleHealthAndNotify(car, carInvoices, email);
+      checkVehicleHealthAndNotify(car, carInvoices, email, userId);
     });
   }, []);
 
@@ -217,7 +217,7 @@ const App: React.FC = () => {
     setAllCars(updatedCars);
     db.cars.saveAll(updatedCars);
     if (cloud.isConnected()) await cloud.syncCar(car);
-    if (user) performHealthChecks(updatedCars, allInvoices, user.email);
+    if (user) performHealthChecks(updatedCars, allInvoices, user.email, user.id);
   };
 
   const handleDeleteCar = async (carId: string) => {
@@ -272,7 +272,7 @@ const App: React.FC = () => {
         await handleSaveCar(updatedCar);
       }
     }
-    if (user) performHealthChecks(allCars, updatedInvoices, user.email);
+    if (user) performHealthChecks(allCars, updatedInvoices, user.email, user.id);
     setScreen(Screen.INVOICES_LIST);
   };
 

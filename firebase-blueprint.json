@@ -53,6 +53,22 @@
         "lastSync": { "type": "object" }
       },
       "required": ["id", "carId", "type", "title", "date", "km", "price"]
+    },
+    "Notification": {
+      "title": "Notification",
+      "description": "In-app notification for user",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "title": { "type": "string" },
+        "message": { "type": "string" },
+        "type": { "type": "string", "enum": ["info", "warning", "error", "success"] },
+        "date": { "type": "string" },
+        "read": { "type": "boolean" },
+        "carId": { "type": "string" }
+      },
+      "required": ["id", "userId", "title", "message", "type", "date", "read"]
     }
   },
   "firestore": {
@@ -67,6 +83,10 @@
     "/invoices/{invoiceId}": {
       "schema": "Invoice",
       "description": "Invoices"
+    },
+    "/notifications/{notificationId}": {
+      "schema": "Notification",
+      "description": "User notifications"
     }
   }
 }

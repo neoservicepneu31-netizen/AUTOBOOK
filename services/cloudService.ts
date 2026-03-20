@@ -27,7 +27,7 @@ import {
   signInWithPopup,
   User as FirebaseUser
 } from 'firebase/auth';
-import { User, Car, Invoice } from '../types';
+import { User, Car, Invoice, AppNotification } from '../types';
 
 // Import the Firebase configuration
 import firebaseConfig from '../firebase-applet-config.json';
@@ -511,6 +511,48 @@ class CloudConnector {
     }, (error) => {
       handleFirestoreError(error, OperationType.LIST, path);
     });
+  }
+
+  async sendNotification(notification: AppNotification): Promise<void> {
+    if (!this.isConnected()) return;
+    const path = `notifications/${notification.id}`;
+    try {
+      const cleaned = cleanData(notification);
+      await setDoc(doc(db, "notifications", notification.id), { ...cleaned, lastSync: Timestamp.now() }, { merge: true });
+    } catch (e) { 
+      handleFirestoreError(e, OperationType.WRITE, path);
+    }
+  }
+
+  async deleteNotification(notificationId: string): Promise<void> {
+    if (!this.isConnected()) return;
+    const path = `notifications/${notificationId}`;
+    try {
+      await deleteDoc(doc(db, "notifications", notificationId));
+    } catch (e) { 
+      handleFirestoreError(e, OperationType.DELETE, path);
+    }
+  }
+
+  listenToUserNotifications(userId: string, callback: (notifications: AppNotification[]) => void) {
+    if (!this.isConnected()) return null;
+    const path = "notifications";
+    const q = query(collection(db, "notifications"), where("userId", "==", userId), orderBy("date", "desc"));
+    return onSnapshot(q, (snapshot) => {
+      callback(snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as AppNotification)));
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, path);
+    });
+  }
+
+  async markNotificationAsRead(notificationId: string): Promise<void> {
+    if (!this.isConnected()) return;
+    const path = `notifications/${notificationId}`;
+    try {
+      await setDoc(doc(db, "notifications", notificationId), { read: true }, { merge: true });
+    } catch (e) { 
+      handleFirestoreError(e, OperationType.WRITE, path);
+    }
   }
 }
 

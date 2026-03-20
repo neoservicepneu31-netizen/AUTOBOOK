@@ -56,6 +56,9 @@ async function startServer() {
         from = "onboarding@resend.dev";
       } else if (!fromEmail.includes("<") && fromEmail.includes("@")) {
         from = `AutoBook <${fromEmail}>`;
+      } else if (fromEmail.includes("<") && fromEmail.includes(">")) {
+        // Already in 'Name <email@example.com>' format
+        from = fromEmail;
       }
       
       const { data, error } = await resend.emails.send({

@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { User, Car, Invoice } from '../types';
+import { User, Car, Invoice, AppNotification } from '../types';
 import { cloud } from '../services/cloudService';
 import { db } from '../services/storageService';
 import { emailService } from '../services/emailService';
@@ -41,6 +41,8 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({
   const [isSendingMails, setIsSendingMails] = useState(false);
   const [messageText, setMessageText] = useState('');
   const [isMessageModalOpen, setIsMessageModalOpen] = useState(false);
+  const [isNotificationModalOpen, setIsNotificationModalOpen] = useState(false);
+  const [notificationData, setNotificationData] = useState({ title: '', message: '', type: 'info' as any });
   const [resetConfirmation, setResetConfirmation] = useState<{ isOpen: boolean; user: User | null }>({ isOpen: false, user: null });
   const [deleteUserConfirmation, setDeleteUserConfirmation] = useState<{ isOpen: boolean; userId: string | null }>({ isOpen: false, userId: null });
   const [infoRequests, setInfoRequests] = useState([
@@ -191,6 +193,33 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({
     } catch (error: any) {
       console.error("Email error:", error);
       onNotify('error', 'Erreur', `❌ Erreur lors de l'envoi du message : ${error.message}`);
+    } finally {
+      setIsSendingMails(false);
+    }
+  };
+  
+  const handleSendAppNotification = async (user: User) => {
+    if (!notificationData.title.trim() || !notificationData.message.trim()) return;
+
+    setIsSendingMails(true);
+    try {
+      const newNotification: AppNotification = {
+        id: `notif_${Date.now()}`,
+        userId: user.id,
+        title: notificationData.title,
+        message: notificationData.message,
+        type: notificationData.type,
+        date: new Date().toISOString(),
+        read: false
+      };
+      
+      await cloud.sendNotification(newNotification);
+      onNotify('success', 'Notification', `✅ Notification envoyée dans l'application à ${user.name}.`);
+      setNotificationData({ title: '', message: '', type: 'info' });
+      setIsNotificationModalOpen(false);
+    } catch (error: any) {
+      console.error("Notification error:", error);
+      onNotify('error', 'Erreur', `❌ Erreur lors de l'envoi de la notification : ${error.message}`);
     } finally {
       setIsSendingMails(false);
     }
@@ -561,6 +590,9 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({
                   <button onClick={() => setIsMessageModalOpen(true)} className="w-full bg-nsp-primary text-white p-5 rounded-2xl font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 shadow-xl active:scale-95 transition-all">
                     <Send size={16} /> Envoyer un message / Question
                   </button>
+                  <button onClick={() => setIsNotificationModalOpen(true)} className="w-full bg-nsp-success text-white p-5 rounded-2xl font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 shadow-xl active:scale-95 transition-all">
+                    <BellRing size={16} /> Alerte Application (Garage)
+                  </button>
                   <button onClick={() => handleInvitationMail(selectedUser)} className="w-full bg-nsp-input text-white p-5 rounded-2xl font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 shadow-xl active:scale-95 transition-all">
                     <Mail size={16} /> Envoyer mail d'invitation
                   </button>
@@ -601,6 +633,69 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({
                 className="flex-1 bg-nsp-primary text-white py-4 rounded-xl font-black text-[10px] uppercase shadow-lg shadow-nsp-primary/20"
               >
                 Envoyer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isNotificationModalOpen && selectedUser && (
+        <div className="fixed inset-0 z-[200] bg-black/95 backdrop-blur-xl flex items-center justify-center p-6 animate-fade-in">
+          <div className="bg-nsp-card border border-nsp-border w-full max-w-md rounded-[2.5rem] p-8 shadow-2xl">
+            <h3 className="text-white font-black text-xs uppercase tracking-widest mb-6 flex items-center gap-3">
+              <BellRing size={18} className="text-nsp-success" /> Alerte Garage pour {selectedUser.name}
+            </h3>
+            
+            <div className="space-y-4 mb-6">
+              <div>
+                <label className="text-gray-500 text-[8px] font-black uppercase mb-1 block">Titre de l'alerte</label>
+                <input 
+                  type="text" 
+                  className="w-full bg-nsp-input border border-white/10 rounded-xl p-3 text-white text-xs font-bold outline-none focus:border-nsp-success/50"
+                  placeholder="Ex: Entretien requis"
+                  value={notificationData.title}
+                  onChange={(e) => setNotificationData({...notificationData, title: e.target.value})}
+                />
+              </div>
+              
+              <div>
+                <label className="text-gray-500 text-[8px] font-black uppercase mb-1 block">Type d'alerte</label>
+                <div className="flex gap-2">
+                  {['info', 'warning', 'error', 'success'].map(type => (
+                    <button 
+                      key={type}
+                      onClick={() => setNotificationData({...notificationData, type})}
+                      className={`flex-1 py-2 rounded-lg text-[8px] font-black uppercase border transition-all ${notificationData.type === type ? 'bg-white text-black border-white' : 'bg-nsp-input text-gray-500 border-white/5'}`}
+                    >
+                      {type}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="text-gray-500 text-[8px] font-black uppercase mb-1 block">Message</label>
+                <textarea
+                  className="w-full bg-nsp-input border border-white/10 rounded-xl p-3 text-white text-xs font-bold min-h-[100px] outline-none focus:border-nsp-success/50"
+                  placeholder="Expliquez ce que le client doit faire..."
+                  value={notificationData.message}
+                  onChange={(e) => setNotificationData({...notificationData, message: e.target.value})}
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-4">
+              <button
+                onClick={() => setIsNotificationModalOpen(false)}
+                className="flex-1 bg-nsp-input text-white py-4 rounded-xl font-black text-[10px] uppercase"
+              >
+                Annuler
+              </button>
+              <button
+                onClick={() => handleSendAppNotification(selectedUser)}
+                className="flex-1 bg-nsp-success text-white py-4 rounded-xl font-black text-[10px] uppercase shadow-lg shadow-nsp-success/20"
+              >
+                Envoyer Alerte
               </button>
             </div>
           </div>

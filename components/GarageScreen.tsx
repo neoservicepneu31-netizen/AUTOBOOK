@@ -1,9 +1,11 @@
 
 import React, { useState, useEffect } from 'react';
-import { Car, User, NewsArticle, Invoice } from '../types';
+import { Car, User, NewsArticle, Invoice, AppNotification } from '../types';
 import { Plus, Car as CarIcon, Bike, ChevronRight, LogOut, Newspaper, X, ArrowRight, FolderOpen, DownloadCloud, ShieldCheck, Zap, Bell, BellRing, ShieldAlert, RefreshCw, Trash2 } from 'lucide-react';
 import { requestNotificationPermission, checkVehicleHealthAndNotify } from '../services/notificationService';
 import { calculateMaintenanceStatus } from '../services/mechanicRules';
+import { cloud } from '../services/cloudService';
+import { GarageNotificationsModal } from './GarageNotificationsModal';
 
 const NEWS_DATA: NewsArticle[] = [
   {
@@ -85,6 +87,8 @@ interface GarageScreenProps {
 export const GarageScreen: React.FC<GarageScreenProps> = ({ user, cars, invoices, onSelectCar, onAddCar, onLogout, onBuyCar, onRefresh, onDeleteCar, onNotify }) => {
   const [selectedArticle, setSelectedArticle] = useState<NewsArticle | null>(null);
   const [showNotifyPrompt, setShowNotifyPrompt] = useState(false);
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
+  const [isNotificationsModalOpen, setIsNotificationsModalOpen] = useState(false);
 
   useEffect(() => {
     if ("Notification" in window && Notification.permission === "default") {
@@ -92,9 +96,18 @@ export const GarageScreen: React.FC<GarageScreenProps> = ({ user, cars, invoices
     }
     cars.forEach(car => {
       const carInvoices = invoices.filter(i => i.carId === car.id);
-      checkVehicleHealthAndNotify(car, carInvoices, user.email);
+      checkVehicleHealthAndNotify(car, carInvoices, user.email, user.id);
     });
-  }, [cars, invoices, user.email]);
+
+    // Listen to Firestore notifications
+    const unsubscribe = cloud.listenToUserNotifications(user.id, (notifs) => {
+      setNotifications(notifs);
+    });
+
+    return () => {
+      if (unsubscribe) unsubscribe();
+    };
+  }, [cars, invoices, user.email, user.id]);
 
   const handleEnableNotifications = async () => {
     const granted = await requestNotificationPermission();
@@ -103,6 +116,8 @@ export const GarageScreen: React.FC<GarageScreenProps> = ({ user, cars, invoices
       onNotify('success', 'Notifications', "✅ Alertes activées ! Vous recevrez désormais vos rappels de révision et contrôle technique.");
     }
   };
+
+  const unreadCount = notifications.filter(n => !n.read).length;
 
   return (
     <div className="min-h-full bg-nsp-bg flex flex-col pb-20">
@@ -124,6 +139,16 @@ export const GarageScreen: React.FC<GarageScreenProps> = ({ user, cars, invoices
             )}
             <button onClick={onRefresh} className="p-3 bg-nsp-input rounded-2xl text-nsp-success hover:text-white border border-white/5 transition-colors" title="Synchroniser">
               <RefreshCw size={20} />
+            </button>
+            <button 
+              onClick={() => setIsNotificationsModalOpen(true)} 
+              className="p-3 bg-nsp-input rounded-2xl text-nsp-primary hover:text-white border border-white/5 transition-colors relative" 
+              title="Notifications"
+            >
+              <Bell size={20} />
+              {unreadCount > 0 && (
+                <span className="absolute top-2 right-2 w-2.5 h-2.5 bg-nsp-primary rounded-full border-2 border-nsp-card"></span>
+              )}
             </button>
             <button onClick={onLogout} className="p-3 bg-nsp-input rounded-2xl text-nsp-sub hover:text-white border border-white/5 transition-colors">
               <LogOut size={20} />
@@ -273,6 +298,14 @@ export const GarageScreen: React.FC<GarageScreenProps> = ({ user, cars, invoices
       </div>
 
       {/* Article Modal */}
+      <GarageNotificationsModal 
+        isOpen={isNotificationsModalOpen}
+        notifications={notifications}
+        onClose={() => setIsNotificationsModalOpen(false)}
+        onMarkAsRead={(id) => cloud.markNotificationAsRead(id)}
+        onDelete={(id) => cloud.deleteNotification(id)}
+      />
+
       {selectedArticle && (
         <div className="fixed inset-0 z-[300] bg-black flex flex-col pt-safe-top animate-fade-in overflow-hidden">
            <header className="p-6 flex justify-between items-center border-b border-white/10 bg-black/50 backdrop-blur-md">
