@@ -61,45 +61,42 @@ export const processFile = (file: File): Promise<string> => {
   });
 };
 
+export const base64ToBlob = (base64Data: string, contentType: string = ''): Blob => {
+  const sliceSize = 512;
+  const base64 = base64Data.includes(',') ? base64Data.split(',')[1] : base64Data;
+  const byteCharacters = atob(base64.trim());
+  const byteArrays = [];
+
+  for (let offset = 0; offset < byteCharacters.length; offset += sliceSize) {
+    const slice = byteCharacters.slice(offset, offset + sliceSize);
+    const byteNumbers = new Array(slice.length);
+    for (let i = 0; i < slice.length; i++) {
+      byteNumbers[i] = slice.charCodeAt(i);
+    }
+    const byteArray = new Uint8Array(byteNumbers);
+    byteArrays.push(byteArray);
+  }
+
+  return new Blob(byteArrays, { type: contentType });
+};
+
 export const safeBase64ToBlobUrl = (base64Data: string): string => {
   if (!base64Data) return "";
-  if (base64Data.startsWith('data:') || base64Data.startsWith('http') || base64Data.startsWith('blob:')) return base64Data;
+  if (base64Data.startsWith('http') || base64Data.startsWith('blob:')) return base64Data;
   
   try {
-    const isPDF = base64Data.length > 20 && base64Data.substring(0, 30).includes('JVBER');
-    const prefix = isPDF ? 'data:application/pdf;base64,' : 'data:image/jpeg;base64,';
-    return `${prefix}${base64Data}`;
+    const isPDF = base64Data.includes('application/pdf') || (base64Data.length > 20 && base64Data.substring(0, 30).includes('JVBER'));
+    const mimeType = isPDF ? 'application/pdf' : 'image/jpeg';
+    const blob = base64ToBlob(base64Data, mimeType);
+    return URL.createObjectURL(blob);
   } catch (e) {
-    return base64Data;
+    console.error("Blob conversion error", e);
+    return base64Data.startsWith('data:') ? base64Data : `data:image/jpeg;base64,${base64Data}`;
   }
 };
 
 export const base64ToRealBlobUrl = (base64: string, mimeType: string = 'application/pdf'): string => {
-  if (!base64) return "";
-  if (base64.startsWith('http') || base64.startsWith('blob:')) return base64;
-  
-  try {
-    const sliceSize = 1024;
-    const byteCharacters = atob(base64.includes(',') ? base64.split(',')[1] : base64);
-    const bytesLength = byteCharacters.length;
-    const slicesCount = Math.ceil(bytesLength / sliceSize);
-    const byteArrays = new Array(slicesCount);
-
-    for (let sliceIndex = 0; sliceIndex < slicesCount; ++sliceIndex) {
-      const begin = sliceIndex * sliceSize;
-      const end = Math.min(begin + sliceSize, bytesLength);
-      const bytes = new Array(end - begin);
-      for (let offset = begin, i = 0; offset < end; ++i, ++offset) {
-        bytes[i] = byteCharacters[offset].charCodeAt(0);
-      }
-      byteArrays[sliceIndex] = new Uint8Array(bytes);
-    }
-    const blob = new Blob(byteArrays, { type: mimeType });
-    return URL.createObjectURL(blob);
-  } catch (e) {
-    console.error("Blob conversion error", e);
-    return base64;
-  }
+  return safeBase64ToBlobUrl(base64); // Unify implementation
 };
 
 export const analyzeInvoiceImage = async (base64Data: string, mimeType: string = 'image/jpeg', retryCount = 0): Promise<any> => {

@@ -35,6 +35,8 @@ export const InvoicesListScreen: React.FC<InvoicesListScreenProps> = ({ car, inv
     return url.includes('application/pdf') || url.substring(0, 30).includes('JVBER');
   };
 
+  const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+
   const initialDocs = useMemo(() => {
     const docs = [];
     if (car.grayCardUrl) docs.push({ title: 'Carte Grise', url: car.grayCardUrl, type: 'OFFICIEL' });
@@ -200,7 +202,7 @@ export const InvoicesListScreen: React.FC<InvoicesListScreenProps> = ({ car, inv
                 </button>
               )}
               <button 
-                onClick={() => window.open(base64ToRealBlobUrl(viewingItem.url, isPDF(viewingItem.url) ? 'application/pdf' : 'image/png'), '_blank')}
+                onClick={() => window.open(safeBase64ToBlobUrl(viewingItem.url), '_blank')}
                 className="p-3 bg-nsp-input rounded-2xl text-white shadow-lg"
               >
                 <Eye size={24}/>
@@ -212,24 +214,45 @@ export const InvoicesListScreen: React.FC<InvoicesListScreenProps> = ({ car, inv
             <div className={`w-full h-full max-w-4xl bg-nsp-card rounded-[3rem] border border-white/10 shadow-2xl relative overflow-hidden transition-all duration-300 ${isZoomed ? 'scale-150 cursor-zoom-out' : 'cursor-zoom-in'}`}
                  onClick={() => !isPDF(viewingItem.url) && setIsZoomed(!isZoomed)}>
               {isPDF(viewingItem.url) ? (
-                 <div className="w-full h-full bg-black relative">
-                    <iframe 
-                      src={base64ToRealBlobUrl(viewingItem.url, 'application/pdf') + '#toolbar=0&navpanes=0'} 
-                      className="w-full h-full border-0"
-                      title="PDF Doc"
-                      referrerPolicy="no-referrer"
-                    />
-                    <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10">
-                      <button 
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          window.open(base64ToRealBlobUrl(viewingItem.url, 'application/pdf'), '_blank');
-                        }}
-                        className="bg-nsp-primary text-white px-8 py-3 rounded-full text-[10px] font-black uppercase flex items-center gap-2 shadow-2xl active:scale-95 transition-all"
-                      >
-                        <Eye size={16} /> Plein Écran PDF
-                      </button>
-                    </div>
+                 <div className="w-full h-full bg-black relative flex flex-col items-center justify-center">
+                    {isMobile ? (
+                      <div className="flex flex-col items-center gap-6 p-10 text-center">
+                        <div className="w-24 h-24 bg-red-500/10 rounded-full flex items-center justify-center text-red-500">
+                          <FileText size={48} />
+                        </div>
+                        <div className="space-y-2">
+                          <h4 className="text-white font-black text-sm uppercase tracking-widest">Document PDF</h4>
+                          <p className="text-gray-500 text-[10px] font-medium leading-relaxed">Le visionnage direct des PDF peut être limité sur mobile.</p>
+                        </div>
+                        <button 
+                          onClick={() => window.open(safeBase64ToBlobUrl(viewingItem.url), '_blank')}
+                          className="bg-nsp-primary text-white px-10 py-4 rounded-full text-[11px] font-black uppercase flex items-center gap-3 shadow-2xl active:scale-95 transition-all"
+                        >
+                          <Eye size={18} /> Ouvrir le PDF
+                        </button>
+                      </div>
+                    ) : (
+                      <iframe 
+                        src={safeBase64ToBlobUrl(viewingItem.url) + '#toolbar=0&navpanes=0'} 
+                        className="w-full h-full border-0"
+                        title="PDF Doc"
+                        referrerPolicy="no-referrer"
+                      />
+                    )}
+                    
+                    {!isMobile && (
+                      <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10">
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            window.open(safeBase64ToBlobUrl(viewingItem.url), '_blank');
+                          }}
+                          className="bg-nsp-primary text-white px-8 py-3 rounded-full text-[10px] font-black uppercase flex items-center gap-2 shadow-2xl active:scale-95 transition-all"
+                        >
+                          <Eye size={16} /> Plein Écran PDF
+                        </button>
+                      </div>
+                    )}
                  </div>
               ) : (
                 <img 
