@@ -20,8 +20,14 @@ export const InvoicesListScreen: React.FC<InvoicesListScreenProps> = ({ car, inv
   const [viewingItem, setViewingItem] = useState<{title: string, url: string, type?: string, price?: number, km?: number, date?: string, id?: string} | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isZoomed, setIsZoomed] = useState(false);
 
-  const filteredInvoices = invoices.filter(inv => filter === 'all' || inv.type === filter);
+  const filteredInvoices = useMemo(() => {
+    const filtered = invoices.filter(inv => filter === 'all' || inv.type === filter);
+    // Ensure uniqueness by ID just in case
+    const unique = Array.from(new Map(filtered.map(i => [i.id, i])).values());
+    return unique;
+  }, [invoices, filter]);
   const totalSpend = invoices.reduce((acc, inv) => acc + inv.price, 0);
 
   const isPDF = (url?: string) => {
@@ -175,7 +181,7 @@ export const InvoicesListScreen: React.FC<InvoicesListScreenProps> = ({ car, inv
         <div className="fixed inset-0 z-[1000] bg-black/98 flex flex-col animate-fade-in overflow-hidden pt-safe-top">
           <header className="flex justify-between items-center p-6 bg-black/80 border-b border-white/10 z-[1001]">
             <button 
-              onClick={() => { setViewingItem(null); }} 
+              onClick={() => { setViewingItem(null); setIsZoomed(false); }} 
               className="p-3 bg-nsp-input rounded-2xl text-white hover:bg-nsp-primary transition-colors shadow-lg"
             >
               <X size={24}/>
@@ -184,17 +190,27 @@ export const InvoicesListScreen: React.FC<InvoicesListScreenProps> = ({ car, inv
                <h3 className="text-white font-black text-xs uppercase tracking-[0.2em] truncate max-w-[150px]">{viewingItem.title}</h3>
                <p className="text-[9px] text-nsp-primary font-black uppercase mt-1 tracking-widest">Archive Certifiée</p>
             </div>
-            <a 
-              href={safeBase64ToBlobUrl(viewingItem.url)} 
-              target="_blank" 
-              className="p-3 bg-nsp-input rounded-2xl text-white shadow-lg"
-            >
-              <Maximize2 size={24}/>
-            </a>
+            <div className="flex gap-2">
+              {!isPDF(viewingItem.url) && (
+                <button 
+                  onClick={() => setIsZoomed(!isZoomed)} 
+                  className={`p-3 rounded-2xl transition-all shadow-lg ${isZoomed ? 'bg-nsp-primary text-white' : 'bg-nsp-input text-white'}`}
+                >
+                  {isZoomed ? <Minimize2 size={24}/> : <Maximize2 size={24}/>}
+                </button>
+              )}
+              <button 
+                onClick={() => window.open(base64ToRealBlobUrl(viewingItem.url, isPDF(viewingItem.url) ? 'application/pdf' : 'image/png'), '_blank')}
+                className="p-3 bg-nsp-input rounded-2xl text-white shadow-lg"
+              >
+                <Eye size={24}/>
+              </button>
+            </div>
           </header>
 
           <div className="flex-1 overflow-hidden flex flex-col items-center justify-center bg-[#050505] p-4">
-            <div className="w-full h-full max-w-4xl bg-nsp-card rounded-[3rem] border border-white/10 shadow-2xl relative overflow-hidden">
+            <div className={`w-full h-full max-w-4xl bg-nsp-card rounded-[3rem] border border-white/10 shadow-2xl relative overflow-hidden transition-all duration-300 ${isZoomed ? 'scale-150 cursor-zoom-out' : 'cursor-zoom-in'}`}
+                 onClick={() => !isPDF(viewingItem.url) && setIsZoomed(!isZoomed)}>
               {isPDF(viewingItem.url) ? (
                  <div className="w-full h-full bg-black relative">
                     <iframe 
@@ -203,29 +219,34 @@ export const InvoicesListScreen: React.FC<InvoicesListScreenProps> = ({ car, inv
                       title="PDF Doc"
                       referrerPolicy="no-referrer"
                     />
-                    <div className="absolute bottom-4 left-1/2 -translate-x-1/2">
+                    <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10">
                       <button 
-                        onClick={() => window.open(base64ToRealBlobUrl(viewingItem.url, 'application/pdf'), '_blank')}
-                        className="bg-nsp-primary text-white px-8 py-3 rounded-full text-[10px] font-black uppercase flex items-center gap-2 shadow-2xl"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          window.open(base64ToRealBlobUrl(viewingItem.url, 'application/pdf'), '_blank');
+                        }}
+                        className="bg-nsp-primary text-white px-8 py-3 rounded-full text-[10px] font-black uppercase flex items-center gap-2 shadow-2xl active:scale-95 transition-all"
                       >
-                        <Eye size={16} /> Plein Écran
+                        <Eye size={16} /> Plein Écran PDF
                       </button>
                     </div>
                  </div>
               ) : (
                 <img 
                   src={safeBase64ToBlobUrl(viewingItem.url)} 
-                  className="w-full h-full object-contain" 
+                  className={`w-full h-full ${isZoomed ? 'object-cover' : 'object-contain'}`} 
                   alt="Document" 
                   referrerPolicy="no-referrer"
                 />
               )}
               
-              <div className="absolute top-6 right-6">
-                <div className="bg-nsp-primary/90 text-white px-5 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest flex items-center gap-2 shadow-2xl border border-white/10 backdrop-blur-md">
-                  <ShieldCheck size={16} /> Certifié IA
+              {!isZoomed && (
+                <div className="absolute top-6 right-6">
+                  <div className="bg-nsp-primary/90 text-white px-5 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest flex items-center gap-2 shadow-2xl border border-white/10 backdrop-blur-md">
+                    <ShieldCheck size={16} /> Certifié IA
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
           </div>
 

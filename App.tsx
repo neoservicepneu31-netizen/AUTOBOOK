@@ -214,10 +214,12 @@ const App: React.FC = () => {
 
   const handleSaveCar = async (car: Car) => {
     const updatedCars = [...allCars.filter(c => c.id !== car.id), car];
-    setAllCars(updatedCars);
-    db.cars.saveAll(updatedCars);
+    // Ensure uniqueness by ID
+    const uniqueCars = Array.from(new Map(updatedCars.map(c => [c.id, c])).values());
+    setAllCars(uniqueCars);
+    db.cars.saveAll(uniqueCars);
     if (cloud.isConnected()) await cloud.syncCar(car);
-    if (user) performHealthChecks(updatedCars, allInvoices, user.email, user.id);
+    if (user) performHealthChecks(uniqueCars, allInvoices, user.email, user.id);
   };
 
   const handleDeleteCar = async (carId: string) => {
@@ -262,8 +264,10 @@ const App: React.FC = () => {
 
   const handleSaveInvoice = async (inv: Invoice, specs?: TechnicalSpecs) => {
     const updatedInvoices = [inv, ...allInvoices];
-    setAllInvoices(updatedInvoices);
-    db.invoices.saveAll(updatedInvoices);
+    // Ensure uniqueness by ID
+    const uniqueInvoices = Array.from(new Map(updatedInvoices.map(i => [i.id, i])).values());
+    setAllInvoices(uniqueInvoices);
+    db.invoices.saveAll(uniqueInvoices);
     if (cloud.isConnected()) await cloud.syncInvoice(inv);
     if (specs && activeCarId) {
       const car = allCars.find(c => c.id === activeCarId);
@@ -272,7 +276,7 @@ const App: React.FC = () => {
         await handleSaveCar(updatedCar);
       }
     }
-    if (user) performHealthChecks(allCars, updatedInvoices, user.email, user.id);
+    if (user) performHealthChecks(allCars, uniqueInvoices, user.email, user.id);
     setScreen(Screen.INVOICES_LIST);
   };
 

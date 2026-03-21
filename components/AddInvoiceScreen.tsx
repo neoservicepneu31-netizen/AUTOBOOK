@@ -28,6 +28,8 @@ export const AddInvoiceScreen: React.FC<AddInvoiceScreenProps> = ({ carId, onSav
 
   const [highlightKm, setHighlightKm] = useState(false);
 
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
   const performAnalysis = async (base64DataUrl: string, mime: string) => {
     setIsAnalyzing(true);
     setIsSuccess(false);
@@ -83,24 +85,30 @@ export const AddInvoiceScreen: React.FC<AddInvoiceScreenProps> = ({ carId, onSav
     }
   };
 
-  const handleSubmit = () => {
-    if (!carId || !formData.km) {
+  const handleSubmit = async () => {
+    if (!carId || !formData.km || isSubmitting) {
       setHighlightKm(true);
       return;
     }
-    const newInvoice: Invoice = {
-      id: Date.now().toString(),
-      carId,
-      type: activeTab,
-      title: formData.title || (activeTab === 'fuel' ? 'Plein Carburant' : 'Entretien'),
-      date: formData.date,
-      km: parseInt(formData.km) || 0,
-      price: parseFloat(formData.price) || 0,
-      volume: activeTab === 'fuel' ? parseFloat(formData.volume) || 0 : undefined,
-      imageUrl: persistentImage || undefined,
-      detectedSpecs
-    };
-    onSave(newInvoice, detectedSpecs);
+    setIsSubmitting(true);
+    try {
+      const newInvoice: Invoice = {
+        id: Date.now().toString(),
+        carId,
+        type: activeTab,
+        title: formData.title || (activeTab === 'fuel' ? 'Plein Carburant' : 'Entretien'),
+        date: formData.date,
+        km: parseInt(formData.km) || 0,
+        price: parseFloat(formData.price) || 0,
+        volume: activeTab === 'fuel' ? parseFloat(formData.volume) || 0 : undefined,
+        imageUrl: persistentImage || undefined,
+        detectedSpecs
+      };
+      await onSave(newInvoice, detectedSpecs);
+    } catch (e) {
+      console.error("Submit error", e);
+      setIsSubmitting(false);
+    }
   };
 
   const isPDF = persistentImage?.includes('application/pdf');
@@ -157,12 +165,23 @@ export const AddInvoiceScreen: React.FC<AddInvoiceScreenProps> = ({ carId, onSav
                 <div className="relative bg-nsp-primary text-white py-4 rounded-2xl flex flex-col items-center gap-2 shadow-xl overflow-hidden active:scale-95 transition-all">
                    <Camera size={20} />
                    <span className="text-[8px] font-black uppercase tracking-widest">Prendre Photo</span>
-                   <input type="file" accept="image/*" onChange={handleFileChange} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" />
+                   <input 
+                    type="file" 
+                    accept="image/*" 
+                    capture="environment" 
+                    onChange={handleFileChange} 
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" 
+                   />
                 </div>
                 <div className="relative bg-nsp-input border border-white/5 text-white py-4 rounded-2xl flex flex-col items-center gap-2 shadow-xl overflow-hidden active:scale-95 transition-all">
                    <Upload size={20} />
                    <span className="text-[8px] font-black uppercase tracking-widest">Choisir PDF</span>
-                   <input type="file" accept="image/*,application/pdf" onChange={handleFileChange} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" />
+                   <input 
+                    type="file" 
+                    accept="application/pdf,image/*" 
+                    onChange={handleFileChange} 
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" 
+                   />
                 </div>
              </div>
           )}
@@ -232,10 +251,24 @@ export const AddInvoiceScreen: React.FC<AddInvoiceScreenProps> = ({ carId, onSav
       <div className="p-6 bg-nsp-card border-t border-nsp-border fixed bottom-0 w-full pb-safe-bottom z-[110]">
         <button 
           onClick={handleSubmit} 
-          disabled={isAnalyzing || !persistentImage || !formData.km} 
-          className="w-full bg-nsp-primary text-white font-black py-5 rounded-[2rem] text-[11px] uppercase tracking-[0.2em] shadow-xl disabled:opacity-50 active:scale-95 transition-all"
+          disabled={isAnalyzing || isSubmitting || !persistentImage || !formData.km} 
+          className="w-full bg-nsp-primary text-white font-black py-5 rounded-[2rem] text-[11px] uppercase tracking-[0.2em] shadow-xl disabled:opacity-50 active:scale-95 transition-all flex items-center justify-center gap-2"
         >
-          {isAnalyzing ? 'Traitement IA...' : !formData.km ? 'Kilométrage Requis' : 'ARCHIVER LA PIÈCE'}
+          {isAnalyzing ? (
+            <>
+              <Loader2 className="animate-spin" size={18} />
+              Traitement IA...
+            </>
+          ) : isSubmitting ? (
+            <>
+              <Loader2 className="animate-spin" size={18} />
+              Archivage...
+            </>
+          ) : !formData.km ? (
+            'Kilométrage Requis'
+          ) : (
+            'ARCHIVER LA PIÈCE'
+          )}
         </button>
       </div>
     </div>
