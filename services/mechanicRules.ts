@@ -20,8 +20,8 @@ interface MaintenanceStatus {
   message: string;
   nextDeadline: string;
   alerts: string[];
-  pendingTasks: {id: string, label: string, severity: 'low' | 'high', basis?: string} [];
-  upcomingDeadlines: {id: string, label: string, date: string, type: 'CT' | 'REVISION'} [];
+  pendingTasks: {id: string, label: string, severity: 'low' | 'high', basis?: string, notificationId?: string} [];
+  upcomingDeadlines: {id: string, label: string, date: string, type: 'CT' | 'REVISION', notificationId?: string} [];
   tireHealth?: {
     mileageSinceChange: number;
     wearPercentage: number;
@@ -224,14 +224,19 @@ export const calculateMaintenanceStatus = (car: Car, invoices: Invoice[], notifi
     }
   });
 
-  // --- 4. FILTRAGE PAR NOTIFICATIONS (ACTIONS DÉJÀ FAITES) ---
-  const filteredPendingTasks = pendingTasks.filter(task => {
-    const doneNotif = notifications.find(n => n.carId === car.id && n.title === task.label && n.actionDone);
+  const filteredPendingTasks = pendingTasks.map(task => {
+    const relevantNotif = notifications.find(n => n.carId === car.id && n.title === task.label && !n.actionDone && !n.read);
+    return relevantNotif ? { ...task, notificationId: relevantNotif.id } : task;
+  }).filter(task => {
+    const doneNotif = notifications.find(n => n.carId === car.id && n.title === task.label && (n.actionDone || n.read));
     return !doneNotif;
   });
 
-  const filteredUpcomingDeadlines = upcomingDeadlines.filter(deadline => {
-    const doneNotif = notifications.find(n => n.carId === car.id && n.title.includes(deadline.label) && n.actionDone);
+  const filteredUpcomingDeadlines = upcomingDeadlines.map(deadline => {
+    const relevantNotif = notifications.find(n => n.carId === car.id && n.title.includes(deadline.label) && !n.actionDone && !n.read);
+    return relevantNotif ? { ...deadline, notificationId: relevantNotif.id } : deadline;
+  }).filter(deadline => {
+    const doneNotif = notifications.find(n => n.carId === car.id && n.title.includes(deadline.label) && (n.actionDone || n.read));
     return !doneNotif;
   });
 

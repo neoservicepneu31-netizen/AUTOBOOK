@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { getPersonalizedMaintenance, safeBase64ToBlobUrl, base64ToRealBlobUrl, processFile } from '../services/geminiService';
 import { calculateMaintenanceStatus } from '../services/mechanicRules';
+import { cloud } from '../services/cloudService';
 
 interface DashboardScreenProps {
   user: User;
@@ -543,23 +544,79 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
                     ) : (
                       <div className="space-y-4">
                         {proactiveStatus.pendingTasks.map(task => (
-                           <div key={task.id} className={`p-5 rounded-2xl border flex items-start gap-4 ${task.severity === 'high' ? 'bg-red-900/10 border-red-500/20' : 'bg-nsp-input border-white/5'}`}>
+                           <div 
+                            key={task.id} 
+                            onClick={() => {
+                              if (task.notificationId) {
+                                const notif = notifications.find(n => n.id === task.notificationId);
+                                if (notif) {
+                                  // Marquer comme lu au clic
+                                  cloud.markNotificationAsRead(task.notificationId);
+                                  // Afficher le message complet
+                                  onNotify('info', notif.title, notif.message);
+                                }
+                              }
+                            }}
+                            className={`p-5 rounded-2xl border flex items-start gap-4 cursor-pointer active:scale-95 transition-all ${task.severity === 'high' ? 'bg-red-900/10 border-red-500/20 hover:bg-red-900/20' : 'bg-nsp-input border-white/5 hover:bg-white/5'}`}
+                           >
                               <div className={`p-2 rounded-xl ${task.severity === 'high' ? 'bg-red-500 text-white' : 'bg-nsp-primary text-white'}`}>
                                  <AlertTriangle size={16} />
                               </div>
                               <div className="flex-1">
-                                 <p className="text-white font-black text-xs uppercase">{task.label}</p>
+                                 <div className="flex justify-between items-start">
+                                   <p className="text-white font-black text-xs uppercase">{task.label}</p>
+                                   {task.notificationId && (
+                                     <button 
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        cloud.markNotificationAsDone(task.notificationId!);
+                                        onNotify('success', 'Diagnostic', '✅ Intervention validée.');
+                                      }}
+                                      className="p-1.5 bg-nsp-success/20 text-nsp-success rounded-lg hover:bg-nsp-success hover:text-white transition-all"
+                                      title="Marquer comme fait"
+                                     >
+                                       <CheckCircle2 size={12} />
+                                     </button>
+                                   )}
+                                 </div>
                                  <p className="text-[10px] text-gray-500 font-medium mt-1">{task.basis}</p>
                               </div>
                            </div>
                         ))}
                         {proactiveStatus.upcomingDeadlines.map(deadline => (
-                           <div key={deadline.id} className="p-5 rounded-2xl border border-white/5 bg-nsp-input flex items-start gap-4">
+                           <div 
+                            key={deadline.id} 
+                            onClick={() => {
+                              if (deadline.notificationId) {
+                                const notif = notifications.find(n => n.id === deadline.notificationId);
+                                if (notif) {
+                                  cloud.markNotificationAsRead(deadline.notificationId);
+                                  onNotify('info', notif.title, notif.message);
+                                }
+                              }
+                            }}
+                            className="p-5 rounded-2xl border border-white/5 bg-nsp-input flex items-start gap-4 cursor-pointer hover:bg-white/5 active:scale-95 transition-all"
+                           >
                               <div className="p-2 rounded-xl bg-nsp-primary text-white">
                                  <Clock size={16} />
                               </div>
                               <div className="flex-1">
-                                 <p className="text-white font-black text-xs uppercase">{deadline.label}</p>
+                                 <div className="flex justify-between items-start">
+                                   <p className="text-white font-black text-xs uppercase">{deadline.label}</p>
+                                   {deadline.notificationId && (
+                                     <button 
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        cloud.deleteNotification(deadline.notificationId!);
+                                        onNotify('info', 'Échéance', '🗑️ Alerte supprimée.');
+                                      }}
+                                      className="p-1.5 bg-red-500/20 text-red-500 rounded-lg hover:bg-red-500 hover:text-white transition-all"
+                                      title="Supprimer l'alerte"
+                                     >
+                                       <Trash2 size={12} />
+                                     </button>
+                                   )}
+                                 </div>
                                  <p className="text-[10px] text-gray-500 font-medium mt-1">Échéance : {deadline.date}</p>
                               </div>
                            </div>

@@ -106,6 +106,19 @@ service cloud.firestore {
              data.price is number;
     }
 
+    function isValidNotification(data) {
+      return data.id is string &&
+             data.userId is string &&
+             data.title is string && data.title.size() > 0 && data.title.size() < 200 &&
+             data.message is string && data.message.size() > 0 && data.message.size() < 1000 &&
+             data.type in ['info', 'warning', 'error', 'success'] &&
+             data.date is string &&
+             data.read is bool &&
+             (!('carId' in data) || data.carId is string) &&
+             (!('actionRequired' in data) || data.actionRequired is bool) &&
+             (!('actionDone' in data) || data.actionDone is bool);
+    }
+
     // ===============================================================
     // Rules
     // ===============================================================
@@ -139,9 +152,10 @@ service cloud.firestore {
 
     match /notifications/{notificationId} {
       allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
-      allow create: if isAdmin();
+      allow create: if isAuthenticated() && isValidNotification(request.resource.data) && 
+                      (request.resource.data.userId == request.auth.uid || isAdmin());
       allow update: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
-      allow delete: if isAdmin();
+      allow delete: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
     }
     
     match /{path=**} {

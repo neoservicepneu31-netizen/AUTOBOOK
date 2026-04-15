@@ -14,7 +14,8 @@ import {
   limit,
   orderBy,
   getDoc,
-  getDocFromServer
+  getDocFromServer,
+  writeBatch
 } from 'firebase/firestore';
 import { 
   getAuth, 
@@ -562,6 +563,21 @@ class CloudConnector {
       await setDoc(doc(db, "notifications", notificationId), { actionDone: true, read: true }, { merge: true });
     } catch (e) { 
       handleFirestoreError(e, OperationType.WRITE, path);
+    }
+  }
+
+  async markAllCarNotificationsAsRead(carId: string, userId: string): Promise<void> {
+    if (!this.isConnected()) return;
+    try {
+      const q = query(collection(db, "notifications"), where("carId", "==", carId), where("userId", "==", userId), where("read", "==", false));
+      const snapshot = await getDocs(q);
+      const batch = writeBatch(db);
+      snapshot.docs.forEach(d => {
+        batch.update(d.ref, { read: true });
+      });
+      await batch.commit();
+    } catch (e) {
+      console.error("Error marking all as read:", e);
     }
   }
 }

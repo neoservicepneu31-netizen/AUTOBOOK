@@ -256,9 +256,15 @@ export const GarageScreen: React.FC<GarageScreenProps> = ({ user, cars, invoices
                       
                       {/* BADGE DE NOTIFICATION GARAGE */}
                       {alertCount > 0 && (
-                        <div className="absolute top-5 right-5 z-20 bg-red-600 text-white w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-black border-2 border-nsp-card shadow-lg animate-pulse">
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            cloud.markAllCarNotificationsAsRead(car.id, user.id);
+                          }}
+                          className="absolute top-5 right-5 z-20 bg-red-600 text-white w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-black border-2 border-nsp-card shadow-lg animate-pulse active:scale-90 transition-transform"
+                        >
                           {alertCount}
-                        </div>
+                        </button>
                       )}
 
                       <div className={`absolute top-5 ${alertCount > 0 ? 'right-14' : 'right-5'} bg-nsp-success text-white px-3.5 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest flex items-center gap-1.5 shadow-2xl backdrop-blur-md`}>
