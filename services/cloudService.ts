@@ -580,6 +580,21 @@ class CloudConnector {
       console.error("Error marking all as read:", e);
     }
   }
+
+  async markAllUserNotificationsAsRead(userId: string): Promise<void> {
+    if (!this.isConnected()) return;
+    try {
+      const q = query(collection(db, "notifications"), where("userId", "==", userId), where("read", "==", false));
+      const snapshot = await getDocs(q);
+      const batch = writeBatch(db);
+      snapshot.docs.forEach(d => {
+        batch.update(d.ref, { read: true });
+      });
+      await batch.commit();
+    } catch (e) {
+      console.error("Error marking all user notifications as read:", e);
+    }
+  }
 }
 
 export const cloud = CloudConnector.getInstance();

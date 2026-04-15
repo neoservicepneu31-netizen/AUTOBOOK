@@ -311,6 +311,7 @@ export const GarageScreen: React.FC<GarageScreenProps> = ({ user, cars, invoices
         notifications={notifications.filter(n => !n.actionDone)}
         onClose={() => setIsNotificationsModalOpen(false)}
         onMarkAsRead={(id) => cloud.markNotificationAsRead(id)}
+        onMarkAllAsRead={() => cloud.markAllUserNotificationsAsRead(user.id)}
         onMarkAsDone={(id) => cloud.markNotificationAsDone(id)}
         onDelete={(id) => cloud.deleteNotification(id)}
       />

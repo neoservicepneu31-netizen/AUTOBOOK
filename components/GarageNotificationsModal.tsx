@@ -7,6 +7,8 @@ interface GarageNotificationsModalProps {
   notifications: AppNotification[];
   onClose: () => void;
   onMarkAsRead: (id: string) => void;
+  onMarkAllAsRead: () => void;
+  onMarkAsDone: (id: string) => void;
   onDelete: (id: string) => void;
 }
 
@@ -15,6 +17,8 @@ export const GarageNotificationsModal: React.FC<GarageNotificationsModalProps> =
   notifications,
   onClose,
   onMarkAsRead,
+  onMarkAllAsRead,
+  onMarkAsDone,
   onDelete
 }) => {
   if (!isOpen) return null;
@@ -37,7 +41,16 @@ export const GarageNotificationsModal: React.FC<GarageNotificationsModalProps> =
         <h3 className="text-white font-black text-[10px] uppercase tracking-widest flex items-center gap-2">
           <Bell size={14} className="text-nsp-primary" /> Centre de Notifications
         </h3>
-        <div className="w-12"></div>
+        {notifications.some(n => !n.read) ? (
+          <button 
+            onClick={onMarkAllAsRead}
+            className="text-nsp-primary font-black text-[8px] uppercase tracking-widest bg-nsp-primary/10 px-3 py-2 rounded-lg active:scale-95 transition-all"
+          >
+            Tout marquer lu
+          </button>
+        ) : (
+          <div className="w-12"></div>
+        )}
       </header>
 
       <div className="flex-1 overflow-y-auto p-6 space-y-4">
@@ -71,6 +84,30 @@ export const GarageNotificationsModal: React.FC<GarageNotificationsModalProps> =
                   <p className={`text-[11px] leading-relaxed ${notif.read ? 'text-gray-500' : 'text-gray-300'}`}>
                     {notif.message}
                   </p>
+
+                  {notif.actionRequired && !notif.actionDone && (
+                    <div className="mt-4 flex gap-2">
+                       <button 
+                        onClick={(e) => { e.stopPropagation(); onMarkAsDone(notif.id); }}
+                        className="flex-1 bg-nsp-primary text-white py-2.5 rounded-xl text-[9px] font-black uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg active:scale-95 transition-all"
+                       >
+                         <CheckCircle2 size={14} /> Marquer comme effectué
+                       </button>
+                       <button 
+                        onClick={(e) => { e.stopPropagation(); onMarkAsRead(notif.id); }}
+                        className="px-4 bg-nsp-input text-gray-400 py-2.5 rounded-xl text-[9px] font-black uppercase tracking-widest active:scale-95 transition-all"
+                       >
+                         Plus tard
+                       </button>
+                    </div>
+                  )}
+
+                  {notif.actionDone && (
+                    <div className="mt-3 flex items-center gap-2 text-green-500">
+                      <CheckCircle2 size={12} />
+                      <span className="text-[8px] font-black uppercase tracking-widest">Intervention validée</span>
+                    </div>
+                  )}
                 </div>
               </div>
               

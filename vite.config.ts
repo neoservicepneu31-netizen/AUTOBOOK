@@ -14,6 +14,9 @@ export default defineConfig(({ mode }) => {
 
   return {
     plugins: [react()],
+    server: {
+      hmr: false,
+    },
     define: {
       // Remplace toutes les occurrences de process.env.API_KEY par la valeur réelle pour le frontend
       'process.env.API_KEY': JSON.stringify(apiKey),

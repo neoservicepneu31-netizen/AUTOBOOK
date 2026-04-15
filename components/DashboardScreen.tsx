@@ -532,9 +532,22 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
                {/* SECTION SANTE DETAILLEE */}
                {activeReport === 'health' && (
                  <div className="space-y-6">
-                    <div className="flex items-center gap-2 px-2">
-                       <AlertCircle size={16} className="text-nsp-primary" />
-                       <h4 className="text-[10px] text-gray-500 font-black uppercase tracking-widest">Détail des vérifications IA</h4>
+                    <div className="flex items-center justify-between px-2">
+                       <div className="flex items-center gap-2">
+                         <AlertCircle size={16} className="text-nsp-primary" />
+                         <h4 className="text-[10px] text-gray-500 font-black uppercase tracking-widest">Détail des vérifications IA</h4>
+                       </div>
+                       {(proactiveStatus.pendingTasks.length > 0 || proactiveStatus.upcomingDeadlines.length > 0) && (
+                         <button 
+                           onClick={() => {
+                             cloud.markAllCarNotificationsAsRead(car.id, user.id);
+                             onNotify('success', 'Diagnostic', '✅ Toutes les alertes ont été marquées comme lues.');
+                           }}
+                           className="text-nsp-primary font-black text-[8px] uppercase tracking-widest bg-nsp-primary/10 px-3 py-1.5 rounded-lg active:scale-95 transition-all"
+                         >
+                           Tout effacer
+                         </button>
+                       )}
                     </div>
                     {proactiveStatus.pendingTasks.length === 0 && proactiveStatus.upcomingDeadlines.length === 0 ? (
                       <div className="p-6 bg-nsp-success/10 border border-nsp-success/20 rounded-2xl flex items-center gap-4">
