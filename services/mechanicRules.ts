@@ -1,5 +1,5 @@
 
-import { Invoice, Car } from '../types';
+import { Invoice, Car, AppNotification } from '../types';
 
 const BASE_RULES = {
   REVISION_KM: 20000,
@@ -34,7 +34,7 @@ interface MaintenanceStatus {
   estimatedValue: number; // Nouveau: Estimation de la cote
 }
 
-export const calculateMaintenanceStatus = (car: Car, invoices: Invoice[]): MaintenanceStatus => {
+export const calculateMaintenanceStatus = (car: Car, invoices: Invoice[], notifications: AppNotification[] = []): MaintenanceStatus => {
   const currentKm = invoices.length > 0 ? Math.max(...invoices.map(i => i.km)) : car.initialKm;
   const today = new Date();
   const alerts: string[] = [];
@@ -224,13 +224,24 @@ export const calculateMaintenanceStatus = (car: Car, invoices: Invoice[]): Maint
     }
   });
 
+  // --- 4. FILTRAGE PAR NOTIFICATIONS (ACTIONS DÉJÀ FAITES) ---
+  const filteredPendingTasks = pendingTasks.filter(task => {
+    const doneNotif = notifications.find(n => n.carId === car.id && n.title === task.label && n.actionDone);
+    return !doneNotif;
+  });
+
+  const filteredUpcomingDeadlines = upcomingDeadlines.filter(deadline => {
+    const doneNotif = notifications.find(n => n.carId === car.id && n.title.includes(deadline.label) && n.actionDone);
+    return !doneNotif;
+  });
+
   let status: MaintenanceStatus['status'] = 'success';
   let message = `Toutes les échéances de votre ${car.name} sont à jour.`;
 
-  if (pendingTasks.some(t => t.severity === 'high')) {
+  if (filteredPendingTasks.some(t => t.severity === 'high')) {
     status = 'critical';
     message = `ALERTE : Des entretiens critiques sont en retard.`;
-  } else if (pendingTasks.length > 0 || upcomingDeadlines.length > 0) {
+  } else if (filteredPendingTasks.length > 0 || filteredUpcomingDeadlines.length > 0) {
     status = 'warning';
     message = `VIGILANCE : Des échéances approchent.`;
   }
@@ -240,8 +251,8 @@ export const calculateMaintenanceStatus = (car: Car, invoices: Invoice[]): Maint
     message, 
     nextDeadline: nextCTDate.toLocaleDateString(), 
     alerts,
-    pendingTasks,
-    upcomingDeadlines,
+    pendingTasks: filteredPendingTasks,
+    upcomingDeadlines: filteredUpcomingDeadlines,
     tireHealth: {
       mileageSinceChange,
       wearPercentage,

@@ -236,7 +236,7 @@ export const GarageScreen: React.FC<GarageScreenProps> = ({ user, cars, invoices
             <div className="grid grid-cols-1 gap-8">
               {cars.map((car) => {
                 const carInvoices = invoices.filter(i => i.carId === car.id);
-                const health = calculateMaintenanceStatus(car, carInvoices);
+                const health = calculateMaintenanceStatus(car, carInvoices, notifications);
                 const alertCount = health.pendingTasks.length + health.upcomingDeadlines.length;
 
                 return (
@@ -302,7 +302,7 @@ export const GarageScreen: React.FC<GarageScreenProps> = ({ user, cars, invoices
       {/* Article Modal */}
       <GarageNotificationsModal 
         isOpen={isNotificationsModalOpen}
-        notifications={notifications}
+        notifications={notifications.filter(n => !n.actionDone)}
         onClose={() => setIsNotificationsModalOpen(false)}
         onMarkAsRead={(id) => cloud.markNotificationAsRead(id)}
         onMarkAsDone={(id) => cloud.markNotificationAsDone(id)}

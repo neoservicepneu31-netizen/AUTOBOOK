@@ -1,6 +1,6 @@
 
 import React, { useEffect, useState, useMemo } from 'react';
-import { User, Car, Invoice, AIStatus, ManufacturerSpecs, TechnicalSpecs } from '../types';
+import { User, Car, Invoice, AIStatus, ManufacturerSpecs, TechnicalSpecs, AppNotification } from '../types';
 import { 
   Plus, FileText, ArrowLeft, Sparkles, Gauge, Droplet, PhoneCall, X, Camera,
   Wrench, AlertCircle, Share2, ShieldCheck, ChevronRight, Activity, Info, Eye, Download, Maximize2, Loader2, Trash2, Layers, Search, History, CheckCircle2, AlertTriangle, ListChecks, Calendar, Scale, Image as ImageIcon, BellRing, Clock, ShieldAlert, CircleAlert, Shield, SearchCode, PackageSearch, TrendingUp, TrendingDown, Wallet, Medal, Target
@@ -12,6 +12,7 @@ interface DashboardScreenProps {
   user: User;
   car: Car;
   invoices: Invoice[];
+  notifications: AppNotification[];
   aiStatus: AIStatus;
   onBackToGarage: () => void;
   onAddInvoice: () => void;
@@ -26,7 +27,7 @@ interface DashboardScreenProps {
 }
 
 export const DashboardScreen: React.FC<DashboardScreenProps> = ({
-  user, car, invoices, onBackToGarage, onAddInvoice, onAssistance, onDeleteInvoice, onSellCar, onUpdateCar, onDeleteCar, onNotify
+  user, car, invoices, notifications, onBackToGarage, onAddInvoice, onAssistance, onDeleteInvoice, onSellCar, onUpdateCar, onDeleteCar, onNotify
 }) => {
   const [specs, setSpecs] = useState<ManufacturerSpecs | null>(null);
   const [isLoadingSpecs, setIsLoadingSpecs] = useState(false);
@@ -92,7 +93,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
     }
   };
 
-  const proactiveStatus = calculateMaintenanceStatus(car, invoices);
+  const proactiveStatus = calculateMaintenanceStatus(car, invoices, notifications);
   const lastMileage = invoices.length > 0 ? Math.max(...invoices.map(i => i.km)) : car.initialKm;
   
   const alertCount = proactiveStatus.pendingTasks.length + proactiveStatus.upcomingDeadlines.length;

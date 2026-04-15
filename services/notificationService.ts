@@ -59,7 +59,7 @@ export const simulateCloudEmail = (email: string, carName: string, reason: strin
  * Vérifie l'état d'un véhicule et envoie une alerte si nécessaire
  */
 export const checkVehicleHealthAndNotify = async (car: Car, invoices: Invoice[], userEmail: string, userId: string, existingNotifications: AppNotification[] = []) => {
-  const health = calculateMaintenanceStatus(car, invoices);
+  const health = calculateMaintenanceStatus(car, invoices, existingNotifications);
   
   // Récupération de toutes les tâches
   const allTasks = [
