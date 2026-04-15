@@ -8,6 +8,8 @@ export interface AppNotification {
   date: string;
   read: boolean;
   carId?: string;
+  actionRequired?: boolean;
+  actionDone?: boolean;
 }
 
 export enum Screen {

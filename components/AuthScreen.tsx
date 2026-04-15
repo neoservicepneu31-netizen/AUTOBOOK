@@ -73,11 +73,20 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLogin, onNotify }) => 
       console.error("Auth Error:", e);
       let message = "Une erreur est survenue lors de l'authentification.";
       
-      if (e.code === 'auth/user-not-found' || e.code === 'auth/wrong-password' || e.code === 'auth/invalid-credential' || (e.message && e.message.includes('invalid-credential'))) {
-        if (email.toLowerCase() === "neoservicepneu31@gmail.com") {
-          message = "Le compte existe déjà mais le mot de passe est incorrect. Veuillez utiliser 'Mot de passe oublié' pour le réinitialiser.";
+      const isInvalidCred = e.code === 'auth/user-not-found' || 
+                           e.code === 'auth/wrong-password' || 
+                           e.code === 'auth/invalid-credential' || 
+                           (e.message && e.message.toLowerCase().includes('invalid-credential'));
+
+      if (isInvalidCred) {
+        if (mode === 'login') {
+          if (email.toLowerCase() === "neoservicepneu31@gmail.com" || email.toLowerCase() === "fernand1802@gmail.com") {
+            message = "Identifiants incorrects pour le compte Administrateur. Veuillez vérifier votre mot de passe ou utiliser 'Mot de passe oublié'.";
+          } else {
+            message = "Email ou mot de passe incorrect. Si c'est votre première visite, veuillez utiliser l'onglet 'S'inscrire' pour créer votre compte.";
+          }
         } else {
-          message = "Identifiants incorrects ou compte inexistant. Si c'est votre première visite, veuillez vous inscrire.";
+          message = "Erreur d'inscription. L'email est peut-être mal formé ou le mot de passe trop simple.";
         }
       } else if (e.code === 'auth/email-already-in-use') {
         message = "Cette adresse email est déjà enregistrée. Veuillez utiliser l'onglet 'Connexion' ou réinitialiser votre mot de passe.";

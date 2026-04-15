@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Screen, User, Car, Invoice, TechnicalSpecs } from './types';
+import { Screen, User, Car, Invoice, TechnicalSpecs, AppNotification } from './types';
 import { AuthScreen } from './components/AuthScreen';
 import { OnboardingScreen } from './components/OnboardingScreen';
 import { DashboardScreen } from './components/DashboardScreen';
@@ -32,6 +32,7 @@ const App: React.FC = () => {
     isOpen: false,
     carId: null
   });
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [notification, setNotification] = useState<{ isOpen: boolean; type: NotificationType; title: string; message: string }>({
     isOpen: false,
     type: 'info',
@@ -43,10 +44,10 @@ const App: React.FC = () => {
     setNotification({ isOpen: true, type, title, message });
   };
 
-  const performHealthChecks = useCallback((cars: Car[], invoices: Invoice[], email: string, userId: string) => {
+  const performHealthChecks = useCallback((cars: Car[], invoices: Invoice[], email: string, userId: string, existingNotifications: AppNotification[] = []) => {
     cars.forEach(car => {
       const carInvoices = invoices.filter(i => i.carId === car.id);
-      checkVehicleHealthAndNotify(car, carInvoices, email, userId);
+      checkVehicleHealthAndNotify(car, carInvoices, email, userId, existingNotifications);
     });
   }, []);
 
@@ -149,6 +150,11 @@ const App: React.FC = () => {
         
         await loadAllData(authenticatedUser);
         
+        // Listen to notifications
+        cloud.listenToUserNotifications(authenticatedUser.id, (notifs) => {
+          setNotifications(notifs);
+        });
+        
         // Ne change l'écran que si on est sur l'écran d'auth
         setScreen(prev => {
           if (prev === Screen.AUTH) {
@@ -219,7 +225,7 @@ const App: React.FC = () => {
     setAllCars(uniqueCars);
     db.cars.saveAll(uniqueCars);
     if (cloud.isConnected()) await cloud.syncCar(car);
-    if (user) performHealthChecks(uniqueCars, allInvoices, user.email, user.id);
+    if (user) performHealthChecks(uniqueCars, allInvoices, user.email, user.id, notifications);
   };
 
   const handleDeleteCar = async (carId: string) => {
@@ -276,7 +282,7 @@ const App: React.FC = () => {
         await handleSaveCar(updatedCar);
       }
     }
-    if (user) performHealthChecks(allCars, uniqueInvoices, user.email, user.id);
+    if (user) performHealthChecks(allCars, uniqueInvoices, user.email, user.id, notifications);
     setScreen(Screen.INVOICES_LIST);
   };
 

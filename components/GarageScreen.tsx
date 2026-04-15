@@ -94,14 +94,16 @@ export const GarageScreen: React.FC<GarageScreenProps> = ({ user, cars, invoices
     if ("Notification" in window && Notification.permission === "default") {
       setShowNotifyPrompt(true);
     }
-    cars.forEach(car => {
-      const carInvoices = invoices.filter(i => i.carId === car.id);
-      checkVehicleHealthAndNotify(car, carInvoices, user.email, user.id);
-    });
-
+    
     // Listen to Firestore notifications
     const unsubscribe = cloud.listenToUserNotifications(user.id, (notifs) => {
       setNotifications(notifs);
+      
+      // Trigger health checks only after we have notifications to avoid duplicates
+      cars.forEach(car => {
+        const carInvoices = invoices.filter(i => i.carId === car.id);
+        checkVehicleHealthAndNotify(car, carInvoices, user.email, user.id, notifs);
+      });
     });
 
     return () => {
@@ -303,6 +305,7 @@ export const GarageScreen: React.FC<GarageScreenProps> = ({ user, cars, invoices
         notifications={notifications}
         onClose={() => setIsNotificationsModalOpen(false)}
         onMarkAsRead={(id) => cloud.markNotificationAsRead(id)}
+        onMarkAsDone={(id) => cloud.markNotificationAsDone(id)}
         onDelete={(id) => cloud.deleteNotification(id)}
       />
 

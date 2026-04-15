@@ -10,6 +10,9 @@ const BASE_RULES = {
   CT_INTERVAL_YEARS: 2,
   TIRE_LIFESPAN_KM: 45000, 
   TIRE_AGE_YEARS: 5,
+  TIMING_BELT_KM: 100000,
+  TIMING_BELT_YEARS: 6,
+  SPARK_PLUGS_KM: 60000,
 };
 
 interface MaintenanceStatus {
@@ -43,6 +46,34 @@ export const calculateMaintenanceStatus = (car: Car, invoices: Invoice[]): Maint
     : new Date(car.firstRegistrationDate);
 
   const daysSinceLastCheck = Math.floor((today.getTime() - lastDocDate.getTime()) / (1000 * 60 * 60 * 24));
+
+  // --- 0. CONTRÔLES PÉRIODIQUES (SÉCURITÉ) ---
+  if (daysSinceLastCheck >= BASE_RULES.CHECK_TIRES_DAYS) {
+    pendingTasks.push({
+      id: 'check_tires',
+      label: 'Vérifier la pression des pneus',
+      severity: 'high',
+      basis: `Dernier contrôle il y a ${daysSinceLastCheck} jours (Recommandé tous les 30 jours)`
+    });
+  }
+
+  if (daysSinceLastCheck >= BASE_RULES.CHECK_FLUIDS_DAYS) {
+    pendingTasks.push({
+      id: 'check_fluids',
+      label: 'Vérifier les niveaux (Lave-glace, Refroidissement)',
+      severity: 'low',
+      basis: `Dernier contrôle il y a ${daysSinceLastCheck} jours`
+    });
+  }
+
+  if (daysSinceLastCheck >= BASE_RULES.CHECK_OIL_DAYS) {
+    pendingTasks.push({
+      id: 'check_oil',
+      label: 'Vérifier le niveau d\'huile moteur',
+      severity: 'high',
+      basis: `Dernier contrôle il y a ${daysSinceLastCheck} jours`
+    });
+  }
 
   const make = car.name.split(' ')[0].toUpperCase();
   let maintenanceIntervalKm = BASE_RULES.REVISION_KM;
@@ -117,6 +148,39 @@ export const calculateMaintenanceStatus = (car: Car, invoices: Invoice[]): Maint
     healthScore -= 30;
     alerts.push("CT_EXPIRED");
     pendingTasks.push({id: 'ct_crit', label: 'Contrôle Technique PÉRIMÉ', severity: 'high', basis: `Date limite : ${nextCTDate.toLocaleDateString()}`});
+  } else if (diffDaysCT < 30) {
+    upcomingDeadlines.push({id: 'ct_soon', label: 'Contrôle Technique', date: nextCTDate.toLocaleDateString(), type: 'CT'});
+  }
+
+  // Impact Courroie de Distribution
+  const lastTimingBelt = invoices
+    .filter(i => /courroie|distribution|timing belt/i.test(i.title.toLowerCase()))
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
+
+  const timingBeltIntervalKm = car.specs?.timingBeltIntervalKm || BASE_RULES.TIMING_BELT_KM;
+  const timingBeltIntervalYears = car.specs?.timingBeltIntervalYears || BASE_RULES.TIMING_BELT_YEARS;
+
+  if (lastTimingBelt) {
+    const kmSinceBelt = currentKm - lastTimingBelt.km;
+    const yearsSinceBelt = (today.getTime() - new Date(lastTimingBelt.date).getTime()) / (1000 * 60 * 60 * 24 * 365);
+    
+    if (kmSinceBelt >= timingBeltIntervalKm || yearsSinceBelt >= timingBeltIntervalYears) {
+      healthScore -= 25;
+      pendingTasks.push({
+        id: 'belt_due',
+        label: 'Remplacement Courroie de Distribution',
+        severity: 'high',
+        basis: `Dernier remplacement : ${kmSinceBelt.toLocaleString()} km / ${Math.round(yearsSinceBelt)} ans`
+      });
+    }
+  } else if (currentKm >= timingBeltIntervalKm || carAgeYears >= timingBeltIntervalYears) {
+    healthScore -= 20;
+    pendingTasks.push({
+      id: 'belt_missing',
+      label: 'Vérifier Courroie de Distribution',
+      severity: 'high',
+      basis: 'Aucun historique trouvé. Risque de casse moteur.'
+    });
   }
 
   // Plafonnement du score

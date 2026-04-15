@@ -58,7 +58,7 @@ export const simulateCloudEmail = (email: string, carName: string, reason: strin
 /**
  * Vérifie l'état d'un véhicule et envoie une alerte si nécessaire
  */
-export const checkVehicleHealthAndNotify = async (car: Car, invoices: Invoice[], userEmail: string, userId: string) => {
+export const checkVehicleHealthAndNotify = async (car: Car, invoices: Invoice[], userEmail: string, userId: string, existingNotifications: AppNotification[] = []) => {
   const health = calculateMaintenanceStatus(car, invoices);
   
   // Récupération de toutes les tâches
@@ -77,32 +77,58 @@ export const checkVehicleHealthAndNotify = async (car: Car, invoices: Invoice[],
     // Fréquence d'alerte : 24h pour critique, 48h pour informatif
     const interval = hasCritical ? 24 : 48;
     if (!lastAlertTime || (now - parseInt(lastAlertTime)) > interval * 60 * 60 * 1000) {
-      let title = "";
-      let body = "";
+      // Filter out tasks that have a corresponding "Done" notification recently
+      const pendingTasksToSend = health.pendingTasks.filter(task => {
+        const existing = existingNotifications.find(n => n.carId === car.id && n.title === task.label);
+        return !existing || (!existing.actionDone && !existing.read);
+      });
 
-      if (hasCritical) {
-        title = `🚨 ALERTE ENTRETIEN : ${car.plate}`;
-        body = `Urgent : ${allTasks[0]}. ${allTasks.length > 1 ? `(+${allTasks.length - 1} autres tâches)` : ""}`;
-      } else {
-        title = `📅 RAPPEL AUTOBOOK : ${car.plate}`;
-        body = `Pensez à : ${allTasks[0]}. Votre garage numérique veille sur votre sécurité.`;
+      const deadlinesToSend = health.upcomingDeadlines.filter(deadline => {
+        const existing = existingNotifications.find(n => n.carId === car.id && n.title.includes(deadline.label));
+        return !existing || (!existing.actionDone && !existing.read);
+      });
+
+      if (pendingTasksToSend.length === 0 && deadlinesToSend.length === 0) return;
+
+      // Send a summary local notification
+      let summaryTitle = hasCritical ? `🚨 ALERTE ENTRETIEN : ${car.plate}` : `📅 RAPPEL AUTOBOOK : ${car.plate}`;
+      let summaryBody = `Vous avez ${pendingTasksToSend.length + deadlinesToSend.length} interventions à prévoir pour votre sécurité.`;
+      
+      await sendLocalNotification(summaryTitle, summaryBody);
+      simulateCloudEmail(userEmail, car.name, summaryBody, allTasks);
+      
+      // Create separate persistent notifications for each task
+      for (const task of pendingTasksToSend) {
+        const notification: AppNotification = {
+          id: `task_${car.id}_${task.id}_${now}`,
+          userId: userId,
+          title: task.label,
+          message: task.basis || "Intervention recommandée pour la longévité de votre véhicule.",
+          type: task.severity === 'high' ? 'error' : 'warning',
+          date: new Date().toISOString(),
+          read: false,
+          carId: car.id,
+          actionRequired: true,
+          actionDone: false
+        };
+        await cloud.sendNotification(notification);
       }
-      
-      await sendLocalNotification(title, body);
-      simulateCloudEmail(userEmail, car.name, body, allTasks);
-      
-      // Send persistent notification to Firestore
-      const notification: AppNotification = {
-        id: `auto_${car.id}_${now}`,
-        userId: userId,
-        title: title,
-        message: body,
-        type: hasCritical ? 'error' : 'warning',
-        date: new Date().toISOString(),
-        read: false,
-        carId: car.id
-      };
-      await cloud.sendNotification(notification);
+
+      for (const deadline of deadlinesToSend) {
+        const notification: AppNotification = {
+          id: `deadline_${car.id}_${deadline.id}_${now}`,
+          userId: userId,
+          title: `Échéance : ${deadline.label}`,
+          message: `Date limite prévue : ${deadline.date}. Anticipez pour éviter les mauvaises surprises.`,
+          type: 'info',
+          date: new Date().toISOString(),
+          read: false,
+          carId: car.id,
+          actionRequired: true,
+          actionDone: false
+        };
+        await cloud.sendNotification(notification);
+      }
 
       localStorage.setItem(lastAlertKey, now.toString());
     }

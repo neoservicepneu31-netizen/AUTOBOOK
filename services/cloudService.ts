@@ -554,6 +554,16 @@ class CloudConnector {
       handleFirestoreError(e, OperationType.WRITE, path);
     }
   }
+
+  async markNotificationAsDone(notificationId: string): Promise<void> {
+    if (!this.isConnected()) return;
+    const path = `notifications/${notificationId}`;
+    try {
+      await setDoc(doc(db, "notifications", notificationId), { actionDone: true, read: true }, { merge: true });
+    } catch (e) { 
+      handleFirestoreError(e, OperationType.WRITE, path);
+    }
+  }
 }
 
 export const cloud = CloudConnector.getInstance();
